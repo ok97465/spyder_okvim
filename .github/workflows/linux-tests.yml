@@ -51,10 +51,9 @@ jobs:
         run: |
           conda info
           conda list
+      - name: Codecov
+        uses: codecov/codecov-action@v1.0.14
       - name: Run tests
         shell: bash -l {0}
         run: xvfb-run --auto-servernum python runtests.py
         timeout-minutes: 30
-      - name: Coverages
-        shell: bash -l {0}
-        run: codecov
