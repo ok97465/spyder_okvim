@@ -62,12 +62,14 @@ class ExecutorSubMotion_i(ExecutorSubBase):
         self.update_input_cmd_info(None, None, txt)
         self.vim_status.sub_mode = None
 
-        if txt in 'w{}[]()\'"':
+        if txt in 'w{}[]()\'"bB':
             if txt in "w":
                 motion_info = self.helper_motion.i_w(self.parent_num[-1])
             elif txt in '\'"':
                 motion_info = self.helper_motion.i_quote(txt)
             else:
+                txt = txt.replace('b', '(')
+                txt = txt.replace('B', '{')
                 motion_info = self.helper_motion.i_bracket(self.parent_num[-1],
                                                            txt)
 
@@ -92,12 +94,14 @@ class ExecutorSubMotion_a(ExecutorSubBase):
         self.update_input_cmd_info(None, None, txt)
         self.vim_status.sub_mode = None
 
-        if txt in 'w{}[]()\'"':
+        if txt in 'w{}[]()\'"bB':
             if txt in "w":
                 motion_info = self.helper_motion.a_w(self.parent_num[-1])
             elif txt in '\'"':
                 motion_info = self.helper_motion.a_quote(txt)
             else:
+                txt = txt.replace('b', '(')
+                txt = txt.replace('B', '{')
                 motion_info = self.helper_motion.a_bracket(self.parent_num[-1],
                                                            txt)
 
