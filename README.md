@@ -14,7 +14,7 @@ installing this, please retry after uninstalling okvim.
 ![Linux tests](https://github.com/ok97465/spyder_okvim/workflows/Linux%20tests/badge.svg)
 ![Macos tests](https://github.com/ok97465/spyder_okvim/workflows/Macos%20tests/badge.svg)
 ![Window tests](https://github.com/ok97465/spyder_okvim/workflows/Windows%20tests/badge.svg)
-[![Coverage Status](https://coveralls.io/repos/github/ok97465/spyder_okvim/badge.svg?branch=master)](https://coveralls.io/github/ok97465/spyder_okvim?branch=master)
+[![codecov](https://codecov.io/gh/ok97465/spyder_okvim/branch/main/graph/badge.svg?token=7JIIKTOZMO)](https://codecov.io/gh/ok97465/spyder_okvim)
 
 ## Overview
 

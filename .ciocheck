@@ -3,7 +3,7 @@
 # https://github.com/ContinuumIO/ciocheck
 # -----------------------------------------------------------------------------
 [ciocheck]
-branch = origin/master
+branch = origin/main
 diff_mode = commited
 file_mode = all
 check = pep8,pydocstyle
