@@ -3,10 +3,10 @@ name: Windows tests
 on:
   push:
     branches:
-    - master
+    - main
   pull_request:
     branches:
-    - master
+    - main
 
 jobs:
   windows:
@@ -47,4 +47,4 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: python runtests.py
-        timeout-minutes: 10
+        timeout-minutes: 30
