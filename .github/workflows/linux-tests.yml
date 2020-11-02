@@ -55,8 +55,8 @@ jobs:
         shell: bash -l {0}
         run: xvfb-run --auto-servernum python runtests.py
         timeout-minutes: 30
-      - name: Generate coverage report
+      - name: Coverages
         shell: bash -l {0}
-        run: pytest --cov=./ --cov-report=xml
+        run: codecov
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1.0.14
