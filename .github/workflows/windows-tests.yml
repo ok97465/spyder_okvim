@@ -14,6 +14,7 @@ jobs:
     runs-on: windows-latest
     env:
       CI: True
+      CODECOV_TOKEN: "a622d5af-356c-41f6-b298-b9b96f75be41"
       PYTHON_VERSION: ${{ matrix.PYTHON_VERSION }}
       RUNNER_OS: 'windows'
     strategy:
@@ -48,3 +49,6 @@ jobs:
         shell: bash -l {0}
         run: python runtests.py
         timeout-minutes: 30
+      - name: Coverages
+        shell: bash -l {0}
+        run: codecov

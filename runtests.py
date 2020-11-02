@@ -12,7 +12,7 @@ import pytest
 def main():
     """Run pytest tests."""
     errno = pytest.main(['-x', 'spyder_okvim', '-v',
-                         '-rw', '--durations=10',
+                         '-rw', '--durations=30',
                          '--cov=spyder_okvim', '--cov-report=term-missing'])
 
     # sys.exit doesn't work here because some things could be running
