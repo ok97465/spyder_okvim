@@ -62,9 +62,11 @@ class ExecutorSubMotion_i(ExecutorSubBase):
         self.update_input_cmd_info(None, None, txt)
         self.vim_status.sub_mode = None
 
-        if txt in 'w{}[]()\'"bB':
+        if txt in 'wW{}[]()\'"bB':
             if txt in "w":
                 motion_info = self.helper_motion.i_w(self.parent_num[-1])
+            elif txt in "W":
+                motion_info = self.helper_motion.i_W(self.parent_num[-1])
             elif txt in '\'"':
                 motion_info = self.helper_motion.i_quote(txt)
             else:
