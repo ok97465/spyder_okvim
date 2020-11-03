@@ -41,7 +41,7 @@ pip install -U .
 
 If spyder-vim is installed, you need to uninstall it.
 
-## Mode
+## Modes
 
 The following modes are supported:
 
@@ -49,7 +49,7 @@ The following modes are supported:
 - Visual
 - Visual Line
 
-## Action
+## Actions
 
 The following actions are supported:
 
@@ -65,7 +65,7 @@ The following actions are supported:
 - J
 - .
 
-## Motion
+## Motions
 
 The following motions are supported:
 
@@ -84,13 +84,13 @@ The following motions are supported:
 
 - Ctrl + A : Add [count] to number 
 - Ctrl + X : Subtract [count] to number 
+- K : Inspect current object 
+- gd : Go to definition.
 - gt, gT : Cycle to next/previous file.
 - ZZ : Save and close current file.
 
-## Special Key
+## Special Keys
 
-- K : Inspect current object 
-- gd : Go to definition.
 - space + f : autoformatting (spyder >= 4.2.0)
 - space + b : Toggle break point
 - space + r : run selected text or current line in console.
