@@ -72,22 +72,25 @@ The following motions are supported:
 - hjkl
 - 0, ^, $
 - w, W, b
-- iw, i()[]{}, i',"
-- GG, g
+- iw, i()[]{}bB, i',"
+- G, g
 - Ctrl + D, Ctrl + U
 - HLM
 - %
 - f, F, t, T, ;, ,
 - /, N, n
 
-## Shortcut
+## Vim keys
 
 - Ctrl + A : Add [count] to number 
 - Ctrl + X : Subtract [count] to number 
+- gt, gT : Cycle to next/previous file.
+- ZZ : Save and close current file.
 
 ## Special Key
 
 - K : Inspect current object 
+- gd : Go to definition.
 - space + f : autoformatting (spyder >= 4.2.0)
 - space + b : Toggle break point
 - space + r : run selected text or current line in console.
