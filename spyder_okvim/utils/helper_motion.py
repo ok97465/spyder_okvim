@@ -776,6 +776,60 @@ class HelperMotion:
             if idx % 2 == 0:
                 cursor.movePosition(QTextCursor.EndOfWord)
             else:
+                # go to the end of blank
+                if cursor.atBlockEnd():
+                    cursor.movePosition(QTextCursor.NextWord, n=2)
+                else:
+                    cursor.movePosition(QTextCursor.NextWord)
+
+        sel_end = cursor.position()
+
+        return self._set_motion_info(None, sel_start, sel_end,
+                                     motion_type=MotionType.BlockWise)
+
+    def i_W(self, num):
+        """Find WORD block position."""
+        cursor = self.get_cursor()
+
+        if self._get_ch(cursor.position()) in WHITE_SPACE:
+            cursor_pos_in_block = cursor.positionInBlock()
+            txt = cursor.block().text()
+            txt_leading = txt[:cursor_pos_in_block]
+            txt_trailing = txt[cursor_pos_in_block:]
+
+            n_leading_space = len(txt_leading) - len(txt_leading.rstrip())
+            n_trailing_space = len(txt_trailing) - len(txt_trailing.lstrip())
+            sel_start = cursor_pos_in_block - n_leading_space
+            sel_end = cursor_pos_in_block + n_trailing_space
+            cursor.setPosition(sel_end + cursor.block().position())
+            num -= 1
+        else:
+            cursor.movePosition(QTextCursor.EndOfWord)
+            cursor.movePosition(QTextCursor.StartOfWord)
+
+            while (not cursor.atBlockStart()
+                    and self._get_leading_ch(cursor.position()) not in
+                    WHITE_SPACE):
+                cursor.movePosition(QTextCursor.Left)
+                cursor.movePosition(QTextCursor.StartOfWord)
+
+            sel_start = cursor.position()
+
+        for idx in range(num):
+            if idx % 2 == 0:
+                if cursor.atBlockEnd():
+                    cursor.movePosition(QTextCursor.NextWord, n=2)
+                else:
+                    cursor.movePosition(QTextCursor.EndOfWord)
+                    while (not cursor.atBlockEnd()
+                           and self._get_ch(cursor.position())
+                           not in WHITE_SPACE):
+                        cursor.movePosition(QTextCursor.Right)
+                        if (self._get_ch(cursor.position())
+                                not in WHITE_SPACE):
+                            cursor.movePosition(QTextCursor.EndOfWord)
+            else:
+                # go to the end of blank
                 if cursor.atBlockEnd():
                     cursor.movePosition(QTextCursor.NextWord, n=2)
                 else:

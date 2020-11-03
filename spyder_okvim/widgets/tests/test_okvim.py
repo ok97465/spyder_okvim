@@ -2750,6 +2750,36 @@ def test_iw_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
     [
+        ('', ['v', 'i', 'W'], 0, [0, 0]),
+        ('\n\n', ['j', 'v', 'i', 'W'], 1, [1, 2]),
+        ('fig.add_subplot(111)  # ', ['4l', 'v', 'i', 'W'], 19, [0, 20]),
+        ('fig.add_subplot(111)  # ', ['4l', 'v', '2i', 'W'], 21, [0, 22]),
+        ('fig.add_subplot(111)  # ', ['4l', 'v', '3i', 'W'], 22, [0, 23]),
+        ('fig.add_subplot(111)  # ', ['20l', 'v', 'i', 'W'], 21, [20, 22]),
+        ('fig.add_subplot(111)  # ', ['20l', 'v', '2i', 'W'], 22, [20, 23]),
+        (' # \n 1', ['l', 'v', '3i', 'W'], 4, [1, 5]),
+    ]
+)
+def test_iW_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test iW command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
         ('kk 2 3', ['v', 'a', 'w'], 2, [0, 3]),
         ('kk 2 3', ['l', 'v', 'a', 'w'], 2, [0, 3]),
         ('kk 2 3', ['v', '2a', 'w'], 4, [0, 5]),
@@ -3459,6 +3489,7 @@ def test_C_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
         (' dhrwodndhrwodn', ['d', '/', 'd', 'h', 'r', '\r'], 0, 'dhrwodndhrwodn', '"', ' '),
         (' dhrwodndhrwodn', ['d', '/', 'd', 'h', 'r', '\r', 'd', 'n'], 0, 'dhrwodn', '"', 'dhrwodn'),
         (' dhrwodn dhrwodn', ['2w', 'h', 'd', '/', 'd', 'h', 'r', '\r', 'd', 'N'], 1, ' dhrwodn', '"', 'dhrwodn'),
+        (' fig.add_plot(1,1,1) ', ['4l', 'd', 'i', 'W'], 1, '  ', '"', 'fig.add_plot(1,1,1)'),
     ]
 )
 def test_d_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
