@@ -32,8 +32,8 @@ class FindInfo:
     """f,F,t,T command Info."""
 
     def __init__(self):
-        self.cmd_name: str = None
-        self.ch: str = None
+        self.cmd_name: str = ''
+        self.ch: str = ''
 
     def set(self, cmd_name: str, ch: str):
         """Set infomation of find commmand."""
