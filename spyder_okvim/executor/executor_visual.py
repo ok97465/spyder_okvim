@@ -327,7 +327,7 @@ class ExecutorVisualCmd(ExecutorBase):
 
     def y(self, num=1, num_str=''):
         """Yank selected text."""
-        sel_start, sel_end = self.helper_action.yank(None)
+        sel_start, sel_end = self.helper_action.yank(None, is_explicit=True)
 
         self.vim_status.to_normal()
         self.set_cursor_pos(sel_start)

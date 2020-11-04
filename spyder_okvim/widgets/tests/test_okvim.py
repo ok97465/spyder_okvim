@@ -2984,6 +2984,9 @@ def test_y_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, register_name,
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert reg.content == text_yanked
+    if register_name == '"':
+        reg0 = vim.vim_cmd.vim_status.register_dict['0']
+        assert reg0.content == text_yanked
 
 
 @pytest.mark.parametrize(
@@ -3011,6 +3014,9 @@ def test_y_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, register_name,
     assert reg.content == text_yanked
     assert reg.type == VimState.NORMAL
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
+    if register_name == '"':
+        reg0 = vim.vim_cmd.vim_status.register_dict['0']
+        assert reg0.content == text_yanked
 
 
 @pytest.mark.parametrize(
@@ -3037,6 +3043,9 @@ def test_y_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, register_name,
     assert reg.content == text_yanked
     assert reg.type == VimState.VLINE
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
+    if register_name == '"':
+        reg0 = vim.vim_cmd.vim_status.register_dict['0']
+        assert reg0.content == text_yanked
 
 
 @pytest.mark.parametrize(
@@ -3051,6 +3060,8 @@ def test_y_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, register_name,
         ('\na', ['j', 'V', 'y', 'k', 'p'], 1, '\na\na'),
         ('a\na\n', ['V', 'j', 'y', '2j', 'p'], 5, 'a\na\n\na\na'),
         (' a\n a\n', ['V', 'j', 'y', '2j', 'p'], 8, ' a\n a\n\n a\n a'),
+        ('a\nb\n', ['y', 'y', 'j', 'd', 'd', 'p'], 3, 'a\n\nb'),
+        ('a\nb\n', ['y', 'y', 'j', 'd', 'd', 'p', '"', '0', 'p'], 5, 'a\n\nb\na'),
     ]
 )
 def test_p_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected):

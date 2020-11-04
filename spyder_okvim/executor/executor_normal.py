@@ -442,7 +442,8 @@ class ExecutorNormalCmd(ExecutorBase):
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.helper_action.yank, True),
+            [FUNC_INFO(lambda x:self.helper_action.yank(x, is_explicit=True),
+                       True),
              FUNC_INFO(self.apply_motion_info_in_yank, True)])
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
