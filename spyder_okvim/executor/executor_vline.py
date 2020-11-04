@@ -18,7 +18,7 @@ class ExecutorVlineCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUovhydcsxHjJklLMwWb^$gG~%fFtTnN/;,"r<> '
+        cmds = 'uUovhydcsxHjJklLMwWbe^$gG~%fFtTnN/;,"r<> '
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_vline = \
@@ -120,14 +120,20 @@ class ExecutorVlineCmd(ExecutorBase):
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
     def W(self, num=1, num_str=''):
-        """Move to the next word."""
+        """Move to the next WORD."""
         motion_info = self.helper_motion.W(num=num)
 
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
     def b(self, num=1, num_str=''):
-        """Move to the next word."""
+        """Move to the previous word."""
         motion_info = self.helper_motion.b(num=num)
+
+        self.set_cursor_pos_in_vline(motion_info.cursor_pos)
+
+    def e(self, num=1, num_str=''):
+        """Move to the end of the word."""
+        motion_info = self.helper_motion.e(num=num)
 
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 

@@ -424,6 +424,43 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(),
                                      motion_type=MotionType.CharWise)
 
+    def e(self, num=1, num_str=''):
+        """Get the position of the end of word.
+
+        Does not stop in an empty line.
+
+        Returns
+        -------
+        MotionInfo
+            motion info
+
+        """
+        cursor = self.get_cursor()
+        pos_old = cursor.position()
+
+        if not cursor.atBlockEnd():
+            cursor.movePosition(QTextCursor.Right)
+
+        def _helper_e(cursor):
+            while (cursor.atBlockEnd()
+                    or not cursor.block().text().strip()
+                    or self._get_ch(cursor.position()) in WHITE_SPACE):
+                cursor.movePosition(QTextCursor.NextWord)
+                if cursor.atEnd():
+                    break
+
+            cursor.movePosition(QTextCursor.EndOfWord)
+            return cursor
+
+        for _ in range(num):
+            cursor = _helper_e(cursor)
+
+        if pos_old < cursor.position():
+            cursor.movePosition(QTextCursor.Left)
+
+        return self._set_motion_info(
+                cursor.position(), motion_type=MotionType.CharWiseIncludingEnd)
+
     def G(self, num=1, num_str=''):
         """Get the position of the Line.
 
