@@ -3015,6 +3015,11 @@ def test_clipboard(vim_bot):
     "text, cmd_list, cursor_pos, register_name, text_yanked",
     [
         ('a', ['y', 'l'], 0, '"', 'a'),
+<<<<<<< HEAD
+=======
+        ('a', ['y', 'i', 'b'], 0, '"', ''),
+        ('a', ['y', ','], 0, '"', ''),
+>>>>>>> 12ac128... add test
         ('abcd', ['$', 'y', '2h'], 1, '"', 'bc'),
         ('a\nb', ['y', 'j'], 0, '"', 'a\nb\n'),
         ('  a\n b', ['j', 'l', 'y', 'k'], 1, '"', '  a\n b\n'),
@@ -3531,6 +3536,10 @@ def test_C_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
     "text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked",
     [
         ('a', ['d', 'l'], 0, '', '"', 'a'),
+<<<<<<< HEAD
+=======
+        ('a', ['d', 'i', 'b'], 0, 'a', '"', ''),
+>>>>>>> 12ac128... add test
         ('abcd', ['$', 'd', '2h'], 1, 'ad',  '"', 'bc'),
         ('a\nb', ['d', 'j'], 0, '', '"', 'a\nb\n'),
         ('  a\n b', ['j', 'l', 'd', 'k'], 0, '', '"', '  a\n b\n'),
@@ -3614,6 +3623,11 @@ def test_d_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
         ('a b', ['l', 'c', 'w'], 1, 'ab',  '"', ' '),
         ('a b c ', ['c', '2w'], 0, ' c ',  '"', 'a b'),
         ('a b c ', ['c', '3w'], 0, ' ',  '"', 'a b c'),
+<<<<<<< HEAD
+=======
+        ('a\nb\nc', ['c', '3w'], 0, '',  '"', 'a\nb\nc'),
+        ('a\n b\nc', ['c', '3w'], 0, '',  '"', 'a\n b\nc'),
+>>>>>>> 12ac128... add test
         ('a.dk b', ['c', 'W'], 0, ' b', '"', 'a.dk'),
         (' a.dk b', ['c', 'W'], 0, 'a.dk b', '"', ' '),
         ('a.dk\nb', ['c', 'e'], 0, 'dk\nb', '"', 'a.'),
@@ -3755,3 +3769,99 @@ def test_search_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos == sel_pos_
 
+<<<<<<< HEAD
+=======
+
+def test_ctrl_u(vim_bot):
+    """Test ^u."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\n")
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in ['j']:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_U, Qt.ControlModifier)
+    vim.vim_cmd.commandline.keyPressEvent(event)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == 0
+
+
+def test_ctrl_d(vim_bot):
+    """Test ^d."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\n")
+
+    cmd_line = vim.get_focus_widget()
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_D, Qt.ControlModifier)
+    vim.vim_cmd.commandline.keyPressEvent(event)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == 2
+
+
+def test_HML(vim_bot):
+    """Test HML."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\n")
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'V')
+    qtbot.keyClicks(cmd_line, 'v')
+    qtbot.keyClicks(cmd_line, 'L')
+    qtbot.keyClicks(cmd_line, 'M')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    qtbot.keyClicks(cmd_line, 'V')
+    qtbot.keyClicks(cmd_line, 'L')
+    qtbot.keyClicks(cmd_line, 'M')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    qtbot.keyPress(cmd_line, Qt.Key_Escape)
+    qtbot.keyClicks(cmd_line, 'L')
+    qtbot.keyClicks(cmd_line, 'M')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    qtbot.keyClicks(cmd_line, 'y')
+    qtbot.keyClicks(cmd_line, 'L')
+
+    qtbot.keyClicks(cmd_line, 'y')
+    qtbot.keyClicks(cmd_line, 'M')
+
+    qtbot.keyClicks(cmd_line, 'y')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    assert cmd_line.text() == ""
+
+
+def test_toggle_comment(vim_bot):
+    """Test toogle comment."""
+    # TODO: Use CodeEditor of spyder for exact test.
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\n")
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyClicks(cmd_line, 'c')
+    qtbot.keyClicks(cmd_line, 'c')
+
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyClicks(cmd_line, 'c')
+    qtbot.keyClicks(cmd_line, 'f')
+    qtbot.keyClicks(cmd_line, 'k')
+
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyClicks(cmd_line, 'c')
+    qtbot.keyClicks(cmd_line, 'i')
+    qtbot.keyClicks(cmd_line, 'w')
+
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyClicks(cmd_line, 'c')
+    qtbot.keyClicks(cmd_line, 'i')
+    qtbot.keyClicks(cmd_line, '"')
+
+    qtbot.keyClicks(cmd_line, 'v')
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyClicks(cmd_line, 'c')
+>>>>>>> 12ac128... add test
