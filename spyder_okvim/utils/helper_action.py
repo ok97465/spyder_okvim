@@ -250,8 +250,17 @@ class HelperAction:
                                               + len_blank)
         editor.document_did_change()
 
-    def yank(self, motion_info: MotionInfo):
-        """Yank text into register."""
+    def yank(self, motion_info: MotionInfo, is_explicit=False):
+        """Yank text into register.
+
+        Parameters
+        ----------
+        motion_info: MotionInfo
+            motion_info
+        is_explicit: Bool
+            If this method is called explicitly, this arg is True.
+
+        """
         if self.vim_status.is_normal():
             if motion_info.motion_type == MotionType.BlockWise:
                 if (motion_info.sel_start is None
@@ -294,6 +303,8 @@ class HelperAction:
             txt += '\n'
 
         self.vim_status.set_register(register_name, txt, register_type)
+        if is_explicit is True and register_name == '"':
+            self.vim_status.set_register('0', txt, register_type)
 
         return sel_start, sel_end
 
