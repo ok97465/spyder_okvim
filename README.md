@@ -71,8 +71,8 @@ The following motions are supported:
 
 - hjkl
 - 0, ^, $
-- w, W, b
-- iwiW, i()[]{}bB, i'"
+- w, W, b, e
+- iwW, i()[]{}bB, i'"
 - G, g
 - Ctrl + D, Ctrl + U
 - HLM

@@ -1055,6 +1055,80 @@ def test_b_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
 
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ('', ['e'], 0),
+        ('01', ['e'], 1),
+        ('01 ', ['e', 'e'], 2),
+        ('01 34', ['e', 'e'], 4),
+        ('01 34\n6 ', ['3e'], 6),
+        ('01 34\n 7 ', ['3e'], 7),
+        ('01 34\n67 ', ['3e'], 7),
+        ('01 34\n\n   \n  ab', ['3e'], 14),
+        ('01 34\n\n   \n  ab', ['e', 'e', 'e'], 14),
+        (' 12 45', ['e'], 2),
+    ]
+)
+def test_e_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test e command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ("01 34", ['v', 'e'], 1, [0, 2]),
+    ]
+)
+def test_e_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test e command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ("01 34\n67 90", ['V', 'e'], 1, [0, 5]),
+        ("01 34\n67 90", ['V', '3e'], 7, [0, 11]),
+    ]
+)
+def test_e_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test e command in vline."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
+
 
 def test_gt_cmd(vim_bot):
     """Test gt, gT command."""
@@ -2044,6 +2118,9 @@ def test_colon_n_command(vim_bot):
         ('A B C D E', ['g', 'u', '2w'], 'a b C D E', 0),
         ('A B C D E', ['2g', 'u', '2w'], 'a b c d E', 0),
         ('AbC.DE', ['g', 'u', 'W'], 'abc.de', 0),
+        ('AbC.DE', ['g', 'u', 'e'], 'abc.DE', 0),
+        ('AbC.DE', ['g', 'u', '2e'], 'abc.DE', 0),
+        ('AbC.DE', ['g', 'u', '3e'], 'abc.de', 0),
         ('A B C D E ', ['$', 'g', 'u', 'b'], 'A B C D e ', 8),
         ('A B C D E ', ['$', 'g', 'u', '2b'], 'A B C d e ', 6),
         ('A B C D E ', ['$', '2g', 'u', '2b'], 'A b c d e ', 2),
@@ -3471,6 +3548,8 @@ def test_C_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
         ('a.dk b', ['d', 'W'], 0, 'b', '"', 'a.dk '),
         ('  a.dk b', ['d', 'W'], 0, 'a.dk b', '"', '  '),
         ('a.dk\nb', ['d', 'W'], 0, '\nb', '"', 'a.dk'),
+        ('a.dk\nb', ['d', 'e'], 0, 'dk\nb', '"', 'a.'),
+        ('a.dk\nb', ['d', '2e'], 0, '\nb', '"', 'a.dk'),
         ('abcd', ['$', 'd', 'b'], 0, 'd', '"', 'abc'),
         ('  abcd \n b', ['3l', 'd', 'i', 'w'], 2, '   \n b', '"', 'abcd'),
         ('  abcd \n b', ['3l', 'd', 'a', 'w'], 1, '  \n b', '"', 'abcd '),
@@ -3537,6 +3616,8 @@ def test_d_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
         ('a b c ', ['c', '3w'], 0, ' ',  '"', 'a b c'),
         ('a.dk b', ['c', 'W'], 0, ' b', '"', 'a.dk'),
         (' a.dk b', ['c', 'W'], 0, 'a.dk b', '"', ' '),
+        ('a.dk\nb', ['c', 'e'], 0, 'dk\nb', '"', 'a.'),
+        ('a.dk\nb', ['c', '2e'], 0, '\nb', '"', 'a.dk'),
         ('abcd', ['$', 'c', 'b'], 0, 'd', '"', 'abc'),
         ('  abcd \n b', ['3l', 'c', 'i', 'w'], 2, '   \n b', '"', 'abcd'),
         ('  abcd \n b', ['3l', 'c', 'a', 'w'], 2, '  \n b', '"', 'abcd '),
