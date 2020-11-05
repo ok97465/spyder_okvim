@@ -281,7 +281,11 @@ class HelperMotion:
         cursor = self.get_cursor()
         for _ in range(num):
             if cursor.atBlockEnd():
-                cursor.movePosition(QTextCursor.NextWord, n=2)
+                cursor.movePosition(QTextCursor.NextWord)
+                if self._get_ch(cursor.position()) in WHITE_SPACE:
+                    cursor.movePosition(QTextCursor.NextWord, n=2)
+                else:
+                    cursor.movePosition(QTextCursor.NextWord)
             else:
                 cursor.movePosition(QTextCursor.NextWord)
 

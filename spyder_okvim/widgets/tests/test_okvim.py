@@ -281,6 +281,7 @@ def test_v_cmd(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     "text, cmd_list, cursor_pos, sel_pos",
     [
         ("import numpy as np", ['V'], 0, [0, 18]),
+        ("import numpy as np", ['V', 'l', 'h'], 0, [0, 18]),
         ("import numpy as np", ['V', '5l'], 5, [0, 18]),
         ("import numpy as np", ['5l', 'V'], 5, [0, 18]),
         ("""import numpy as np
@@ -2547,6 +2548,7 @@ def test_gtilde_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos)
     [
         ('', ['>', '>'], '', 0),
         ('abcde', ['2l', '>', '>'], '    abcde', 4),
+        ('abcde', ['2l', '>', '%'], 'abcde', 2),
         (' abcde\na', ['l', '>', '>'], '     abcde\na', 5),
         ('a\n\na', ['l', '3>', '>'], '    a\n\n    a', 4),
         ('ab\na\na\nb\nc\nd\ne\n', ['l', '2>', '3>'], '    ab\n    a\n    a\n    b\n    c\n    d\ne\n', 4),
@@ -2632,6 +2634,7 @@ def test_greater_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos
     [
         ('', ['<', '<'], '', 0),
         ('    abcde', ['2l', '<', '<'], 'abcde', 0),
+        ('    abcde', ['2l', '<', '%'], '    abcde', 2),
         ('   abcde', ['2l', '<', '<'], 'abcde', 0),
         (' abcde\na', ['l', '<', '<'], 'abcde\na', 0),
         ('    a\n\n    a', ['l', '3<', '<'], 'a\n\na', 0),
@@ -2913,6 +2916,7 @@ def test_aw_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         (' {01234} ', ['l', 'v', 'a', '}'], 7, [1, 8]),
         (' {01234} ', ['7l', 'v', 'a', '}'], 7, [1, 8]),
         (' {\n(\nasdf)\nasdf} ', ['3l', 'v', 'a', '}'], 15, [1, 16]),
+        (' (((kk)))', ['l', 'v', 'a', '('], 8, [1, 9]),
     ]
 )
 def test_a_bracket_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
@@ -3016,6 +3020,7 @@ def test_clipboard(vim_bot):
     [
         ('a', ['y', 'l'], 0, '"', 'a'),
         ('a', ['y', ','], 0, '"', ''),
+        ('a', ['y', 'i', 'b'], 0, '"', ''),
         ('abcd', ['$', 'y', '2h'], 1, '"', 'bc'),
         ('a\nb', ['y', 'j'], 0, '"', 'a\nb\n'),
         ('  a\n b', ['j', 'l', 'y', 'k'], 1, '"', '  a\n b\n'),
@@ -3543,6 +3548,7 @@ def test_C_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
         ('a b', ['d', 'w'], 0, 'b',  '"', 'a '),
         ('a\nb', ['d', 'w'], 0, '\nb',  '"', 'a'),
         ('a\nb', ['d', '2w'], 0, '',  '"', 'a\nb'),
+        ('a\n b', ['d', '2w'], 0, '',  '"', 'a\n b'),
         ('a\nb c\n', ['d', '2w'], 0, 'c\n',  '"', 'a\nb '),
         ('a b', ['l', 'd', 'w'], 1, 'ab',  '"', ' '),
         ('a b c ', ['d', '2w'], 0, 'c ',  '"', 'a b '),
@@ -3616,6 +3622,7 @@ def test_d_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
         ('a b', ['l', 'c', 'w'], 1, 'ab',  '"', ' '),
         ('a b c ', ['c', '2w'], 0, ' c ',  '"', 'a b'),
         ('a b c ', ['c', '3w'], 0, ' ',  '"', 'a b c'),
+        ('a\n b', ['c', '2w'], 0, '',  '"', 'a\n b'),
         ('a\nb\nc', ['c', '3w'], 0, '',  '"', 'a\nb\nc'),
         ('a\n b\nc', ['c', '3w'], 0, '',  '"', 'a\n b\nc'),
         ('a.dk b', ['c', 'W'], 0, ' b', '"', 'a.dk'),
@@ -3670,6 +3677,8 @@ def test_c_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
+        ('a', ['n'], 0,),
+        ('a', ['N'], 0,),
         ('a', ['/', 'b', Qt.Key_Escape], 0,),
         ('a', ['/', 'b', '\r'], 0,),
         (' dhr\n  dhrwodn\n\ndhrwodn\n   dhrwodn', ['/', 'd', 'h', 'r', Qt.Key_Return], 1,),
