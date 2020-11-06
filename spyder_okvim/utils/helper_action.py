@@ -442,6 +442,7 @@ class HelperAction:
 
     def toggle_comment(self, motion_info: MotionInfo):
         """Toggle comment."""
+        self.vim_status.update_dot_cmd(connect_editor=False)
         editor = self.get_editor()
         if not self.vim_status.is_normal():
             pos_start = self.get_pos_start_in_selection()

@@ -1410,17 +1410,19 @@ def test_tilde_cmd_in_vline(vim_bot, text, cmd_list, text_expected,
 @pytest.mark.parametrize(
     "text, cmd_list, text_expected, cursor_pos",
     [
-        ('', [], '', 0),
-        ('\n1\n', ['2j'], '\n1\n', 3),
-        ('1', [], '2', 0),
-        ('9', [], '10', 1),
-        ('100', [], '101', 2),
-        ('100', ['l'], '101', 2),
-        (' 100a', ['l'], ' 101a', 3),
-        (' -1a', ['2l'], ' 0a', 1),
-        (' -2a', ['l'], ' -1a', 2),
-        (' -2a', ['l', '15'], ' 13a', 2),
-        (' -2a', ['l', 'c'], ' -2a', 1),
+        ('', ['^A'], '', 0),
+        ('\n1\n', ['2j', '^A'], '\n1\n', 3),
+        ('1', ['^A'], '2', 0),
+        ('9', ['^A'], '10', 1),
+        ('100', ['^A'], '101', 2),
+        ('100', ['l', '^A'], '101', 2),
+        (' 100a', ['l', '^A'], ' 101a', 3),
+        (' -1a', ['2l', '^A'], ' 0a', 1),
+        (' -2a', ['l', '^A'], ' -1a', 2),
+        (' -2a', ['l', '15', '^A'], ' 13a', 2),
+        (' -2a', ['l', '15', '^A', '.'], ' 28a', 2),
+        (' -2a', ['l', '15', '^A', '2.'], ' 15a', 2),
+        (' -2a', ['l', 'c', '^A'], ' -2a', 1),
     ]
 )
 def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
@@ -1430,10 +1432,11 @@ def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
 
     cmd_line = vim.get_focus_widget()
     for cmd in cmd_list:
-        qtbot.keyClicks(cmd_line, cmd)
-
-    event = QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.ControlModifier)
-    vim.vim_cmd.commandline.keyPressEvent(event)
+        if cmd != '^A':
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            event = QKeyEvent(QEvent.KeyPress, Qt.Key_A, Qt.ControlModifier)
+            vim.vim_cmd.commandline.keyPressEvent(event)
 
     assert cmd_line.text() == ""
     assert editor.toPlainText() == text_expected
@@ -1443,17 +1446,19 @@ def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, text_expected, cursor_pos",
     [
-        ('', [], '', 0),
-        ('\n1\n', ['2j'], '\n1\n', 3),
-        ('1', [], '0', 0),
-        ('0', [], '-1', 1),
-        ('100', [], '99', 1),
-        ('100', ['l'], '99', 1),
-        (' 100a', ['l'], ' 99a', 2),
-        (' -1a', ['2l'], ' -2a', 2),
-        (' -2a', ['l'], ' -3a', 2),
-        (' -2a', ['l', '15'], ' -17a', 3),
-        (' -2a', ['l', 'c'], ' -2a', 1),
+        ('', ['^X'], '', 0),
+        ('\n1\n', ['2j', '^X'], '\n1\n', 3),
+        ('1', ['^X'], '0', 0),
+        ('0', ['^X'], '-1', 1),
+        ('100', ['^X'], '99', 1),
+        ('100', ['l', '^X'], '99', 1),
+        (' 100a', ['l', '^X'], ' 99a', 2),
+        (' -1a', ['2l', '^X'], ' -2a', 2),
+        (' -2a', ['l', '^X'], ' -3a', 2),
+        (' -2a', ['l', '15', '^X'], ' -17a', 3),
+        (' -2a', ['l', '15', '^X', '.'], ' -32a', 3),
+        (' -2a', ['l', '15', '^X', '2.'], ' -19a', 3),
+        (' -2a', ['l', 'c', '^X'], ' -2a', 1),
     ]
 )
 def test_subtract_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
@@ -1463,10 +1468,11 @@ def test_subtract_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
 
     cmd_line = vim.get_focus_widget()
     for cmd in cmd_list:
-        qtbot.keyClicks(cmd_line, cmd)
-
-    event = QKeyEvent(QEvent.KeyPress, Qt.Key_X, Qt.ControlModifier)
-    vim.vim_cmd.commandline.keyPressEvent(event)
+        if cmd != '^X':
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            event = QKeyEvent(QEvent.KeyPress, Qt.Key_X, Qt.ControlModifier)
+            vim.vim_cmd.commandline.keyPressEvent(event)
 
     assert cmd_line.text() == ""
     assert editor.toPlainText() == text_expected

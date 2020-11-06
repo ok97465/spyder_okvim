@@ -366,17 +366,18 @@ class ExecutorNormalCmd(ExecutorBase):
         for ch in cmd_str:
             self.cmd_line.setText(self.cmd_line.text() + ch)
 
-        self.vim_status.set_focus_to_vim()
+        for key_info in self.vim_status.dot_cmd.key_list_to_cmd_line:
+            event = key_info.to_event()
+            self.cmd_line.keyPressEvent(event)
+
         editor = self.get_editor()
         for key_info in self.vim_status.dot_cmd.key_list_from_editor:
-            event = QKeyEvent(
-                QEvent.KeyPress, key_info.key_code, key_info.modifiers,
-                key_info.text)
-            event.ignore()
-            print(event.key(), event.isAccepted())
+            event = key_info.to_event()
             editor.keyPressEvent(event)
 
         self.vim_status.running_dot_cmd = False
+
+        self.vim_status.set_focus_to_vim()
 
         cursor_pos = self.get_cursor().position()
         self.vim_status.cursor.set_cursor_pos_without_end(cursor_pos)
