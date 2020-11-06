@@ -1,21 +1,16 @@
 # -*- coding: utf-8 -*-
 """Status of Vim."""
 # Standard library imports
-from typing import NamedTuple
 from collections import defaultdict
+from typing import NamedTuple
 
 # Third party imports
-from qtpy.QtWidgets import QTextEdit, QApplication
-from qtpy.QtCore import QObject, Signal, QTimer, Slot, Qt
-from qtpy.QtGui import QBrush, QColor, QTextCursor, QKeyEvent
+from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
+from qtpy.QtGui import QBrush, QColor, QKeyEvent, QTextCursor
+from qtpy.QtWidgets import QApplication, QTextEdit
 
 # Local imports
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
-
-
-KEY_INFO = NamedTuple("KEY_INFO", [('key_code', int),
-                                   ('text', str),
-                                   ('modifiers', int)])
 
 
 class VimState:
@@ -44,9 +39,9 @@ class FindInfo:
 class InputCmdInfo:
     """Info for input command."""
 
-    def __init__(self):
-        self.num_str: str = ""
-        self.cmd: str = ""
+    def __init__(self, num_str: str, cmd: str):
+        self.num_str: str = num_str
+        self.cmd: str = cmd
 
     def clear(self):
         """Clear."""
@@ -74,10 +69,12 @@ class DotCmdInfo:
         self.register_name = None
         self.editor_connected = None
         self.key_list_from_editor = []
+        self.key_list_to_cmd_line = []
 
     def clear_key_list(self):
         """Clear key list from editor."""
         self.key_list_from_editor.clear()
+        self.key_list_to_cmd_line.clear()
 
     def cmd2string(self, num, num_str):
         """Convert cmd info to string of vim command."""
@@ -114,6 +111,22 @@ class DotCmdInfo:
             return str(num) + self.cmd
         else:
             return self.num_str + self.cmd
+
+
+class KeyInfo:
+    """Save the info of QKeyEvent."""
+
+    def __init__(self, key_code: int, text: str, modifiers: int):
+        self.key_code = key_code
+        self.text = text
+        self.modifiers = modifiers
+
+    def to_event(self):
+        """Convert key info to qkeyevent."""
+        event = QKeyEvent(
+                QEvent.KeyPress, self.key_code, self.modifiers, self.text)
+        event.ignore()
+        return event
 
 
 class RegisterInfo:
@@ -481,8 +494,8 @@ class VimStatus(QObject):
 
         # command
         self.find_info = FindInfo()
-        self.input_cmd = InputCmdInfo()
-        self.input_cmd_prev = InputCmdInfo()
+        self.input_cmd = InputCmdInfo("", "")
+        self.input_cmd_prev = InputCmdInfo("", "")
         self.dot_cmd = DotCmdInfo()
         self.running_dot_cmd = False
 
@@ -578,7 +591,7 @@ class VimStatus(QObject):
     def rcv_key_from_editor(self, event):
         """Add key event from editor to list."""
         self.dot_cmd.key_list_from_editor.append(
-            KEY_INFO(event.key(), event.text(), event.modifiers()))
+            KeyInfo(event.key(), event.text(), event.modifiers()))
 
     def disconnect_from_editor(self):
         """Disconnect from the editor."""
@@ -588,7 +601,8 @@ class VimStatus(QObject):
             editor.sig_key_pressed.disconnect(self.rcv_key_from_editor)
         self.dot_cmd.editor_connected = None
 
-    def update_dot_cmd(self, connect_editor, register_name=None):
+    def update_dot_cmd(self, connect_editor, register_name=None,
+                       key_list_to_cmd_line=None):
         """Update input command info to dot command info."""
         if self.running_dot_cmd is True:
             return
@@ -598,6 +612,8 @@ class VimStatus(QObject):
         dot_cmd.cmd = self.input_cmd.cmd
         dot_cmd.register_name = register_name
         dot_cmd.clear_key_list()
+        if key_list_to_cmd_line:
+            dot_cmd.key_list_to_cmd_line = key_list_to_cmd_line
         self.disconnect_from_editor()
 
         # For receiving key event from codeeditor

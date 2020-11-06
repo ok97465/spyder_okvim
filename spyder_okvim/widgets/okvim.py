@@ -15,7 +15,8 @@ from qtpy.QtGui import QTextCursor
 # Local imports
 from spyder_okvim.executor import (ExecutorNormalCmd, ExecutorVisualCmd,
                                    ExecutorVlineCmd)
-from spyder_okvim.utils.vim_status import VimStatus, VimState
+from spyder_okvim.utils.vim_status import (VimStatus, VimState, InputCmdInfo,
+                                           KeyInfo)
 
 
 class VimShortcut(QObject):
@@ -109,6 +110,13 @@ class VimShortcut(QObject):
             cursor.insertText(str(val + num))
             self.signal_cmd.emit("h")
 
+            # Update dot cmd
+            cmd_info = InputCmdInfo(str(num), "")
+            self.vim_status.input_cmd.set(cmd_info)
+            key_info = KeyInfo(Qt.Key_A, '', Qt.ControlModifier)
+            self.vim_status.update_dot_cmd(
+                    False, key_list_to_cmd_line=[key_info])
+
     def subtract_num(self):
         """Subtract to the number at the cursor."""
         val, pos_start, pos_end = self._extract_number()
@@ -127,6 +135,13 @@ class VimShortcut(QObject):
             cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
             cursor.insertText(str(val - num))
             self.signal_cmd.emit("h")
+
+            # Update dot cmd
+            cmd_info = InputCmdInfo(str(num), "")
+            self.vim_status.input_cmd.set(cmd_info)
+            key_info = KeyInfo(Qt.Key_X, '', Qt.ControlModifier)
+            self.vim_status.update_dot_cmd(
+                    False, key_list_to_cmd_line=[key_info])
 
     def open_symbols_dlg(self):
         """Open switcher for symbol."""
