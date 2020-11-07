@@ -169,6 +169,8 @@ class VimShortcut(QObject):
         for _ in range(num):
             editor.redo()
 
+        self.cmd_line.esc_pressed()
+
     def open_symbols_dlg(self):
         """Open switcher for symbol."""
         self.main.open_switcher(symbol=True)
