@@ -775,6 +775,11 @@ def test_undo_redo(vim_bot):
     assert editor.toPlainText() == 'a'
     assert editor.textCursor().position() == 0
 
+    qtbot.keyClicks(cmd_line, '/')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a'
+    assert editor.textCursor().position() == 0
+
     qtbot.keyPress(cmd_line, Qt.Key_Escape)
     qtbot.keyClicks(cmd_line, '2')
     qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
@@ -1439,6 +1444,7 @@ def test_tilde_cmd_in_vline(vim_bot, text, cmd_list, text_expected,
         (' -2a', ['l', '15', '^A', '.'], ' 28a', 2),
         (' -2a', ['l', '15', '^A', '2.'], ' 15a', 2),
         (' -2a', ['l', 'c', '^A'], ' -2a', 1),
+        (' -2a', ['l', '/', '^A'], ' -2a', 1),
     ]
 )
 def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
@@ -1475,6 +1481,7 @@ def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
         (' -2a', ['l', '15', '^X', '.'], ' -32a', 3),
         (' -2a', ['l', '15', '^X', '2.'], ' -19a', 3),
         (' -2a', ['l', 'c', '^X'], ' -2a', 1),
+        (' -2a', ['l', '/', '^X'], ' -2a', 1),
     ]
 )
 def test_subtract_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):

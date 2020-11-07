@@ -94,16 +94,19 @@ class VimShortcut(QObject):
     def add_num(self):
         """Add to the number at the cursor."""
         val, pos_start, pos_end = self._extract_number()
+
         if val is not None:
-            txt = self.cmd_line.text()
             if self.vim_status.sub_mode:
                 self.cmd_line.esc_pressed()
                 return
+
             try:
+                txt = self.cmd_line.text()
                 num = 1 if not txt else int(txt)
             except ValueError:
                 self.cmd_line.esc_pressed()
                 return
+
             cursor = self.get_editor().textCursor()
             cursor.setPosition(pos_start)
             cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
@@ -120,16 +123,19 @@ class VimShortcut(QObject):
     def subtract_num(self):
         """Subtract to the number at the cursor."""
         val, pos_start, pos_end = self._extract_number()
+
         if val is not None:
             if self.vim_status.sub_mode:
                 self.cmd_line.esc_pressed()
                 return
+
             try:
                 txt = self.cmd_line.text()
                 num = 1 if not txt else int(txt)
             except ValueError:
                 self.cmd_line.esc_pressed()
                 return
+
             cursor = self.get_editor().textCursor()
             cursor.setPosition(pos_start)
             cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
@@ -148,6 +154,7 @@ class VimShortcut(QObject):
         if self.vim_status.sub_mode:
             self.cmd_line.esc_pressed()
             return
+
         if not self.vim_status.is_normal():
             return
 
@@ -157,6 +164,7 @@ class VimShortcut(QObject):
         except ValueError:
             self.cmd_line.esc_pressed()
             return
+
         editor = self.get_editor()
         for _ in range(num):
             editor.redo()
