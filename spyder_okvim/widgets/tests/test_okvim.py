@@ -751,8 +751,8 @@ def test_O_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.toPlainText() == text_expected
 
 
-def test_u_cmd(vim_bot):
-    """Test u command."""
+def test_undo_redo(vim_bot):
+    """Test undo redo command."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text('a')
     editor.moveCursor(QTextCursor.EndOfLine)
@@ -764,6 +764,22 @@ def test_u_cmd(vim_bot):
 
     assert editor.toPlainText() == 'a'
     assert editor.textCursor().position() == 0
+
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a'
+    assert editor.textCursor().position() == 0
+
+    qtbot.keyClicks(cmd_line, 'v')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a'
+    assert editor.textCursor().position() == 0
+
+    qtbot.keyPress(cmd_line, Qt.Key_Escape)
+    qtbot.keyClicks(cmd_line, '2')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a\n1'
+    assert editor.textCursor().position() == 3
 
 
 @pytest.mark.parametrize(

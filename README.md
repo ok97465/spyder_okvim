@@ -61,7 +61,7 @@ The following actions are supported:
 - d{motion}, c{motion}
 - <{motion}, >{motion}
 - gu{motion}, gU{motion} g~{motion}, ~
-- u
+- u, Ctrl + R
 - J
 - .
 

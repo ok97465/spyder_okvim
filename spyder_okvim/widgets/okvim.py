@@ -121,11 +121,11 @@ class VimShortcut(QObject):
         """Subtract to the number at the cursor."""
         val, pos_start, pos_end = self._extract_number()
         if val is not None:
-            txt = self.cmd_line.text()
             if self.vim_status.sub_mode:
                 self.cmd_line.esc_pressed()
                 return
             try:
+                txt = self.cmd_line.text()
                 num = 1 if not txt else int(txt)
             except ValueError:
                 self.cmd_line.esc_pressed()
@@ -142,6 +142,24 @@ class VimShortcut(QObject):
             key_info = KeyInfo(Qt.Key_X, '', Qt.ControlModifier)
             self.vim_status.update_dot_cmd(
                     False, key_list_to_cmd_line=[key_info])
+
+    def redo(self):
+        """ Redo [count changes which were undone. """
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+        if not self.vim_status.is_normal():
+            return
+
+        try:
+            txt = self.cmd_line.text()
+            num = 1 if not txt else int(txt)
+        except ValueError:
+            self.cmd_line.esc_pressed()
+            return
+        editor = self.get_editor()
+        for _ in range(num):
+            editor.redo()
 
     def open_symbols_dlg(self):
         """Open switcher for symbol."""
@@ -189,7 +207,8 @@ class VimLineEdit(QLineEdit):
                            Qt.Key_X: vim_shortcut.subtract_num,
                            Qt.Key_S: vim_shortcut.open_symbols_dlg,
                            Qt.Key_D: vim_shortcut.pg_half_down,
-                           Qt.Key_U: vim_shortcut.pg_half_up}
+                           Qt.Key_U: vim_shortcut.pg_half_up,
+                           Qt.Key_R: vim_shortcut.redo}
 
     def to_normal(self):
         """Convert the state of vim to normal mode."""
