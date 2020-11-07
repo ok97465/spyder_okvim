@@ -784,7 +784,7 @@ def test_undo_redo(vim_bot):
     qtbot.keyClicks(cmd_line, '2')
     qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
     assert editor.toPlainText() == 'a\n1'
-    assert editor.textCursor().position() == 3
+    assert editor.textCursor().position() == 2
 
 
 @pytest.mark.parametrize(
