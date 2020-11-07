@@ -751,8 +751,8 @@ def test_O_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.toPlainText() == text_expected
 
 
-def test_u_cmd(vim_bot):
-    """Test u command."""
+def test_undo_redo(vim_bot):
+    """Test undo redo command."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text('a')
     editor.moveCursor(QTextCursor.EndOfLine)
@@ -764,6 +764,27 @@ def test_u_cmd(vim_bot):
 
     assert editor.toPlainText() == 'a'
     assert editor.textCursor().position() == 0
+
+    qtbot.keyClicks(cmd_line, 'g')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a'
+    assert editor.textCursor().position() == 0
+
+    qtbot.keyClicks(cmd_line, 'v')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a'
+    assert editor.textCursor().position() == 0
+
+    qtbot.keyClicks(cmd_line, '/')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a'
+    assert editor.textCursor().position() == 0
+
+    qtbot.keyPress(cmd_line, Qt.Key_Escape)
+    qtbot.keyClicks(cmd_line, '2')
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert editor.toPlainText() == 'a\n1'
+    assert editor.textCursor().position() == 2
 
 
 @pytest.mark.parametrize(
@@ -1423,6 +1444,7 @@ def test_tilde_cmd_in_vline(vim_bot, text, cmd_list, text_expected,
         (' -2a', ['l', '15', '^A', '.'], ' 28a', 2),
         (' -2a', ['l', '15', '^A', '2.'], ' 15a', 2),
         (' -2a', ['l', 'c', '^A'], ' -2a', 1),
+        (' -2a', ['l', '/', '^A'], ' -2a', 1),
     ]
 )
 def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
@@ -1459,6 +1481,7 @@ def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
         (' -2a', ['l', '15', '^X', '.'], ' -32a', 3),
         (' -2a', ['l', '15', '^X', '2.'], ' -19a', 3),
         (' -2a', ['l', 'c', '^X'], ' -2a', 1),
+        (' -2a', ['l', '/', '^X'], ' -2a', 1),
     ]
 )
 def test_subtract_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
