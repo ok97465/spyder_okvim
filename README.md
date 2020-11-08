@@ -61,7 +61,7 @@ The following actions are supported:
 - d{motion}, c{motion}
 - <{motion}, >{motion}
 - gu{motion}, gU{motion} g~{motion}, ~
-- u, Ctrl + R
+- u, ^R
 - J
 - .
 
@@ -74,7 +74,7 @@ The following motions are supported:
 - w, W, b, e
 - iwW, i()[]{}bB, i'"
 - G, g
-- Ctrl + D, Ctrl + U
+- ^D, ^U, ^F, ^B
 - HLM
 - %
 - f, F, t, T, ;, ,
@@ -82,8 +82,8 @@ The following motions are supported:
 
 ## Vim keys
 
-- Ctrl + A : Add [count] to number 
-- Ctrl + X : Subtract [count] to number 
+- ^A : Add [count] to number 
+- ^X : Subtract [count] to number 
 - K : Inspect current object 
 - gd : Go to definition.
 - gt, gT : Cycle to next/previous file.

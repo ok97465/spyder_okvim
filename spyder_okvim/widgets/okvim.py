@@ -40,9 +40,27 @@ class VimShortcut(QObject):
         self.signal_cmd.emit(f"{scroll_lines}k")
         self.signal_cmd.emit("^")
 
+    def pg_up(self):
+        """Scroll window upward."""
+        scroll_lines = self.vim_status.get_number_of_visible_lines()
+        if scroll_lines < 1:
+            scroll_lines = 1
+
+        self.signal_cmd.emit(f"{scroll_lines}k")
+        self.signal_cmd.emit("^")
+
     def pg_half_down(self):
         """Scroll window downward."""
         scroll_lines = self.vim_status.get_number_of_visible_lines() // 2
+        if scroll_lines < 1:
+            scroll_lines = 1
+
+        self.signal_cmd.emit(f"{scroll_lines}j")
+        self.signal_cmd.emit("^")
+
+    def pg_down(self):
+        """Scroll window downward."""
+        scroll_lines = self.vim_status.get_number_of_visible_lines()
         if scroll_lines < 1:
             scroll_lines = 1
 
@@ -205,7 +223,9 @@ class VimLineEdit(QLineEdit):
                            Qt.Key_X: vim_shortcut.subtract_num,
                            Qt.Key_S: vim_shortcut.open_symbols_dlg,
                            Qt.Key_D: vim_shortcut.pg_half_down,
+                           Qt.Key_F: vim_shortcut.pg_down,
                            Qt.Key_U: vim_shortcut.pg_half_up,
+                           Qt.Key_B: vim_shortcut.pg_up,
                            Qt.Key_R: vim_shortcut.redo}
 
     def to_normal(self):
