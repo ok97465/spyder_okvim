@@ -100,12 +100,8 @@ class VimShortcut(QObject):
                 self.cmd_line.esc_pressed()
                 return
 
-            try:
-                txt = self.cmd_line.text()
-                num = 1 if not txt else int(txt)
-            except ValueError:
-                self.cmd_line.esc_pressed()
-                return
+            txt = self.cmd_line.text()
+            num = 1 if not txt else int(txt)
 
             cursor = self.get_editor().textCursor()
             cursor.setPosition(pos_start)
@@ -129,12 +125,8 @@ class VimShortcut(QObject):
                 self.cmd_line.esc_pressed()
                 return
 
-            try:
-                txt = self.cmd_line.text()
-                num = 1 if not txt else int(txt)
-            except ValueError:
-                self.cmd_line.esc_pressed()
-                return
+            txt = self.cmd_line.text()
+            num = 1 if not txt else int(txt)
 
             cursor = self.get_editor().textCursor()
             cursor.setPosition(pos_start)
@@ -158,12 +150,8 @@ class VimShortcut(QObject):
         if not self.vim_status.is_normal():
             return
 
-        try:
-            txt = self.cmd_line.text()
-            num = 1 if not txt else int(txt)
-        except ValueError:
-            self.cmd_line.esc_pressed()
-            return
+        txt = self.cmd_line.text()
+        num = 1 if not txt else int(txt)
 
         editor = self.get_editor()
         for _ in range(num):

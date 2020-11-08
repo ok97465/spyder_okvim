@@ -107,10 +107,10 @@ def editor_bot(qtbot):
 
     editor_stack.set_find_widget(Mock())
     editor_stack.set_io_actions(Mock(), Mock(), Mock(), Mock())
-    finfo = editor_stack.new(osp.join(LOCATION, 'foo.txt'), 'utf-8', text)
-    editor_stack.new(osp.join(LOCATION, 'foo1.txt'), 'utf-8', text)
-    editor_stack.new(osp.join(LOCATION, 'foo2.txt'), 'utf-8', text)
-    editor_stack.new(osp.join(LOCATION, 'foo3.txt'), 'utf-8', text)
+    finfo = editor_stack.new(osp.join(LOCATION, 'foo.py'), 'utf-8', text)
+    editor_stack.new(osp.join(LOCATION, 'foo1.py'), 'utf-8', text)
+    editor_stack.new(osp.join(LOCATION, 'foo2.py'), 'utf-8', text)
+    editor_stack.new(osp.join(LOCATION, 'foo3.py'), 'utf-8', text)
     main = MainMock(editor_stack)
     # main.show()
     qtbot.addWidget(main)
@@ -3874,32 +3874,31 @@ def test_HML(vim_bot):
     assert cmd_line.text() == ""
 
 
-def test_toggle_comment(vim_bot):
-    """Test toogle comment."""
-    # TODO: Use CodeEditor of spyder for exact test.
+@pytest.mark.parametrize(
+    "text, cmd_list, text_expected, cursor_pos",
+    [
+        ('a\nb\nc', ['g', 'c', 'c'], '# a\nb\nc', 0),
+        ('a\nb\nc', ['g', 'c', 'f', 'k'], 'a\nb\nc', 0),
+        ('a\nb\nc', ['j', 'g', 'c', 'i', 'w'], 'a\n# b\nc', 2),
+        ('a\nb\nc', ['g', 'c', 'i', 'b'], 'a\nb\nc', 0),
+        ('a\nb\nc', ['g', 'c', '2j'], '# a\n# b\n# c', 0),
+        ('a\nb\nc', ['g', 'c', '2j', '.'], 'a\nb\nc', 0),
+        ('a\nb\nc', ['2j', 'g', 'c', '2k'], '# a\n# b\n# c', 0),
+        ('a\nb\nc', ['2j', 'g', 'c', '2k', '.'], 'a\n# b\n# c', 0),
+        ('a\nb\nc', ['v', 'j', 'g', 'c'], '# a\n# b\nc', 0),
+        ('a\nb\nc', ['v', 'j', 'g', 'c', 'j', '.'], '# a\n# # b\n# c', 4),
+    ]
+)
+def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
+    """Test gc command."""
     _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\n")
+    editor.set_text(text)
 
     cmd_line = vim.get_focus_widget()
-    qtbot.keyClicks(cmd_line, 'g')
-    qtbot.keyClicks(cmd_line, 'c')
-    qtbot.keyClicks(cmd_line, 'c')
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
 
-    qtbot.keyClicks(cmd_line, 'g')
-    qtbot.keyClicks(cmd_line, 'c')
-    qtbot.keyClicks(cmd_line, 'f')
-    qtbot.keyClicks(cmd_line, 'k')
-
-    qtbot.keyClicks(cmd_line, 'g')
-    qtbot.keyClicks(cmd_line, 'c')
-    qtbot.keyClicks(cmd_line, 'i')
-    qtbot.keyClicks(cmd_line, 'w')
-
-    qtbot.keyClicks(cmd_line, 'g')
-    qtbot.keyClicks(cmd_line, 'c')
-    qtbot.keyClicks(cmd_line, 'i')
-    qtbot.keyClicks(cmd_line, 'b')
-
-    qtbot.keyClicks(cmd_line, 'v')
-    qtbot.keyClicks(cmd_line, 'g')
-    qtbot.keyClicks(cmd_line, 'c')
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
