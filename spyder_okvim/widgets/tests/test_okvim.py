@@ -1783,7 +1783,6 @@ def test_F_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         ('\n r', ['j', 't', 'r'], 1),
         ('\n  r', ['j', 't', 'r'], 2),
         ('\n  rr', ['j', 't', 'r', ';'], 3),
-        ('\n  rr', ['j', 't', 'r', ';', ','], 3),
         ('\n  rrr', ['j', 't', 'r', '2;'], 3),
         ('\n  rrr', ['j', 't', 'r', ';', ';'], 4),
         ('\n  rrr', ['j', 't', 'r', ';', ';', ','], 4),
@@ -3893,16 +3892,16 @@ def test_HML(vim_bot):
 @pytest.mark.parametrize(
     "text, cmd_list, text_expected, cursor_pos",
     [
-        # ('a\nb\nc', ['g', 'c', 'c'], '# a\nb\nc', 0),
-        # ('a\nb\nc', ['g', 'c', 'f', 'k'], 'a\nb\nc', 0),
-        # ('a\nb\nc', ['j', 'g', 'c', 'i', 'w'], 'a\n# b\nc', 2),
+        ('a\nb\nc', ['g', 'c', 'c'], '# a\nb\nc', 0),
+        ('a\nb\nc', ['g', 'c', 'f', 'k'], 'a\nb\nc', 0),
+        ('a\nb\nc', ['j', 'g', 'c', 'i', 'w'], 'a\n# b\nc', 2),
         ('a\nb\nc', ['g', 'c', 'i', 'b'], 'a\nb\nc', 0),
-        # ('a\nb\nc', ['g', 'c', '2j'], '# a\n# b\n# c', 0),
-        # ('a\nb\nc', ['g', 'c', '2j', '.'], 'a\nb\nc', 0),
-        # ('a\nb\nc', ['2j', 'g', 'c', '2k'], '# a\n# b\n# c', 0),
-        # ('a\nb\nc', ['2j', 'g', 'c', '2k', '.'], 'a\n# b\n# c', 0),
-        # ('a\nb\nc', ['v', 'j', 'g', 'c'], '# a\n# b\nc', 0),
-        # ('a\nb\nc', ['v', 'j', 'g', 'c', 'j', '.'], '# a\n# # b\n# c', 4),
+        ('a\nb\nc', ['g', 'c', '2j'], '# a\n# b\n# c', 0),
+        ('a\nb\nc', ['g', 'c', '2j', '.'], 'a\nb\nc', 0),
+        ('a\nb\nc', ['2j', 'g', 'c', '2k'], '# a\n# b\n# c', 0),
+        ('a\nb\nc', ['2j', 'g', 'c', '2k', '.'], 'a\n# b\n# c', 0),
+        ('a\nb\nc', ['v', 'j', 'g', 'c'], '# a\n# b\nc', 0),
+        ('a\nb\nc', ['v', 'j', 'g', 'c', 'j', '.'], '# a\n# # b\n# c', 4),
     ]
 )
 def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
@@ -3918,3 +3917,4 @@ def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.toPlainText() == text_expected
     assert editor.textCursor().position() == cursor_pos
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
+
