@@ -318,23 +318,27 @@ class HelperAction:
 
     def paste_in_normal(self, num, is_lower):
         """Put the text before the cursor."""
-        # TODO: apply num
         reg = self.vim_status.get_register()
         self.vim_status.update_dot_cmd(connect_editor=False,
                                        register_name=reg.name)
+
+        if reg.content:
+            content = reg.content * num
+        else:
+            content = ''
 
         cursor = self.get_cursor()
         if reg.type != VimState.VLINE:
             if not cursor.atBlockEnd() and is_lower:
                 cursor.movePosition(QTextCursor.Right)
-            cursor.insertText(reg.content)
+            cursor.insertText(content)
             pos_end = cursor.selectionEnd()
             self.vim_status.to_normal()
             self.set_cursor_pos(pos_end - 1)
         elif is_lower is False:
             cursor.movePosition(QTextCursor.StartOfLine)
             block_number_old = cursor.block().blockNumber()
-            cursor.insertText(reg.content)
+            cursor.insertText(content)
             block = self.get_editor().document().findBlockByNumber(
                 block_number_old)
             cursor.setPosition(block.position())
@@ -344,10 +348,10 @@ class HelperAction:
             cursor.movePosition(QTextCursor.EndOfLine)
             cursor_pos_old = cursor.position()
             if cursor.atEnd():
-                cursor.insertText('\n' + reg.content[:-1])
+                cursor.insertText('\n' + content[:-1])
             else:
                 cursor.movePosition(QTextCursor.Right)
-                cursor.insertText(reg.content)
+                cursor.insertText(content)
             cursor.setPosition(cursor_pos_old)
             cursor.movePosition(QTextCursor.Down)
             cursor = self._move_cursor_after_space(cursor)
