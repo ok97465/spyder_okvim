@@ -3918,3 +3918,42 @@ def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.textCursor().position() == cursor_pos
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
 
+
+@pytest.mark.parametrize(
+    "text, cmd_list1, input_editor, cmd_list2, text_expected",
+    [
+        ('a\na\n', ['c', 'w'],  'bb', ['j', '.'], 'bb\nbb\n'),
+        ('a\na\n', ['a'],  'bb', ['j', '.'], 'abb\nabb\n'),
+        ('aa\naa\n', ['A'],  'bb', ['j', '.'], 'aabb\naabb\n'),
+        ('aa\naa\n', ['i'],  'bb', ['j', '.'], 'bbaa\nabba\n'),
+        ('aa\naa\n', ['I'],  'bb', ['j', '.'], 'bbaa\nbbaa\n'),
+        ('aa\naa\n', ['o'],  'bb', ['j', '.'], 'aa\nbb\naa\nbb\n'),
+        ('aa\naa\n', ['O'], 'bb', ['2j', '.'], 'bb\naa\nbb\naa\n'),
+        ('aa\naa\n', ['C'], 'bb', ['j', '.'], 'bb\nabb\n'),
+        ('aa\naa\n', ['s'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+        ('  aa\n  aa\n', ['S'], 'bb', ['j', '.'], '  bb\n  bb\n'),
+        ('aa\naa\n', ['v', 'c'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+        ('aa\naa\n', ['v', 'c'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+        ('aa\naa\n', ['v', 's'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+    ]
+)
+def test_dot_cmd_with_insert(vim_bot, text, cmd_list1, input_editor,
+                             cmd_list2, text_expected):
+    """Test . command with insert mode."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    cmd_line.setFocus()
+    for cmd in cmd_list1:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    qtbot.keyClicks(editor, input_editor)
+
+    vim.vim_cmd.vim_status.disconnect_from_editor()  # TODO: Fix
+    cmd_line.setFocus()
+    for cmd in cmd_list2:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text_expected

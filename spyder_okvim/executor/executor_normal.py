@@ -171,8 +171,6 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def o(self, num=1, num_str=''):
         """Begin a new line below the cursor and insert text."""
-        self.vim_status.update_dot_cmd(connect_editor=True)
-
         editor = self.get_editor()
         cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.EndOfLine)
@@ -183,10 +181,10 @@ class ExecutorNormalCmd(ExecutorBase):
         new_event = QKeyEvent(QEvent.KeyPress, Qt.Key_Return, Qt.NoModifier)
         editor.keyPressEvent(new_event)
 
-    def O(self, num=1, num_str=''):
-        """Begin a new line above the cursor and insert text."""
         self.vim_status.update_dot_cmd(connect_editor=True)
 
+    def O(self, num=1, num_str=''):
+        """Begin a new line above the cursor and insert text."""
         editor = self.get_editor()
         cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.StartOfLine)
@@ -194,6 +192,8 @@ class ExecutorNormalCmd(ExecutorBase):
         cursor.movePosition(QTextCursor.Up)
         editor.setTextCursor(cursor)
         editor.setFocus()
+
+        self.vim_status.update_dot_cmd(connect_editor=True)
 
     def K(self, num=1, num_str=''):
         """Show the help for the keyword under the cursor."""
