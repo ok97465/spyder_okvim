@@ -3922,6 +3922,7 @@ def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
 @pytest.mark.parametrize(
     "text, cmd_list1, input_editor, cmd_list2, text_expected",
     [
+        ('a\na\n', ['.'],  '', [], 'a\na\n'),
         ('a\na\n', ['c', 'w'],  'bb', ['j', '.'], 'bb\nbb\n'),
         ('a\na\n', ['a'],  'bb', ['j', '.'], 'abb\nabb\n'),
         ('aa\naa\n', ['A'],  'bb', ['j', '.'], 'aabb\naabb\n'),
