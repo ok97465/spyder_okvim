@@ -19,7 +19,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUoiaydxscVhHjJklLMwWbe^$gG~%fFtTnN/;,"r<> '
+        cmds = 'uUoiaydxscVhHjJklLMwWbepP^$gG~%fFtTnN/;,"r<> '
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = \
@@ -380,4 +380,11 @@ class ExecutorVisualCmd(ExecutorBase):
         """Make txt uppercase and move cursor to the start of selection."""
         self.helper_action.handle_case(None, 'upper')
 
-    # TODO : add p, P
+    def p(self, num=1, num_str=''):
+        """Put the text from register."""
+        self.helper_action.paste_in_visual(num)
+
+    def P(self, num=1, num_str=''):
+        """Put the text from register."""
+        self.helper_action.paste_in_visual(num)
+
