@@ -360,6 +360,75 @@ class HelperAction:
         editor = self.get_editor()
         editor.document_did_change()
 
+    def paste_in_visual(self, num):
+        """Put the text before the cursor."""
+        editor = self.get_editor()
+        reg = self.vim_status.get_register()
+        self.vim_status.update_dot_cmd(connect_editor=False,
+                                       register_name=reg.name)
+
+        if reg.content:
+            content = reg.content * num
+            if reg.type == VimState.VLINE:
+                content = '\n' + content
+        else:
+            content = ''
+
+        cursor = self.get_cursor()
+        sel_start = self.get_pos_start_in_selection()
+        sel_end = self.get_pos_end_in_selection()
+        block_no_start = self.get_block_no_start_in_selection()
+
+        cursor.setPosition(sel_start)
+        cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
+        cursor.insertText(content)
+
+        if reg.type == VimState.VLINE:
+            block = editor.document().findBlockByNumber(block_no_start + 1)
+            cursor_pos_new = block.position()
+        else:
+            if '\n' in content:
+                cursor_pos_new = sel_start
+            else:
+                cursor_pos_new = sel_start + len(content) - 1
+
+        editor.document_did_change()
+
+        self.vim_status.to_normal()
+        self.vim_status.cursor.set_cursor_pos(cursor_pos_new)
+
+    def paste_in_vline(self, num):
+        """Put the text before the cursor."""
+        editor = self.get_editor()
+        reg = self.vim_status.get_register()
+        self.vim_status.update_dot_cmd(connect_editor=False,
+                                       register_name=reg.name)
+
+        if reg.content:
+            if reg.type == VimState.VLINE:
+                content = reg.content * num
+                content = content[:-1]
+            else:
+                content = reg.content
+                if num > 1:
+                    content = (reg.content + '\n') * num
+                    content = content[:-1]
+        else:
+            content = ''
+
+        cursor = self.get_cursor()
+        sel_start = self.get_pos_start_in_selection()
+        sel_end = self.get_pos_end_in_selection()
+
+        cursor.setPosition(sel_start)
+        cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
+        cursor.insertText(content)
+
+        editor.document_did_change()
+
+        self.vim_status.to_normal()
+        self.vim_status.cursor.set_cursor_pos(sel_start)
+
     def delete(self, motion_info: MotionInfo, is_insert, replace_txt=''):
         """Delete selected text."""
         reg = self.vim_status.get_register()

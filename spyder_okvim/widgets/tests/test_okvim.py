@@ -3203,6 +3203,59 @@ def test_p_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, text_expected",
     [
+        ('ak', ['v', 'p'], 0, 'k'),
+        ('ak', ['v', 'l', 'y', 'v', 'p'], 1, 'akk'),
+        ('ak', ['v', 'l', 'y', 'v', 'P'], 1, 'akk'),
+        ('ak', ['v', 'l', 'y', 'v', '2p'], 3, 'akakk'),
+        ('ab\ncd\nef', ['v', 'j', 'l', 'y', 'j', 'v', 'p'], 3, 'ab\nab\ncdd\nef'),
+        ('ab\ncd\nef', ['V', 'y', 'j', 'v', 'p'], 4, 'ab\n\nab\nd\nef'),
+    ]
+)
+def test_p_P_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, text_expected):
+    """Test p command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert editor.toPlainText() == text_expected
+    assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, text_expected",
+    [
+        ('ak', ['V', 'p'], 0, ''),
+        ('ak', ['v', 'l', 'y', 'V', 'p'], 0, 'ak'),
+        ('ak', ['v', 'l', 'y', 'V', 'P'], 0, 'ak'),
+        ('ak', ['v', 'l', 'y', 'V', '2p'], 0, 'ak\nak'),
+        ('ab\n\ncd\n', ['v', 'j', 'y', '2j', 'V', '2p'], 4, 'ab\n\nab\n\n\nab\n\n\n'),
+        ('ab\ncd\nef\ngh\n', ['V', 'j', 'y', '2j', 'V', 'p'], 6, 'ab\ncd\nab\ncd\ngh\n'),
+        ('ab\ncd\nef\ngh\n', ['V', 'j', 'y', '2j', 'V', '2p'], 6, 'ab\ncd\nab\ncd\nab\ncd\ngh\n'),
+    ]
+)
+def test_p_P_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, text_expected):
+    """Test p command in vline."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert editor.toPlainText() == text_expected
+    assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, text_expected",
+    [
         ('ak', ['v', 'l', 'y', 'P'], 1, 'akak'),
         ('ak', ['v', 'l', 'y', '2P'], 3, 'akakak'),
         ('a\n', ['v', 'y', 'j', 'P'], 2, 'a\na'),
@@ -3722,6 +3775,47 @@ def test_c_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
 
 
 @pytest.mark.parametrize(
+    "text, cmd_list1, input_editor, cmd_list2, text_expected",
+    [
+        ('a\na\n', ['.'],  '', [], 'a\na\n'),
+        ('a\na\n', ['c', 'w'],  'bb', ['j', '.'], 'bb\nbb\n'),
+        ('a\na\n', ['a'],  'bb', ['j', '.'], 'abb\nabb\n'),
+        ('aa\naa\n', ['A'],  'bb', ['j', '.'], 'aabb\naabb\n'),
+        ('aa\naa\n', ['i'],  'bb', ['j', '.'], 'bbaa\nabba\n'),
+        ('aa\naa\n', ['I'],  'bb', ['j', '.'], 'bbaa\nbbaa\n'),
+        ('aa\naa\n', ['o'],  'bb', ['j', '.'], 'aa\nbb\naa\nbb\n'),
+        ('aa\naa\n', ['O'], 'bb', ['2j', '.'], 'bb\naa\nbb\naa\n'),
+        ('aa\naa\n', ['C'], 'bb', ['j', '.'], 'bb\nabb\n'),
+        ('aa\naa\n', ['s'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+        ('  aa\n  aa\n', ['S'], 'bb', ['j', '.'], '  bb\n  bb\n'),
+        ('aa\naa\n', ['v', 'c'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+        ('aa\naa\n', ['v', 'c'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+        ('aa\naa\n', ['v', 's'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
+    ]
+)
+def test_dot_cmd_with_insert(vim_bot, text, cmd_list1, input_editor,
+                             cmd_list2, text_expected):
+    """Test . command with insert mode."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    cmd_line.setFocus()
+    for cmd in cmd_list1:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    qtbot.keyClicks(editor, input_editor)
+
+    vim.vim_cmd.vim_status.disconnect_from_editor()  # TODO: Fix
+    cmd_line.setFocus()
+    for cmd in cmd_list2:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text_expected
+
+
+@pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
         ('a', ['n'], 0,),
@@ -3927,43 +4021,3 @@ def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.textCursor().position() == cursor_pos
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
 
-
-@pytest.mark.parametrize(
-    "text, cmd_list1, input_editor, cmd_list2, text_expected",
-    [
-        ('a\na\n', ['.'],  '', [], 'a\na\n'),
-        ('a\na\n', ['c', 'w'],  'bb', ['j', '.'], 'bb\nbb\n'),
-        ('a\na\n', ['a'],  'bb', ['j', '.'], 'abb\nabb\n'),
-        ('aa\naa\n', ['A'],  'bb', ['j', '.'], 'aabb\naabb\n'),
-        ('aa\naa\n', ['i'],  'bb', ['j', '.'], 'bbaa\nabba\n'),
-        ('aa\naa\n', ['I'],  'bb', ['j', '.'], 'bbaa\nbbaa\n'),
-        ('aa\naa\n', ['o'],  'bb', ['j', '.'], 'aa\nbb\naa\nbb\n'),
-        ('aa\naa\n', ['O'], 'bb', ['2j', '.'], 'bb\naa\nbb\naa\n'),
-        ('aa\naa\n', ['C'], 'bb', ['j', '.'], 'bb\nabb\n'),
-        ('aa\naa\n', ['s'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
-        ('  aa\n  aa\n', ['S'], 'bb', ['j', '.'], '  bb\n  bb\n'),
-        ('aa\naa\n', ['v', 'c'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
-        ('aa\naa\n', ['v', 'c'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
-        ('aa\naa\n', ['v', 's'], 'bb', ['j', '0', '.'], 'bba\nbba\n'),
-    ]
-)
-def test_dot_cmd_with_insert(vim_bot, text, cmd_list1, input_editor,
-                             cmd_list2, text_expected):
-    """Test . command with insert mode."""
-    _, _, editor, vim, qtbot = vim_bot
-    editor.set_text(text)
-
-    cmd_line = vim.get_focus_widget()
-    cmd_line.setFocus()
-    for cmd in cmd_list1:
-        qtbot.keyClicks(cmd_line, cmd)
-
-    qtbot.keyClicks(editor, input_editor)
-
-    vim.vim_cmd.vim_status.disconnect_from_editor()  # TODO: Fix
-    cmd_line.setFocus()
-    for cmd in cmd_list2:
-        qtbot.keyClicks(cmd_line, cmd)
-
-    assert cmd_line.text() == ""
-    assert editor.toPlainText() == text_expected
