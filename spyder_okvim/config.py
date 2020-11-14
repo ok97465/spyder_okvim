@@ -20,7 +20,7 @@ CONF_DEFAULTS = [
       'select_bg_color': "#214283",
       'search_fg_color': "#A9B7C6",
       'search_bg_color': "#30652F",
-      'yank_fg_color': "#A9B7C6",
+      'yank_fg_color': "#B9C7D6",
       'yank_bg_color': "#7D7920"
      }
      ),

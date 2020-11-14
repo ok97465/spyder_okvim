@@ -3137,6 +3137,30 @@ def test_y_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, register_name,
         assert reg0.content == text_yanked
 
 
+def test_highlight_yank(vim_bot):
+    """Test highlight yank."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text('foo')
+
+    CONF.set(CONF_SECTION, 'highlight_yank', False)
+    vim.apply_plugin_settings(None)
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'yy')
+
+    sel = editor.get_extra_selections('hl_yank')
+    assert len(sel) == 0
+
+    CONF.set(CONF_SECTION, 'highlight_yank', True)
+    vim.apply_plugin_settings(None)
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'yy')
+
+    sel = editor.get_extra_selections('hl_yank')
+    assert len(sel) > 0
+
+
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, register_name, text_yanked",
     [

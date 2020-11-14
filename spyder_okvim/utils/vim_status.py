@@ -145,7 +145,7 @@ class SearchInfo:
 
     def __init__(self, vim_cursor):
         self.color_fg = QBrush(QColor('#A9B7C6'))
-        self.color_bg = QBrush(QColor('#344143'))
+        self.color_bg = QBrush(QColor('#30652F'))
         self.txt_searched = ''
         self.selection_list = []
         self.vim_cursor = vim_cursor
