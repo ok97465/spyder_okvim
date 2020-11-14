@@ -134,7 +134,10 @@ def vim_bot(editor_bot):
 
 
 def test_ui(vim_bot):
-    """Test ui."""
+    """Test ui.
+
+    Call the methods that is difficult to make test case.
+    """
     _, _, _, vim, _ = vim_bot
     vim.get_plugin_icon()
     vim.switch_to_plugin()

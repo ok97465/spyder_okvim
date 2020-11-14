@@ -202,10 +202,15 @@ class VimCursor:
         self.selection.format.setForeground(QBrush(QColor('#A9B7C6')))
         self.selection.format.setBackground(QBrush(QColor('#214283')))
 
-        self.set_color()
+        self.yank_fg_color = QBrush(QColor('#B9C7D6'))
+        self.yank_bg_color = QBrush(QColor('#7D7920'))
+        self.hl_yank_dur = 400  # duration of highlight after yank
+        self.hl_yank = True
 
-    def set_color(self):
-        """Set the color of vim cursor."""
+        self.set_config_from_conf()
+
+    def set_config_from_conf(self):
+        """Set config from conf."""
         self.vim_cursor.format.setForeground(QBrush(QColor(
             CONF.get(CONF_SECTION, 'cursor_fg_color'))))
         self.vim_cursor.format.setBackground(QBrush(QColor(
@@ -216,6 +221,12 @@ class VimCursor:
         self.selection.format.setBackground(QBrush(QColor(
             CONF.get(CONF_SECTION, 'select_bg_color'))))
 
+        self.yank_fg_color = QBrush(QColor(
+            CONF.get(CONF_SECTION, 'yank_fg_color')))
+        self.yank_bg_color = QBrush(QColor(
+            CONF.get(CONF_SECTION, 'yank_bg_color')))
+        self.hl_yank_dur = CONF.get(CONF_SECTION, 'highlight_yank_duration')
+        self.hl_yank = CONF.get(CONF_SECTION, 'highlight_yank')
 
     def get_editor(self):
         """Get the editor focused."""
@@ -492,6 +503,26 @@ class VimCursor:
     def apply_motion_info_in_vline(self, motion_info: MotionInfo):
         """Apply motion info in visual mode."""
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
+
+    def highlight_yank(self, pos_start, pos_end):
+        """Highlight after yank."""
+        if self.hl_yank is False:
+            return
+
+        cursor = self.get_cursor()
+        editor = self.get_editor()
+        sel = QTextEdit.ExtraSelection()
+        sel.format.setForeground(self.yank_fg_color)
+        sel.format.setBackground(self.yank_bg_color)
+        sel.cursor = cursor
+
+        sel.cursor.setPosition(pos_start)
+        sel.cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
+        editor.set_extra_selections("hl_yank", [sel])
+
+        QTimer.singleShot(
+            self.hl_yank_dur,
+            lambda: editor.clear_extra_selections("hl_yank"))
 
 
 class VimStatus(QObject):

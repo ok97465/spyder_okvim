@@ -306,6 +306,11 @@ class HelperAction:
         if is_explicit is True and register_name == '"':
             self.vim_status.set_register('0', txt, register_type)
 
+        # highlight yank
+        if is_explicit is True and self.vim_status.is_normal():
+            if self.vim_status.running_dot_cmd is False:
+                self.vim_status.cursor.highlight_yank(sel_start, sel_end)
+
         return sel_start, sel_end
 
     def _move_cursor_after_space(self, cursor):
