@@ -29,7 +29,7 @@ This plugin supports spyder command.
 
 | Movements | Combination | Spyder command |
 |------|-------------|----------------|
-|![alt tag](/doc/ex_movement.gif) | ![alt tag](/doc/ex_combination.gif)| ![alt tag](/doc/ex_spyder_cmd.gif) |
+|![movement gif](/doc/ex_movement.gif) | ![combination gif](/doc/ex_combination.gif)| ![spyder cmd gif](/doc/ex_spyder_cmd.gif) |
 
 
 ## Installation
@@ -97,3 +97,7 @@ The following motions are supported:
 - space + enter :  run cell and advance 
 - gc{motion} : toggle comment (support visual mode)
   - gcc : toggle comment of current line
+
+## Config Page
+
+![config page](/doc/config_page.png)
