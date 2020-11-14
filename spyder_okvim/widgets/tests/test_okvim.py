@@ -732,6 +732,7 @@ def test_o_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         ("01 34\n6\n", ['V', 'j'], 6, [0, 7]),
         ("01 34\n6\n", ['V', 'j', 'o'], 0, [0, 7]),
         ("01 34\n6\n", ['j', 'V', 'k', 'o'], 6, [0, 7]),
+        ("01 34\n6\n8\n", ['j', 'V', 'j', '2k', 'o'], 6, [0, 7]),
     ]
 )
 def test_o_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
