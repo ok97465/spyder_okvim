@@ -8,8 +8,10 @@ from typing import NamedTuple
 from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 from qtpy.QtGui import QBrush, QColor, QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication, QTextEdit
+from spyder.config.manager import CONF
 
 # Local imports
+from spyder_okvim.config import CONF_SECTION
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
@@ -142,11 +144,25 @@ class SearchInfo:
     """Result of search."""
 
     def __init__(self, vim_cursor):
-        self.color_fg = QBrush(QColor(0, 0, 0))
-        self.color_bg = QBrush(QColor(0, 107, 107))
+        self.color_fg = QBrush(QColor('#A9B7C6'))
+        self.color_bg = QBrush(QColor('#344143'))
         self.txt_searched = ''
         self.selection_list = []
         self.vim_cursor = vim_cursor
+        self.ignorecase = True
+
+        self.set_color()
+
+    def set_color(self):
+        """Set the color of search results."""
+        self.color_fg = QBrush(QColor(
+            CONF.get(CONF_SECTION, 'search_fg_color')))
+        self.color_bg = QBrush(QColor(
+            CONF.get(CONF_SECTION, 'search_bg_color')))
+
+        for sel in self.selection_list:
+            sel.format.setForeground(self.color_fg)
+            sel.format.setBackground(self.color_bg)
 
     def get_sel_start_list(self):
         """Get the start position of selection."""
@@ -159,7 +175,9 @@ class SearchInfo:
             cursor.setPosition(sel.cursor.selectionEnd(),
                                QTextCursor.KeepAnchor)
             txt_sel = cursor.selectedText()
-            if txt_sel == self.txt_searched:
+            if ((txt_sel == self.txt_searched)
+                    or (self.ignorecase is True
+                        and txt_sel.lower() == self.txt_searched.lower())):
                 tmp.append(sel)
         self.selection_list = tmp
 
@@ -177,12 +195,27 @@ class VimCursor:
         self.editor_widget = editor_widget
 
         self.vim_cursor = QTextEdit.ExtraSelection()
-        self.vim_cursor.format.setForeground(QBrush(QColor(0, 0, 0)))
-        self.vim_cursor.format.setBackground(QBrush(QColor(187, 187, 187)))
+        self.vim_cursor.format.setForeground(QBrush(QColor('#000000')))
+        self.vim_cursor.format.setBackground(QBrush(QColor('#BBBBBB')))
 
         self.selection = QTextEdit.ExtraSelection()
-        self.selection.format.setForeground(QBrush(QColor(0, 0, 0)))
-        self.selection.format.setBackground(QBrush(QColor(147, 147, 147)))
+        self.selection.format.setForeground(QBrush(QColor('#A9B7C6')))
+        self.selection.format.setBackground(QBrush(QColor('#214283')))
+
+        self.set_color()
+
+    def set_color(self):
+        """Set the color of vim cursor."""
+        self.vim_cursor.format.setForeground(QBrush(QColor(
+            CONF.get(CONF_SECTION, 'cursor_fg_color'))))
+        self.vim_cursor.format.setBackground(QBrush(QColor(
+            CONF.get(CONF_SECTION, 'cursor_bg_color'))))
+
+        self.selection.format.setForeground(QBrush(QColor(
+            CONF.get(CONF_SECTION, 'select_fg_color'))))
+        self.selection.format.setBackground(QBrush(QColor(
+            CONF.get(CONF_SECTION, 'select_bg_color'))))
+
 
     def get_editor(self):
         """Get the editor focused."""

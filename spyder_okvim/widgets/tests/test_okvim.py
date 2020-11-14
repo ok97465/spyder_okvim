@@ -20,9 +20,11 @@ from qtpy.QtCore import Qt, QEvent
 
 # Spyder imports
 from spyder.plugins.editor.widgets.editor import EditorStack
+from spyder.config.manager import CONF
 
 # Local imports
 from spyder_okvim.plugin import OkVim
+from spyder_okvim.config import CONF_SECTION, CONF_DEFAULTS
 from spyder_okvim.utils.vim_status import VimState
 
 
@@ -84,6 +86,12 @@ class MainMock(QWidget):
         self.setLayout(layout)
         self.status_bar = StatusBarMock()
 
+        for name, dict_info in CONF_DEFAULTS:
+            if name != CONF_SECTION:
+                continue
+            for key, val in dict_info.items():
+                CONF.set(name, key, val)
+
     add_dockwidget = Mock()
 
     def statusBar(self):
@@ -124,6 +132,18 @@ def vim_bot(editor_bot):
     vim = VimTesting(main)
     vim.register_plugin()
     return main, editor_stack, editor, vim, qtbot
+
+
+def test_apply_config(vim_bot):
+    """Run apply_plugin_settings method."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text('foo Foo foo Foo')
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, '/foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+
+    vim.apply_plugin_settings("")
 
 
 @pytest.mark.parametrize(
@@ -3851,6 +3871,42 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
+
+
+def test_search_cmd_with_option(vim_bot):
+    """Test / command with option."""
+    _, _, editor, vim, qtbot = vim_bot
+    get_start_list = vim.vim_cmd.vim_status.search.get_sel_start_list
+    cmd_line = vim.get_focus_widget()
+
+    editor.set_text('foo Foo foo Foo')
+
+    CONF.set(CONF_SECTION, 'ignorecase', False)
+    CONF.set(CONF_SECTION, 'smartcase', False)
+    qtbot.keyClicks(cmd_line, '/foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    assert get_start_list() == [0, 8]
+    qtbot.keyClicks(cmd_line, '/Foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    assert get_start_list() == [4, 12]
+
+    CONF.set(CONF_SECTION, 'ignorecase', True)
+    CONF.set(CONF_SECTION, 'smartcase', False)
+    qtbot.keyClicks(cmd_line, '/foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    assert get_start_list() == [0, 4, 8, 12]
+    qtbot.keyClicks(cmd_line, '/Foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    assert get_start_list() == [0, 4, 8, 12]
+
+    CONF.set(CONF_SECTION, 'ignorecase', True)
+    CONF.set(CONF_SECTION, 'smartcase', True)
+    qtbot.keyClicks(cmd_line, '/foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    assert get_start_list() == [0, 4, 8, 12]
+    qtbot.keyClicks(cmd_line, '/Foo')
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    assert get_start_list() == [4, 12]
 
 
 @pytest.mark.parametrize(

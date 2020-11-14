@@ -9,6 +9,10 @@ from bisect import bisect_left, bisect_right
 from qtpy.QtWidgets import QTextEdit
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtCore import QPoint, QRegularExpression
+from spyder.config.manager import CONF
+
+# Local imports
+from spyder_okvim.config import CONF_SECTION
 
 
 WHITE_SPACE = ' \t'
@@ -1013,10 +1017,29 @@ class HelperMotion:
         editor = self.get_editor()
         cursor = QTextCursor(editor.document())
         cursor.movePosition(QTextCursor.Start)
+
+        # Apply the option for search
+        is_ignorecase = CONF.get(CONF_SECTION, 'ignorecase')
+        is_smartcase = CONF.get(CONF_SECTION, 'smartcase')
+
+        if is_ignorecase is True:
+            option = None
+            self.vim_status.search.ignorecase = True
+
+            if is_smartcase and txt.lower() != txt:
+                option = QTextDocument.FindCaseSensitively
+                self.vim_status.search.ignorecase = False
+        else:
+            option = QTextDocument.FindCaseSensitively
+            self.vim_status.search.ignorecase = False
+
         # Find key in document forward
         search_stack = []
-        cursor = editor.document().find(
-            QRegularExpression(txt), options=QTextDocument.FindCaseSensitively)
+        if option:
+            cursor = editor.document().find(QRegularExpression(txt),
+                                            options=option)
+        else:
+            cursor = editor.document().find(QRegularExpression(txt))
 
         back = self.vim_status.search.color_bg
         fore = self.vim_status.search.color_fg
@@ -1026,8 +1049,12 @@ class HelperMotion:
             selection.format.setForeground(fore)
             selection.cursor = cursor
             search_stack.append(selection)
-            cursor = editor.document().find(QRegularExpression(txt), cursor,
-                                            QTextDocument.FindCaseSensitively)
+            if option:
+                cursor = editor.document().find(
+                        QRegularExpression(txt), cursor, options=option)
+            else:
+                cursor = editor.document().find(
+                        QRegularExpression(txt), cursor)
         editor.set_extra_selections('vim_search', [i for i in search_stack])
         editor.update_extra_selections()
 

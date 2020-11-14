@@ -12,18 +12,22 @@ from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QShortcut, QVBoxLayout
 from spyder.api.plugins import SpyderPluginWidget
 from spyder.config.base import _
+import qtawesome as qta
 
 # Local imports
+from spyder_okvim.config import CONF_DEFAULTS, CONF_SECTION
+from spyder_okvim.confpage import OkvimConfigPage
 from spyder_okvim.widgets.okvim import VimWidget
+from spyder.utils.icon_manager import MAIN_FG_COLOR
 
 
 class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
     """Implements a Vim-like command mode."""
 
     focus_changed = Signal()
-    CONF_SECTION = "okvim"
-    CONF_FILE = False
-    CONFIGWIDGET_CLASS = None
+    CONF_SECTION = CONF_SECTION
+    CONFIGWIDGET_CLASS = OkvimConfigPage
+    CONF_DEFAULTS = CONF_DEFAULTS
 
     def __init__(self, parent):
         SpyderPluginWidget.__init__(self, parent)
@@ -39,11 +43,11 @@ class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
     # %% SpyderPlugin API
     def get_plugin_title(self):
         """Return widget title."""
-        return _("okvim")
+        return _("Okvim")
 
     def get_plugin_icon(self):
         """Return widget icon."""
-        return  # self.get_icon('vim.png')
+        return qta.icon('mdi.vimeo', color=MAIN_FG_COLOR)
 
     def register_plugin(self):
         """Register plugin in Spyder's main window."""
@@ -69,3 +73,9 @@ class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
         This method is called when pressing plugin's shortcut key
         """
         self.vim_cmd.commandline.setFocus()
+
+    def apply_plugin_settings(self, options):
+        """Apply the config settings."""
+        self.vim_cmd.vim_status.search.set_color()
+        self.vim_cmd.vim_status.cursor.set_color()
+
