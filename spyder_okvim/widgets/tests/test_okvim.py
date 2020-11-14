@@ -20,9 +20,11 @@ from qtpy.QtCore import Qt, QEvent
 
 # Spyder imports
 from spyder.plugins.editor.widgets.editor import EditorStack
+from spyder.config.manager import CONF
 
 # Local imports
 from spyder_okvim.plugin import OkVim
+from spyder_okvim.config import CONF_SECTION
 from spyder_okvim.utils.vim_status import VimState
 
 
@@ -83,6 +85,14 @@ class MainMock(QWidget):
         layout.addWidget(self.editor)
         self.setLayout(layout)
         self.status_bar = StatusBarMock()
+        CONF.set(CONF_SECTION, 'ignorecase', True)
+        CONF.set(CONF_SECTION, 'smartcase', True)
+        CONF.set(CONF_SECTION, 'cursor_fg_color', "#000000")
+        CONF.set(CONF_SECTION, 'cursor_bg_color', "#000000")
+        CONF.set(CONF_SECTION, 'select_fg_color', "#000000")
+        CONF.set(CONF_SECTION, 'select_bg_color', "#000000")
+        CONF.set(CONF_SECTION, 'search_fg_color', "#000000")
+        CONF.set(CONF_SECTION, 'search_bg_color', "#000000")
 
     add_dockwidget = Mock()
 
@@ -124,6 +134,12 @@ def vim_bot(editor_bot):
     vim = VimTesting(main)
     vim.register_plugin()
     return main, editor_stack, editor, vim, qtbot
+
+
+def test_apply_config(vim_bot):
+    """Run apply_plugin_settings method."""
+    _, _, _, vim, _ = vim_bot
+    vim.apply_plugin_settings("")
 
 
 @pytest.mark.parametrize(
