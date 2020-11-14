@@ -149,6 +149,7 @@ class SearchInfo:
         self.txt_searched = ''
         self.selection_list = []
         self.vim_cursor = vim_cursor
+        self.ignorecase = True
 
         self.set_color()
 
@@ -174,7 +175,9 @@ class SearchInfo:
             cursor.setPosition(sel.cursor.selectionEnd(),
                                QTextCursor.KeepAnchor)
             txt_sel = cursor.selectedText()
-            if txt_sel == self.txt_searched:
+            if ((txt_sel == self.txt_searched)
+                    or (self.ignorecase is True
+                        and txt_sel.lower() == self.txt_searched.lower())):
                 tmp.append(sel)
         self.selection_list = tmp
 
