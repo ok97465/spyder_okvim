@@ -8,25 +8,24 @@
 # Standard library imports
 import os
 import os.path as osp
-
-# Test library imports
-import pytest
 from unittest.mock import Mock
 
+# Third party imports
+# Test library imports
+import pytest
 # Qt imports
-from qtpy.QtWidgets import QWidget, QVBoxLayout, QApplication
-from qtpy.QtGui import QTextCursor, QFont, QKeyEvent
-from qtpy.QtCore import Qt, QEvent
-
-# Spyder imports
-from spyder.plugins.editor.widgets.editor import EditorStack
+from qtpy.QtCore import QEvent, Qt
+from qtpy.QtGui import QFont, QKeyEvent, QTextCursor
+from qtpy.QtWidgets import QApplication, QVBoxLayout, QWidget
+# Spyder import
 from spyder.config.manager import CONF
+from spyder.plugins.editor.widgets.editor import EditorStack
 
 # Local imports
+from spyder_okvim.config import CONF_DEFAULTS, CONF_SECTION
+from spyder_okvim.confpage import OkvimConfigPage
 from spyder_okvim.plugin import OkVim
-from spyder_okvim.config import CONF_SECTION, CONF_DEFAULTS
 from spyder_okvim.utils.vim_status import VimState
-
 
 LOCATION = osp.realpath(osp.join(
     os.getcwd(), osp.dirname(__file__)))
@@ -132,6 +131,15 @@ def vim_bot(editor_bot):
     vim = VimTesting(main)
     vim.register_plugin()
     return main, editor_stack, editor, vim, qtbot
+
+
+def test_ui(vim_bot):
+    """Test ui."""
+    _, _, _, vim, _ = vim_bot
+    vim.get_plugin_icon()
+    vim.switch_to_plugin()
+    conf_page = OkvimConfigPage(vim, vim)
+    conf_page.setup_page()
 
 
 def test_apply_config(vim_bot):
