@@ -8,7 +8,7 @@
 from qtpy.QtCore import QRegExp, Qt
 from qtpy.QtGui import QRegExpValidator
 from qtpy.QtWidgets import (
-    QGridLayout, QGroupBox, QLabel, QVBoxLayout,)
+    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QVBoxLayout,)
 from spyder.api.preferences import PluginConfigPage
 from spyder.config.base import _
 
@@ -18,6 +18,7 @@ class OkvimConfigPage(PluginConfigPage):
         """Create configuration page."""
         newcb = self.create_checkbox
         newce = self.create_coloredit
+        newsb = self.create_spinbox
 
         color_group = QGroupBox("Color")
         color_layout = QGridLayout()
@@ -29,6 +30,8 @@ class OkvimConfigPage(PluginConfigPage):
                 'Selection Bg': ('select_bg_color', 1, 2),
                 'Search Fg': ('search_fg_color', 2, 0),
                 'Search Bg': ('search_bg_color', 2, 2),
+                'Yank Fg': ('yank_fg_color', 3, 0),
+                'Yank Bg': ('yank_bg_color', 3, 2),
                 }
 
         for name, (option_name, idx_row, idx_col) in conf_color_info.items():
@@ -44,6 +47,12 @@ class OkvimConfigPage(PluginConfigPage):
         options_layout = QVBoxLayout()
         options_layout.addWidget(newcb("ignorecase", "ignorecase"))
         options_layout.addWidget(newcb("smartcase", "smartcase"))
+
+        hl_yank_layout = QHBoxLayout()
+        hl_yank_layout.addWidget(newcb("highlight yank", "highlight_yank"))
+        hl_yank_layout.addWidget(newsb(None, 'ms', "highlight_yank_duration",
+                                       min_=0, max_=2000, step=100))
+        options_layout.addLayout(hl_yank_layout)
 
         options_group.setLayout(options_layout)
         options_layout.addStretch(1)

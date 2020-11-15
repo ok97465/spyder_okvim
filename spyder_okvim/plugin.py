@@ -77,5 +77,5 @@ class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
     def apply_plugin_settings(self, options):
         """Apply the config settings."""
         self.vim_cmd.vim_status.search.set_color()
-        self.vim_cmd.vim_status.cursor.set_color()
+        self.vim_cmd.vim_status.cursor.set_config_from_conf()
 
