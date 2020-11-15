@@ -444,7 +444,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def y(self, num=1, num_str=''):
         """Yank {motion} text into register."""
-        executor_sub = self.executor_sub_motion
+        executor_sub = self.executor_sub_motion_d
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
