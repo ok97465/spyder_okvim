@@ -11,11 +11,11 @@ from qtpy.QtGui import QKeyEvent, QTextCursor
 # Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO, ExecutorBase,)
-from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 from spyder_okvim.executor.executor_sub import (
-    ExecutorSubColon, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
-    ExecutorSubCmd_Z, ExecutorSubMotion, ExecutorSubSpace, ExecutorSearch,
-    ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubCmd_register)
+    ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
+    ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubColon,
+    ExecutorSubMotion, ExecutorSubMotion_c, ExecutorSubMotion_d,)
+from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
 class ExecutorNormalCmd(ExecutorBase):
@@ -26,7 +26,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
         self.cmd_line = cmd_line
 
-        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> '
+        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<>'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = \
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -41,7 +41,6 @@ class ExecutorNormalCmd(ExecutorBase):
         self.executor_sub_motion = ExecutorSubMotion(vim_status)
         self.executor_sub_motion_c = ExecutorSubMotion_c(vim_status)
         self.executor_sub_motion_d = ExecutorSubMotion_d(vim_status)
-        self.executor_sub_space = ExecutorSubSpace(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
 
@@ -411,16 +410,6 @@ class ExecutorNormalCmd(ExecutorBase):
 
         executor_sub.set_func_list_deferred(
             [FUNC_INFO(self.helper_action.unindent, True)])
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
-    def space(self, num=1, num_str=''):
-        """Call submode of space."""
-        executor_sub = self.executor_sub_space
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred([])
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 

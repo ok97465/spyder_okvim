@@ -91,10 +91,10 @@ The following motions are supported:
 
 ## Special Keys
 
-- space + f : autoformatting (spyder >= 4.2.0)
-- space + b : Toggle break point
-- space + r : run selected text or current line in console.
-- space + enter :  run cell and advance 
+- \<leader\>f : autoformatting (spyder >= 4.2.0)
+- \<leader\>b : Toggle break point
+- \<leader\>r : run selected text or current line in console.
+- \<leader\>enter :  run cell and advance 
 - gc{motion} : toggle comment (support visual mode)
   - gcc : toggle comment of current line
 

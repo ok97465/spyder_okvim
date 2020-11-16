@@ -14,7 +14,7 @@ from qtpy.QtGui import QTextCursor
 
 # Local imports
 from spyder_okvim.executor import (ExecutorNormalCmd, ExecutorVisualCmd,
-                                   ExecutorVlineCmd)
+                                   ExecutorVlineCmd, ExecutorLeaderKey)
 from spyder_okvim.utils.vim_status import (VimStatus, VimState, InputCmdInfo,
                                            KeyInfo)
 
@@ -299,6 +299,10 @@ class VimWidget(QWidget):
                           VimState.VISUAL: self.executor_visual_cmd,
                           VimState.VLINE: self.executor_vline_cmd}
 
+        # leader key
+        self.executor_leader_key = ExecutorLeaderKey(self.vim_status)
+        self.leader_key = ' '
+
     def on_text_changed(self, txt):
         """Send input command to executor."""
         if not txt:
@@ -307,5 +311,10 @@ class VimWidget(QWidget):
         executor = self.executors[self.vim_status.vim_state]
         if self.vim_status.sub_mode:
             executor = self.vim_status.sub_mode
+        elif txt == self.leader_key:
+            self.vim_status.sub_mode = self.executor_leader_key
+            self.commandline.clear()
+            return
+
         if executor(txt):
             self.commandline.clear()
