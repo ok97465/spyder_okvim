@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for the executor_normal."""
+"""Tests for the executor_visual."""
 # Third party imports
 import pytest
 from qtpy.QtCore import Qt

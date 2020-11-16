@@ -34,7 +34,7 @@ class ExecutorLeaderKey(ExecutorBase):
         """
         method = self.dispatcher.get(txt, None)
         if method:
-            method(1, None)
+            method(1, '')
 
         self.vim_status.sub_mode = None
         return True
