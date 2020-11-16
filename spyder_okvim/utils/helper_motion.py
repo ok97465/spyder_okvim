@@ -1055,7 +1055,8 @@ class HelperMotion:
             else:
                 cursor = editor.document().find(
                         QRegularExpression(txt), cursor)
-        editor.set_extra_selections('vim_search', [i for i in search_stack])
+        self.vim_status.cursor.set_extra_selections(
+            'vim_search', [i for i in search_stack])
         editor.update_extra_selections()
 
         self.vim_status.search.selection_list = search_stack
