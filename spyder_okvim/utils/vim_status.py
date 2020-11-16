@@ -181,8 +181,8 @@ class SearchInfo:
                 tmp.append(sel)
         self.selection_list = tmp
 
-        editor.set_extra_selections('vim_search',
-                                    [i for i in self.selection_list])
+        self.vim_cursor.set_extra_selections('vim_search',
+                                             [i for i in self.selection_list])
         editor.update_extra_selections()
 
         return [i.cursor.selectionStart() for i in self.selection_list]
@@ -208,6 +208,12 @@ class VimCursor:
         self.hl_yank = True
 
         self.set_config_from_conf()
+
+        # Order of Selections
+        self.draw_orders_sel = {'vim_search': 6,
+                                'hl_yank': 7,
+                                'vim_selection': 8,
+                                'vim_cursor': 9}
 
     def set_config_from_conf(self):
         """Set config from conf."""
@@ -258,7 +264,7 @@ class VimCursor:
         vim_cursor.cursor = editor.textCursor()
         vim_cursor.cursor.movePosition(QTextCursor.Right,
                                        QTextCursor.KeepAnchor)
-        editor.set_extra_selections('vim_cursor', [vim_cursor])
+        self.set_extra_selections('vim_cursor', [vim_cursor])
         editor.update_extra_selections()
 
     def create_selection(self, start, end):
@@ -271,7 +277,7 @@ class VimCursor:
         sel.cursor = QTextCursor(self.get_editor().document())
         sel.cursor.setPosition(start)
         sel.cursor.setPosition(end, QTextCursor.KeepAnchor)
-        self.get_editor().set_extra_selections("vim_selection", [sel])
+        self.set_extra_selections("vim_selection", [sel])
         self.draw_vim_cursor()
 
     def set_cursor_pos_in_visual(self, pos_new):
@@ -318,7 +324,7 @@ class VimCursor:
 
         sel.cursor.setPosition(start)
         sel.cursor.setPosition(end, QTextCursor.KeepAnchor)
-        editor.set_extra_selections("vim_selection", [sel])
+        self.set_extra_selections("vim_selection", [sel])
         self.set_cursor_pos(pos_new)
 
     def get_block(self, pos):
@@ -447,7 +453,7 @@ class VimCursor:
         end = block_end.position() + block_end.length() - 1
         sel.cursor.setPosition(start)
         sel.cursor.setPosition(end, QTextCursor.KeepAnchor)
-        editor.set_extra_selections("vim_selection", [sel])
+        self.set_extra_selections("vim_selection", [sel])
         self.set_cursor_pos(pos_new)
 
     def set_block_selection_in_visual(self, motion_info: MotionInfo):
@@ -456,7 +462,7 @@ class VimCursor:
         sel = editor.get_extra_selections("vim_selection")[0]
         sel.cursor.setPosition(motion_info.sel_start)
         sel.cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
-        editor.set_extra_selections("vim_selection", [sel])
+        self.set_extra_selections("vim_selection", [sel])
         self.set_cursor_pos(motion_info.sel_end - 1)
 
     def set_cursor_pos(self, pos):
@@ -504,6 +510,22 @@ class VimCursor:
         """Apply motion info in visual mode."""
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
+    def set_extra_selections(self, key, sels):
+        """Set the selection info to editor.
+
+        We can use editor.set_extra_selections for setting selections.
+        But that method does not support setting order. So we need this method.
+        """
+        order = self.draw_orders_sel.get(key, 0)
+        editor = self.get_editor()
+
+        for sel in sels:
+            sel.draw_order = order
+            sel.kind = key
+
+        editor.clear_extra_selections(key)
+        editor.extra_selections_dict[key] = sels
+
     def highlight_yank(self, pos_start, pos_end):
         """Highlight after yank."""
         if self.hl_yank is False:
@@ -511,6 +533,7 @@ class VimCursor:
 
         cursor = self.get_cursor()
         editor = self.get_editor()
+
         sel = QTextEdit.ExtraSelection()
         sel.format.setForeground(self.yank_fg_color)
         sel.format.setBackground(self.yank_bg_color)
@@ -518,7 +541,7 @@ class VimCursor:
 
         sel.cursor.setPosition(pos_start)
         sel.cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-        editor.set_extra_selections("hl_yank", [sel])
+        self.set_extra_selections("hl_yank", [sel])
 
         QTimer.singleShot(
             self.hl_yank_dur,
