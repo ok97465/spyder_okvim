@@ -6,9 +6,9 @@
 
 # Third party imports
 from qtpy.QtCore import QRegExp, Qt
-from qtpy.QtGui import QRegExpValidator
+from qtpy.QtGui import QRegExpValidator, QKeySequence
 from qtpy.QtWidgets import (
-    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QVBoxLayout,)
+    QGridLayout, QGroupBox, QHBoxLayout, QVBoxLayout, QLineEdit)
 from spyder.api.preferences import PluginConfigPage
 from spyder.config.base import _
 
@@ -19,6 +19,7 @@ class OkvimConfigPage(PluginConfigPage):
         newcb = self.create_checkbox
         newce = self.create_coloredit
         newsb = self.create_spinbox
+        newle = self.create_lineedit
 
         color_group = QGroupBox('Color')
         color_layout = QGridLayout()
@@ -59,9 +60,50 @@ class OkvimConfigPage(PluginConfigPage):
         options_group.setLayout(options_layout)
         options_layout.addStretch(1)
 
+        leaderkey_group = QGroupBox('Leader Key Mapping')
+        leaderkey_layout = QHBoxLayout()
+
+        leaderkey_viewer = newle('Leader key', 'leader_key',
+                                 alignment=Qt.Horizontal)
+        leaderkey_viewer.textbox.setAlignment(Qt.AlignHCenter)
+        leaderkey_viewer.textbox.setEnabled(False)
+
+        leaderkey_edit = ShortcutLineEdit(self, leaderkey_viewer.textbox)
+
+        leaderkey_layout.addWidget(leaderkey_viewer)
+        leaderkey_layout.addWidget(leaderkey_edit)
+        leaderkey_group.setLayout(leaderkey_layout)
+        leaderkey_layout.addStretch(1)
+
         layout = QVBoxLayout()
         layout.addWidget(color_group)
         layout.addWidget(options_group)
-        layout.addStretch(1)
+        layout.addWidget(leaderkey_group)
 
         self.setLayout(layout)
+
+
+class ShortcutLineEdit(QLineEdit):
+    """QLineEdit that filters its key press and release events."""
+
+    def __init__(self, parent, viewer):
+        super().__init__(parent)
+        self.setPlaceholderText('Press leader key...')
+        self.viewer = viewer
+
+    def keyPressEvent(self, event):
+        """Override Qt method."""
+        key = event.key()
+        modifier = event.modifiers()
+
+        if modifier != Qt.NoModifier:
+            return
+        if not key or key == Qt.Key_unknown:
+            return
+        if key in [Qt.Key_Control, Qt.Key_Shift,
+                   Qt.Key_Alt, Qt.Key_Meta]:
+            return
+
+        key_str = QKeySequence(key).toString()
+        self.viewer.setText(key_str)
+

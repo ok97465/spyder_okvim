@@ -6,11 +6,10 @@ import re
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
-    FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO, ExecutorBase)
+    FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO, ExecutorBase,)
 from spyder_okvim.executor.executor_sub import (
-    ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r, ExecutorSubSpace,
-    ExecutorSubMotion_i, ExecutorSubMotion_a, ExecutorSubCmd_register,
-    ExecutorSearch)
+    ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
+    ExecutorSubCmd_register, ExecutorSubMotion_a, ExecutorSubMotion_i,)
 
 
 class ExecutorVisualCmd(ExecutorBase):
@@ -19,7 +18,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUoiaydxscVhHjJklLMwWbepP^$gG~%fFtTnN/;,"r<> '
+        cmds = 'uUoiaydxscVhHjJklLMwWbepP^$gG~%fFtTnN/;,"r<>'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = \
@@ -31,7 +30,6 @@ class ExecutorVisualCmd(ExecutorBase):
         self.executor_sub_g = ExecutorSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
         self.executor_sub_r = ExecutorSubCmd_r(vim_status)
-        self.executor_sub_space = ExecutorSubSpace(vim_status)
         self.executor_sub_motion_i = ExecutorSubMotion_i(vim_status)
         self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
@@ -262,16 +260,6 @@ class ExecutorVisualCmd(ExecutorBase):
         self.helper_action._unindent(sel_start, sel_end)
         self.vim_status.to_normal()
         self.vim_status.cursor.draw_vim_cursor()
-
-    def space(self, num=1, num_str=''):
-        """Call submode of space."""
-        executor_sub = self.executor_sub_space
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred([])
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def i(self, num=1, num_str=''):
         """Select block exclusively."""
