@@ -8,15 +8,17 @@
 """OkVim Widget."""
 # %% Import
 # Third party imports
-from qtpy.QtWidgets import QLineEdit, QWidget, QLabel
-from qtpy.QtCore import Qt, Slot, Signal, QObject
-from qtpy.QtGui import QTextCursor
+from qtpy.QtCore import QObject, Qt, Signal, Slot
+from qtpy.QtGui import QTextCursor, QKeySequence
+from qtpy.QtWidgets import QLabel, QLineEdit, QWidget
+from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.executor import (ExecutorNormalCmd, ExecutorVisualCmd,
-                                   ExecutorVlineCmd, ExecutorLeaderKey)
-from spyder_okvim.utils.vim_status import (VimStatus, VimState, InputCmdInfo,
-                                           KeyInfo)
+from spyder_okvim.config import CONF_SECTION, KEYCODE2STR
+from spyder_okvim.executor import (
+    ExecutorLeaderKey, ExecutorNormalCmd, ExecutorVisualCmd, ExecutorVlineCmd,)
+from spyder_okvim.utils.vim_status import (
+    InputCmdInfo, KeyInfo, VimState, VimStatus,)
 
 
 class VimShortcut(QObject):
@@ -240,8 +242,8 @@ class VimLineEdit(QLineEdit):
         pressed_ctrl = e.modifiers() == Qt.ControlModifier
         if key == Qt.Key_Escape:
             self.esc_pressed()
-        elif key in [Qt.Key_Return, Qt.Key_Enter]:
-            self.setText(self.text() + '\r')
+        elif KEYCODE2STR.get(key, None):
+            self.setText(self.text() + KEYCODE2STR[key])
         elif pressed_ctrl and key in self.dispatcher.keys():
             self.dispatcher[key]()
         else:
@@ -302,6 +304,16 @@ class VimWidget(QWidget):
         # leader key
         self.executor_leader_key = ExecutorLeaderKey(self.vim_status)
         self.leader_key = ' '
+        self.set_leader_key()
+
+    def set_leader_key(self):
+        """Set leader key from CONF."""
+        leader_key = CONF.get(CONF_SECTION, 'leader_key')
+        leader_key2 = KEYCODE2STR.get(
+                QKeySequence.fromString(leader_key)[0], None)
+        if leader_key2:
+            leader_key = leader_key2
+        self.leader_key = leader_key
 
     def on_text_changed(self, txt):
         """Send input command to executor."""
