@@ -1195,3 +1195,29 @@ def test_space_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ("01 34", ['l', 'v', Qt.Key_Backspace], 0, [0, 2]),
+    ]
+)
+def test_backspace_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test backspace command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos

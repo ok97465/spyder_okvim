@@ -1114,3 +1114,19 @@ class HelperMotion:
 
         return self._set_motion_info(cursor.position(),
                                      motion_type=MotionType.CharWise)
+
+    def backspace(self, num=1, num_str=''):
+        """Get the position on the right side of the cursor.
+
+        Returns
+        -------
+        MotionInfo
+            motion info
+
+        """
+        cursor = self.get_cursor()
+
+        cursor.movePosition(QTextCursor.Left, n=num)
+
+        return self._set_motion_info(cursor.position(),
+                                     motion_type=MotionType.CharWise)

@@ -27,7 +27,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
         self.cmd_line = cmd_line
 
-        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> '
+        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = \
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -565,6 +565,13 @@ class ExecutorNormalCmd(ExecutorBase):
     def space(self, num=1, num_str=''):
         """Move cursor to right."""
         motion_info = self.helper_motion.space(num=num)
+
+        self.vim_status.cursor.set_cursor_pos_without_end(
+            motion_info.cursor_pos)
+
+    def backspace(self, num=1, num_str=''):
+        """Move cursor to left."""
+        motion_info = self.helper_motion.backspace(num=num)
 
         self.vim_status.cursor.set_cursor_pos_without_end(
             motion_info.cursor_pos)
