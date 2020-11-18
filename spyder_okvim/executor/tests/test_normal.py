@@ -1225,6 +1225,7 @@ def test_clipboard(vim_bot):
         ('a', ['y', 'i', 'b'], 0, '"', ''),
         ('abcd', ['$', 'y', '2h'], 1, '"', 'bc'),
         ('a\nb', ['y', 'j'], 0, '"', 'a\nb\n'),
+        ('a\nb', ['y', Qt.Key_Enter], 0, '"', 'a\nb\n'),
         ('  a\n b', ['j', 'l', 'y', 'k'], 1, '"', '  a\n b\n'),
         ('abcd', ['y', '$'], 0, '"', 'abcd'),
         ('abcd', ['$', 'y', '^'], 0, '"', 'abc'),
@@ -1845,3 +1846,28 @@ def test_backspace_cmd(vim_bot, text, cmd_list, cursor_pos):
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ('ab\n   k', [Qt.Key_Enter], 6),
+        ('ab\n   k\n b', ['2', Qt.Key_Return], 9),
+        ('abcdef\n   k\n b', ['$', Qt.Key_Enter], 10),
+    ]
+)
+def test_enter_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test enter command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+

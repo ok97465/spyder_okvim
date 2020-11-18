@@ -27,7 +27,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
         self.cmd_line = cmd_line
 
-        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b'
+        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\r'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = \
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -576,3 +576,8 @@ class ExecutorNormalCmd(ExecutorBase):
         self.vim_status.cursor.set_cursor_pos_without_end(
             motion_info.cursor_pos)
 
+    def enter(self, num=1, num_str=''):
+        """Move cursor to downward."""
+        motion_info = self.helper_motion.enter(num=num)
+
+        self.set_cursor_pos(motion_info.cursor_pos)

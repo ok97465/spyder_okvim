@@ -1130,3 +1130,25 @@ class HelperMotion:
 
         return self._set_motion_info(cursor.position(),
                                      motion_type=MotionType.CharWise)
+
+    def enter(self, num=1, num_str=''):
+        """Get the position below the cursor.
+
+        Returns
+        -------
+        MotionInfo
+            motion info
+
+        """
+        cursor = self.get_cursor()
+        cursor.movePosition(QTextCursor.Down, n=num)
+        block = cursor.block()
+        text = block.text()
+        pos = cursor.position()
+
+        if text.strip():
+            start_of_line = len(text) - len(text.lstrip())
+            pos = block.position() + start_of_line
+
+        return self._set_motion_info(pos)
+

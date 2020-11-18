@@ -83,7 +83,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        cmds = '/nNailhkjHML$^wWbegG%fFtT;, \b'
+        cmds = '/nNailhkjHML$^wWbegG%fFtT;, \b\r'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
@@ -314,6 +314,13 @@ class ExecutorSubMotion(ExecutorSubBase):
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.backspace(num)
         self.execute_func_deferred(motion_info)
+
+    def enter(self, num=1, num_str=''):
+        """Go to [num] lines downward linewise and execute."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.enter(num)
+        self.execute_func_deferred(motion_info)
+
 
 class ExecutorSubMotion_d(ExecutorSubMotion):
     """Replace w, W for d command in normal."""
