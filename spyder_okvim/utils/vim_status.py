@@ -476,7 +476,10 @@ class VimCursor:
         self.draw_vim_cursor()
 
     def set_cursor_pos_without_end(self, pos):
-        """Set position cursor of editor."""
+        """Set position cursor of editor.
+
+        If the new position is the end of the block, cusor moves to left.
+        """
         if pos is None:
             return
         editor = self.get_editor()

@@ -18,7 +18,7 @@ class ExecutorVlineCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUovhydcsxHjJklLMwWbepP^$gG~%fFtTnN/;,"r<>'
+        cmds = 'uUovhydcsxHjJklLMwWbepP^$gG~%fFtTnN/;,"r<> '
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_vline = \
@@ -358,3 +358,8 @@ class ExecutorVlineCmd(ExecutorBase):
         """Put the text from register."""
         self.helper_action.paste_in_vline(num)
 
+    def space(self, num=1, num_str=''):
+        """Move cursor to right."""
+        motion_info = self.helper_motion.space(num=num)
+
+        self.set_cursor_pos_in_vline(motion_info.cursor_pos)

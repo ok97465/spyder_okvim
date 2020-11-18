@@ -1219,6 +1219,7 @@ def test_clipboard(vim_bot):
     "text, cmd_list, cursor_pos, register_name, text_yanked",
     [
         ('a', ['y', 'l'], 0, '"', 'a'),
+        ('a', ['y', Qt.Key_Space], 0, '"', 'a'),
         ('a', ['y', ','], 0, '"', ''),
         ('a', ['y', 'i', 'b'], 0, '"', ''),
         ('abcd', ['$', 'y', '2h'], 1, '"', 'bc'),
@@ -1259,11 +1260,18 @@ def test_y_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, register_name,
                          text_yanked):
     """Test y command in normal."""
     _, _, editor, vim, qtbot = vim_bot
+
+    CONF.set(CONF_SECTION, 'leader_key', 'F1')
+    vim.apply_plugin_settings("")
+
     editor.set_text(text)
 
     cmd_line = vim.get_focus_widget()
     for cmd in cmd_list:
-        qtbot.keyClicks(cmd_line, cmd)
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
 
     reg = vim.vim_cmd.vim_status.register_dict[register_name]
     assert cmd_line.text() == ""
@@ -1783,3 +1791,33 @@ def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.toPlainText() == text_expected
     assert editor.textCursor().position() == cursor_pos
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ('ab', [Qt.Key_Space], 1),
+        ('abc', ['2', Qt.Key_Space], 2),
+        ('a\nb\n', [Qt.Key_Space], 2),
+        ('a\nb\nc', ['2', Qt.Key_Space], 4),
+    ]
+)
+def test_space_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test space command."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    CONF.set(CONF_SECTION, 'leader_key', 'F1')
+    vim.apply_plugin_settings("")
+
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+

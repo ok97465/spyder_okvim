@@ -83,7 +83,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        cmds = '/nNailhkjHML$^wWbegG%fFtT;,'
+        cmds = '/nNailhkjHML$^wWbegG%fFtT;, '
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
@@ -301,6 +301,12 @@ class ExecutorSubMotion(ExecutorSubBase):
         """Goto the next selected text."""
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.N(num)
+        self.execute_func_deferred(motion_info)
+
+    def space(self, num=1, num_str=''):
+        """Go to [num] characters to the right and execute."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.space(num)
         self.execute_func_deferred(motion_info)
 
 

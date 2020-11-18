@@ -1095,3 +1095,22 @@ class HelperMotion:
 
         return self._set_motion_info(pos_list[idx - 1],
                                      motion_type=MotionType.CharWise)
+
+    def space(self, num=1, num_str=''):
+        """Get the position on the right side of the cursor.
+
+        Returns
+        -------
+        MotionInfo
+            motion info
+
+        """
+        cursor = self.get_cursor()
+
+        for _ in range(num):
+            cursor.movePosition(QTextCursor.Right)
+            if cursor.atBlockEnd():
+                cursor.movePosition(QTextCursor.Right)
+
+        return self._set_motion_info(cursor.position(),
+                                     motion_type=MotionType.CharWise)

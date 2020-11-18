@@ -18,7 +18,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUoiaydxscVhHjJklLMwWbepP^$gG~%fFtTnN/;,"r<>'
+        cmds = 'uUoiaydxscVhHjJklLMwWbepP^$gG~%fFtTnN/;,"r<> '
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = \
@@ -375,4 +375,10 @@ class ExecutorVisualCmd(ExecutorBase):
     def P(self, num=1, num_str=''):
         """Put the text from register."""
         self.helper_action.paste_in_visual(num)
+
+    def space(self, num=1, num_str=''):
+        """Move cursor to right."""
+        motion_info = self.helper_motion.space(num=num)
+
+        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 

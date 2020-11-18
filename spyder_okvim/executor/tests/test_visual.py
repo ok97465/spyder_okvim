@@ -3,8 +3,10 @@
 # Third party imports
 import pytest
 from qtpy.QtCore import Qt
+from spyder.config.manager import CONF
 
 # Local imports
+from spyder_okvim.config import CONF_SECTION
 from spyder_okvim.utils.vim_status import VimState
 
 
@@ -1165,3 +1167,31 @@ def test_search_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert sel_pos == sel_pos_
 
 
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ("01 34", ['v', Qt.Key_Space], 1, [0, 2]),
+    ]
+)
+def test_space_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test space command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    CONF.set(CONF_SECTION, 'leader_key', 'F1')
+    vim.apply_plugin_settings("")
+
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
