@@ -36,6 +36,7 @@ CONF_DEFAULTS = [
      ),
     ('shortcuts',
      {
+         '_/switch to okvim': 'Ctrl+Shift+M'
      }
      ),
 ]
