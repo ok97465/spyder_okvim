@@ -11,10 +11,11 @@ from qtpy.QtGui import QKeyEvent, QTextCursor
 # Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO, ExecutorBase,)
+from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
-    ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubColon,
-    ExecutorSubMotion, ExecutorSubMotion_c, ExecutorSubMotion_d,)
+    ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubMotion,
+    ExecutorSubMotion_c, ExecutorSubMotion_d,)
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
@@ -32,7 +33,7 @@ class ExecutorNormalCmd(ExecutorBase):
             self.vim_status.cursor.apply_motion_info_in_normal
         self.apply_motion_info_in_yank = \
             self.vim_status.cursor.apply_motion_info_in_yank
-        self.executor_colon = ExecutorSubColon(vim_status)
+        self.executor_colon = ExecutorColon(vim_status)
 
         self.executor_sub_g = ExecutorSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)

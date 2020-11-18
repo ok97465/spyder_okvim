@@ -3,50 +3,10 @@
 # %% Import
 # Standard library imports
 import re
-from typing import List
-
-# Third party imports
-from qtpy.QtGui import QTextCursor
 
 # Local imports
-from spyder_okvim.executor.executor_base import (ExecutorBase, FUNC_INFO,
+from spyder_okvim.executor.executor_base import (ExecutorSubBase, FUNC_INFO,
                                                  RETURN_EXECUTOR_METHOD_INFO)
-
-
-class ExecutorSubBase(ExecutorBase):
-    """Baseclass for submode of executor."""
-
-    def __init__(self, vim_status):
-        super().__init__(vim_status)
-
-        self.has_zero_cmd = False
-        self.parent_num = []
-        self.parent_num_str = []
-        self.func_list_deferred: List[FUNC_INFO] = []
-
-    def set_parent_info_to_submode(self, submode, num, num_str):
-        """Set parent and self into to submode."""
-        submode.parent_num = self.parent_num.copy()
-        submode.parent_num_str = self.parent_num_str.copy()
-
-        submode.parent_num.append(num)
-        submode.parent_num_str.append(num_str)
-
-    def set_func_list_deferred(self, f_list: List[FUNC_INFO]):
-        """Set func list."""
-        self.func_list_deferred = f_list
-
-    def execute_func_deferred(self, arg=None):
-        """Execute method passed in from previous executor."""
-        for func_info in self.func_list_deferred:
-            if func_info.has_arg:
-                func_info.func(arg)
-            else:
-                func_info.func()
-
-    def update_input_cmd_info(self, num_str, cmd, input_txt):
-        """Add input cmd to vim_status."""
-        self.vim_status.input_cmd.cmd += input_txt
 
 
 class ExecutorSubMotion_i(ExecutorSubBase):
@@ -585,75 +545,6 @@ class ExecutorSubCmd_Z(ExecutorSubBase):
         """Save and close current file."""
         self.editor_widget.save_action.trigger()
         self.editor_widget.close_action.trigger()
-        self.vim_status.set_focus_to_vim()
-
-
-class ExecutorSubColon(ExecutorSubBase):
-    """Execute the method by enter."""
-
-    def __init__(self, vim_status):
-        super().__init__(vim_status)
-        self.editor_widget = vim_status.editor_widget
-
-    def __call__(self, txt):
-        """Parse txt and executor command.
-
-        Returns
-        -------
-        bool
-            if return is True, Clear command line
-
-        """
-        if txt[-1] != '\r':
-            return False
-
-        # ':' is saved to input cmd_info at ExecutorBase.
-        # So we need only txt[1:].
-        self.update_input_cmd_info(None, None, txt[1:])
-
-        txt = txt[1:-1]  # remove :, \r
-        cmd = txt.split(None, 1)
-        args = cmd[1] if len(cmd) > 1 else ""
-        cmd = cmd[0]
-
-        for symbol, text in self.SYMBOLS_REPLACEMENT.items():
-            cmd = cmd.replace(symbol, text)
-
-        try:
-            method = self.__getattribute__(cmd)
-        except AttributeError:
-            print("unknown command", cmd)
-        else:
-            method(args)
-
-        self.vim_status.sub_mode = None
-
-        return True
-
-    def w(self, arg=""):
-        """Save current file."""
-        self.editor_widget.save_action.trigger()
-        self.vim_status.cursor.draw_vim_cursor()
-
-    def q(self, arg=""):
-        """Close current file."""
-        self.editor_widget.close_action.trigger()
-        self.vim_status.set_focus_to_vim()
-
-    def qexclamation(self, arg=""):
-        """Close current file without saving."""
-        # TODO :
-        self.editor_widget.close_action.trigger()
-        self.vim_status.set_focus_to_vim()
-
-    def wq(self, arg=""):
-        """Save and close current file."""
-        self.w(arg)
-        self.q()
-
-    def n(self, args=""):
-        """Create new file."""
-        self.editor_widget.new_action.trigger()
         self.vim_status.set_focus_to_vim()
 
 

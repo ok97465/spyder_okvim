@@ -2,7 +2,7 @@
 """."""
 # %% Import
 # Standard library imports
-from typing import NamedTuple, Any
+from typing import NamedTuple, Any, List
 
 # Local imports
 from spyder_okvim.utils.helper_motion import HelperMotion
@@ -123,3 +123,39 @@ class ExecutorBase:
         else:
             self.vim_status.sub_mode = None
             return True
+
+
+class ExecutorSubBase(ExecutorBase):
+    """Baseclass for submode of executor."""
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+
+        self.has_zero_cmd = False
+        self.parent_num = []
+        self.parent_num_str = []
+        self.func_list_deferred: List[FUNC_INFO] = []
+
+    def set_parent_info_to_submode(self, submode, num, num_str):
+        """Set parent and self into to submode."""
+        submode.parent_num = self.parent_num.copy()
+        submode.parent_num_str = self.parent_num_str.copy()
+
+        submode.parent_num.append(num)
+        submode.parent_num_str.append(num_str)
+
+    def set_func_list_deferred(self, f_list: List[FUNC_INFO]):
+        """Set func list."""
+        self.func_list_deferred = f_list
+
+    def execute_func_deferred(self, arg=None):
+        """Execute method passed in from previous executor."""
+        for func_info in self.func_list_deferred:
+            if func_info.has_arg:
+                func_info.func(arg)
+            else:
+                func_info.func()
+
+    def update_input_cmd_info(self, num_str, cmd, input_txt):
+        """Add input cmd to vim_status."""
+        self.vim_status.input_cmd.cmd += input_txt
