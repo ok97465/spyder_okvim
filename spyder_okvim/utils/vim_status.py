@@ -578,7 +578,7 @@ class VimStatus(QObject):
         self.get_pos_end_in_selection = \
             self.cursor.get_pos_end_in_selection
 
-        self.set_focus_to_cmd_line = None
+        self.cmd_line = None
 
         self.sub_mode = None
 
@@ -662,8 +662,8 @@ class VimStatus(QObject):
 
     def set_focus_to_vim(self):
         """Set focus to vim command line."""
-        if self.set_focus_to_cmd_line:
-            self.set_focus_to_cmd_line()
+        if self.cmd_line:
+            self.cmd_line.setFocus()
 
     def set_focus_to_vim_after_delay(self, delay=300):
         """Set focus to vim command line after delay.
@@ -674,7 +674,7 @@ class VimStatus(QObject):
         def focus():
             self.set_focus_to_vim()
             self.cursor.draw_vim_cursor()
-        if self.set_focus_to_cmd_line:
+        if self.cmd_line:
             QTimer.singleShot(delay, focus)
 
     @Slot(QKeyEvent)

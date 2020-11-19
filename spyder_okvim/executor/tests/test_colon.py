@@ -79,3 +79,21 @@ def test_colon_n_command(vim_bot):
     qtbot.keyClicks(cmd_line, 'n')
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.new_action.trigger.assert_called_once_with()
+
+
+def test_colon_backspace_command(vim_bot):
+    """Test backspace in ex cmd."""
+    main, editor_stack, editor, vim, qtbot = vim_bot
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, ':')
+    qtbot.keyClicks(cmd_line, 'n')
+    qtbot.keyPress(cmd_line, Qt.Key_Backspace)
+
+    assert cmd_line.text() == ":"
+    assert vim.vim_cmd.vim_status.sub_mode is not None
+
+    qtbot.keyPress(cmd_line, Qt.Key_Backspace)
+
+    assert cmd_line.text() == ""
+    assert vim.vim_cmd.vim_status.sub_mode is None
+

@@ -1653,6 +1653,23 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     assert editor.textCursor().position() == cursor_pos
 
 
+def test_search_backspace_command(vim_bot):
+    """Test backspace in search."""
+    main, editor_stack, editor, vim, qtbot = vim_bot
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, '/')
+    qtbot.keyClicks(cmd_line, 'n')
+    qtbot.keyPress(cmd_line, Qt.Key_Backspace)
+
+    assert cmd_line.text() == "/"
+    assert vim.vim_cmd.vim_status.sub_mode is not None
+
+    qtbot.keyPress(cmd_line, Qt.Key_Backspace)
+
+    assert cmd_line.text() == ""
+    assert vim.vim_cmd.vim_status.sub_mode is None
+
+
 def test_search_cmd_with_option(vim_bot):
     """Test / command with option."""
     _, _, editor, vim, qtbot = vim_bot

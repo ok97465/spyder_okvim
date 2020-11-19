@@ -290,11 +290,10 @@ class VimWidget(QWidget):
                                        self.vim_shortcut)
         self.commandline.textChanged.connect(self.on_text_changed)
 
-        self.vim_status.set_focus_to_cmd_line = self.commandline.setFocus
+        self.vim_status.cmd_line = self.commandline
         self.vim_shortcut.cmd_line = self.commandline
 
-        self.executor_normal_cmd = ExecutorNormalCmd(self.vim_status,
-                                                     self.commandline)
+        self.executor_normal_cmd = ExecutorNormalCmd(self.vim_status)
         self.executor_visual_cmd = ExecutorVisualCmd(self.vim_status)
         self.executor_vline_cmd = ExecutorVlineCmd(self.vim_status)
         self.executors = {VimState.NORMAL: self.executor_normal_cmd,

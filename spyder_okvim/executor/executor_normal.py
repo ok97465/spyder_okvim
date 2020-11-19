@@ -22,10 +22,8 @@ from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 class ExecutorNormalCmd(ExecutorBase):
     """Executor for normal mode."""
 
-    def __init__(self, vim_status, cmd_line):
+    def __init__(self, vim_status):
         super().__init__(vim_status)
-
-        self.cmd_line = cmd_line
 
         cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\r'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -361,14 +359,15 @@ class ExecutorNormalCmd(ExecutorBase):
         if not cmd_str:
             return
 
+        cmd_line = self.vim_status.cmd_line
         self.vim_status.running_dot_cmd = True
-        self.cmd_line.clear()
+        cmd_line.clear()
         for ch in cmd_str:
-            self.cmd_line.setText(self.cmd_line.text() + ch)
+            cmd_line.setText(cmd_line.text() + ch)
 
         for key_info in self.vim_status.dot_cmd.key_list_to_cmd_line:
             event = key_info.to_event()
-            self.cmd_line.keyPressEvent(event)
+            cmd_line.keyPressEvent(event)
 
         editor = self.get_editor()
         for key_info in self.vim_status.dot_cmd.key_list_from_editor:
