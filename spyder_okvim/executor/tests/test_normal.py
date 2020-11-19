@@ -1653,6 +1653,29 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     assert editor.textCursor().position() == cursor_pos
 
 
+@pytest.mark.parametrize(
+    "text, cmd_list",
+    [
+        ('', ["/", Qt.Key_Return]),
+        ('', ["/", Qt.Key_Left, 'd', Qt.Key_Enter]),
+    ]
+)
+def test_search_corner_case_cmd(vim_bot, text, cmd_list):
+    """Test search command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ''
+    assert vim.vim_cmd.vim_status.sub_mode is None
+
+
 def test_search_backspace_command(vim_bot):
     """Test backspace in search."""
     main, editor_stack, editor, vim, qtbot = vim_bot

@@ -10,7 +10,7 @@ from qtpy.QtCore import Qt
     "text, cmd_list, cmd_line_expected",
     [
         ('', [":", "k", "k"], ':kk'),
-        ('', [":", "k", "k", Qt.Key_Escape], '')
+        ('', [":", "k", "k", Qt.Key_Escape], ''),
     ]
 )
 def test_colon_cmd(vim_bot, text, cmd_list, cmd_line_expected):
@@ -26,6 +26,29 @@ def test_colon_cmd(vim_bot, text, cmd_list, cmd_line_expected):
             qtbot.keyPress(cmd_line, cmd)
 
     assert cmd_line.text() == cmd_line_expected
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list",
+    [
+        ('', [":", Qt.Key_Return]),
+        ('', [":", Qt.Key_Left, 'd', Qt.Key_Enter]),
+    ]
+)
+def test_colon_corner_case_cmd(vim_bot, text, cmd_list):
+    """Test colon command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ''
+    assert vim.vim_cmd.vim_status.sub_mode is None
 
 
 def test_colon_w_command(vim_bot):
@@ -96,4 +119,3 @@ def test_colon_backspace_command(vim_bot):
 
     assert cmd_line.text() == ""
     assert vim.vim_cmd.vim_status.sub_mode is None
-

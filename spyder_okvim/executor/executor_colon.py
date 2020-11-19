@@ -30,6 +30,10 @@ class ExecutorColon(ExecutorSubBase):
         if txt[-1] != '\r':
             return False
 
+        if txt[0] != ":" or len(txt) <= 2:
+            self.vim_status.sub_mode = None
+            return True
+
         # ':' is saved to input cmd_info at ExecutorBase.
         # So we need only txt[1:].
         self.update_input_cmd_info(None, None, txt[1:])
