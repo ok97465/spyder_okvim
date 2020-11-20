@@ -602,8 +602,10 @@ class VimStatus(QObject):
         """Clear."""
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL
-        self.get_editor().clear_extra_selections("vim_selection")
-        self.get_editor().clear_extra_selections("vim_cursor")
+        editor = self.get_editor()
+        if editor:
+            editor.clear_extra_selections("vim_selection")
+            editor.clear_extra_selections("vim_cursor")
 
     def is_normal(self):
         """Check that vim state is normal mode."""
