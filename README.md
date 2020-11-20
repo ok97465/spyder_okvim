@@ -79,6 +79,7 @@ The following motions are supported:
 - %
 - f, F, t, T, ;, ,
 - /, N, n
+- Enter, Space, Backspace
 
 ## Vim keys
 
