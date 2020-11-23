@@ -191,10 +191,15 @@ class VimStateLabel(QLabel):
         super().__init__(parent)
         self.change_state(VimState.INSERT)
 
+        self.setAlignment(Qt.AlignCenter)
+        tw = self.fontMetrics().width(" NORMAL ")
+        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        self.setFixedWidth(tw + (2 * fw) + 4)
+
     @Slot(int)
     def change_state(self, state):
         """Display the state of vim."""
-        self.setStyleSheet("QLabel { color: white, padding:2px }")
+        self.setStyleSheet("QLabel { color: white }")
         if state == VimState.VISUAL:
             self.setText("VISUAL")
             self.setStyleSheet("QLabel { background-color: #ff8000 }")
@@ -218,6 +223,11 @@ class VimLineEdit(QLineEdit):
         self.vim_widget = vim_widget
         self.vim_status = vim_status
         self.vim_shortcut = vim_shortcut
+
+        # Set size
+        tw = self.fontMetrics().width(":%s/international/internationl/g")
+        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        self.setFixedWidth(tw + (2 * fw) + 4)
 
         # Todo: Move setting shortcut to config file.
         vim_shortcut.signal_cmd.connect(self.setText)
@@ -263,12 +273,24 @@ class VimLineEdit(QLineEdit):
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
         self.to_normal()
+        self.vim_status.msg_label.clear()
 
     def focusOutEvent(self, event):
         """Override Qt method."""
         super().focusInEvent(event)
         self.clear()
         self.vim_widget.vim_status.to_insert()
+
+
+class VimMsgLabel(QLabel):
+    """Display message of vim."""
+
+    def __init__(self, txt, parent):
+        super().__init__(txt, parent)
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        tw = self.fontMetrics().width("0000 fewers lines")
+        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        self.setFixedWidth(tw + (2 * fw) + 4)
 
 
 class VimWidget(QWidget):
@@ -279,8 +301,9 @@ class VimWidget(QWidget):
         self.editor_widget = editor_widget
         self.main = main
         self.status_label = VimStateLabel(main)
+        self.msg_label = VimMsgLabel('', main)
 
-        self.vim_status = VimStatus(editor_widget, main)
+        self.vim_status = VimStatus(editor_widget, main, self.msg_label)
         self.vim_status.change_label.connect(self.status_label.change_state)
 
         self.vim_shortcut = VimShortcut(self.main,

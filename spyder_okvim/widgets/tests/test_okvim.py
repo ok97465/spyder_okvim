@@ -7,7 +7,7 @@
 # Third party imports
 import pytest
 from qtpy.QtCore import QEvent, Qt
-from qtpy.QtGui import QKeyEvent
+from qtpy.QtGui import QKeyEvent, QFocusEvent
 
 # Local imports
 from spyder_okvim.confpage import OkvimConfigPage
@@ -114,3 +114,25 @@ def test_HML(vim_bot):
     qtbot.keyClicks(cmd_line, 'H')
 
     assert cmd_line.text() == ""
+
+
+def test_message(vim_bot):
+    """Test message."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\nc\nd\ne")
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'y2j')
+    assert vim.vim_cmd.msg_label.text() == "3 lines yanked"
+
+    qtbot.keyClicks(cmd_line, 'i')
+    cmd_line.focusInEvent(QFocusEvent(QEvent.FocusIn, Qt.OtherFocusReason))
+    assert vim.vim_cmd.msg_label.text() == ""
+
+    qtbot.keyClicks(cmd_line, 'd2j')
+    assert vim.vim_cmd.msg_label.text() == "3 fewer lines"
+
+    editor.set_text("a\nb\nc\nd\ne")
+    qtbot.keyClicks(cmd_line, 'c2j')
+    assert vim.vim_cmd.msg_label.text() == "2 fewer lines"
+
