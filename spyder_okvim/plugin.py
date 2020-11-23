@@ -7,18 +7,44 @@
 # -----------------------------------------------------------------------------
 """OkVim Plugin."""
 # Third party imports
+import qtawesome as qta
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QShortcut, QVBoxLayout
+from qtpy.QtGui import QKeySequence, QFont
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QVBoxLayout, QWidget
 from spyder.api.plugins import SpyderPluginWidget
 from spyder.config.base import _
-import qtawesome as qta
+from spyder.utils.icon_manager import MAIN_FG_COLOR
 
 # Local imports
 from spyder_okvim.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.confpage import OkvimConfigPage
 from spyder_okvim.widgets.okvim import VimWidget
-from spyder.utils.icon_manager import MAIN_FG_COLOR
+
+
+class StatusBarVimWidget(QWidget):
+    """Status bar widget for okvim."""
+
+    def __init__(self, parent, msg_label, status_label, cmd_line):
+        """Status bar widget base."""
+        super(StatusBarVimWidget, self).__init__(parent)
+
+        width_msg = msg_label.width()
+        width_status = status_label.width()
+        width_cmd = cmd_line.width()
+        spacing = 40
+
+        width_total = width_msg + width_status + width_cmd + spacing
+
+        layout = QHBoxLayout()
+        layout.setSpacing(5)
+        layout.addWidget(msg_label, int(width_msg / width_total * 100))
+        layout.addWidget(status_label, int(width_status / width_total * 100))
+        layout.addWidget(cmd_line, int(width_cmd / width_total * 100))
+        layout.addSpacing(spacing)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(layout)
+        self.setFixedWidth(width_total)
 
 
 class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
@@ -36,10 +62,14 @@ class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
         layout = QVBoxLayout()
         layout.addWidget(self.vim_cmd)
         self.setLayout(layout)
+
+        status_bar_widget = StatusBarVimWidget(
+                parent,
+                self.vim_cmd.msg_label,
+                self.vim_cmd.status_label,
+                self.vim_cmd.commandline)
         status = self.main.statusBar()
-        status.insertPermanentWidget(0, self.vim_cmd.commandline)
-        status.insertPermanentWidget(0, self.vim_cmd.status_label)
-        status.insertPermanentWidget(0, self.vim_cmd.msg_label)
+        status.insertPermanentWidget(0, status_bar_widget)
 
     # %% SpyderPlugin API
     def get_plugin_title(self):

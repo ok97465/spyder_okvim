@@ -191,10 +191,15 @@ class VimStateLabel(QLabel):
         super().__init__(parent)
         self.change_state(VimState.INSERT)
 
+        self.setAlignment(Qt.AlignCenter)
+        tw = self.fontMetrics().width(" NORMAL ")
+        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        self.setFixedWidth(tw + (2 * fw) + 4)
+
     @Slot(int)
     def change_state(self, state):
         """Display the state of vim."""
-        self.setStyleSheet("QLabel { color: white, padding:2px }")
+        self.setStyleSheet("QLabel { color: white }")
         if state == VimState.VISUAL:
             self.setText("VISUAL")
             self.setStyleSheet("QLabel { background-color: #ff8000 }")
