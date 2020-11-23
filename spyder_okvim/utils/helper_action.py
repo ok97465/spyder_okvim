@@ -306,6 +306,14 @@ class HelperAction:
         if is_explicit is True and register_name == '"':
             self.vim_status.set_register('0', txt, register_type)
 
+        # Set message
+        doc = cursor.document()
+        nb_start = doc.findBlock(sel_start).blockNumber()
+        nb_end = doc.findBlock(sel_end).blockNumber()
+        if nb_start != nb_end:
+            self.vim_status.set_message(
+                f"{nb_end - nb_start + 1} lines yanked")
+
         # highlight yank
         if is_explicit is True and self.vim_status.is_normal():
             if self.vim_status.running_dot_cmd is False:
@@ -454,6 +462,7 @@ class HelperAction:
 
         cursor = self.get_cursor()
         editor = self.get_editor()
+        n_block_old = editor.blockCount()
         is_linewise = False
 
         if not self.vim_status.is_normal():
@@ -497,6 +506,12 @@ class HelperAction:
         cursor.setPosition(sel_start)
         cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
         cursor.insertText(replace_txt)
+
+        # Set message
+        n_block_new = editor.blockCount()
+        if n_block_new != n_block_old:
+            self.vim_status.set_message(
+                f"{n_block_old - n_block_new} fewer lines")
 
         # Set cursor pos in normal
         if self.vim_status.is_normal():

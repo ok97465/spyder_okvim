@@ -39,6 +39,7 @@ class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
         status = self.main.statusBar()
         status.insertPermanentWidget(0, self.vim_cmd.commandline)
         status.insertPermanentWidget(0, self.vim_cmd.status_label)
+        status.insertPermanentWidget(0, self.vim_cmd.msg_label)
 
     # %% SpyderPlugin API
     def get_plugin_title(self):

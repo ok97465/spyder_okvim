@@ -556,13 +556,14 @@ class VimStatus(QObject):
 
     change_label = Signal(int)
 
-    def __init__(self, editor_widget, main):
+    def __init__(self, editor_widget, main, msg_label):
         super().__init__()
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL
         self.editor_widget = editor_widget
         self.cursor: VimCursor = VimCursor(editor_widget)
         self.main = main
+        self.msg_label = msg_label
 
         # method mapping
         self.set_cursor = self.cursor.set_cursor
@@ -760,3 +761,8 @@ class VimStatus(QObject):
             return info
         else:
             return self.register_dict[name]
+
+    def set_message(self, msg, duration_ms=-1):
+        """Display the massage."""
+        self.msg_label.setText(msg)
+
