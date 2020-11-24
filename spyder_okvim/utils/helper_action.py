@@ -335,6 +335,9 @@ class HelperAction:
         self.vim_status.update_dot_cmd(connect_editor=False,
                                        register_name=reg.name)
 
+        editor = self.get_editor()
+        n_block_old = editor.blockCount()
+
         if reg.content:
             content = reg.content * num
         else:
@@ -370,6 +373,11 @@ class HelperAction:
             cursor = self._move_cursor_after_space(cursor)
             self.set_cursor_pos(cursor.position())
 
+        n_block_new = editor.blockCount()
+        if n_block_new != n_block_old:
+            self.vim_status.set_message(
+                f"{n_block_new - n_block_old} more lines")
+
         editor = self.get_editor()
         editor.document_did_change()
 
@@ -379,6 +387,9 @@ class HelperAction:
         reg = self.vim_status.get_register()
         self.vim_status.update_dot_cmd(connect_editor=False,
                                        register_name=reg.name)
+
+        editor = self.get_editor()
+        n_block_old = editor.blockCount()
 
         if reg.content:
             content = reg.content * num
@@ -405,17 +416,25 @@ class HelperAction:
             else:
                 cursor_pos_new = sel_start + len(content) - 1
 
+        n_block_new = editor.blockCount()
+        if n_block_new != n_block_old:
+            self.vim_status.set_message(
+                f"{n_block_new - n_block_old} more lines")
+
         editor.document_did_change()
 
         self.vim_status.to_normal()
         self.vim_status.cursor.set_cursor_pos(cursor_pos_new)
 
-    def paste_in_vline(self, num):
+    def paste_in_vline(self, num):   
         """Put the text before the cursor."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
         self.vim_status.update_dot_cmd(connect_editor=False,
                                        register_name=reg.name)
+
+        editor = self.get_editor()
+        n_block_old = editor.blockCount()
 
         if reg.content:
             if reg.type == VimState.VLINE:
@@ -436,6 +455,11 @@ class HelperAction:
         cursor.setPosition(sel_start)
         cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
         cursor.insertText(content)
+
+        n_block_new = editor.blockCount()
+        if n_block_new != n_block_old:
+            self.vim_status.set_message(
+                f"{n_block_new - n_block_old} more lines")
 
         editor.document_did_change()
 

@@ -125,6 +125,20 @@ def test_message(vim_bot):
     qtbot.keyClicks(cmd_line, 'y2j')
     assert vim.vim_cmd.msg_label.text() == "3 lines yanked"
 
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'p')
+    assert vim.vim_cmd.msg_label.text() == "3 more lines"
+
+    vim.vim_cmd.msg_label.clear()
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'vp')
+    assert vim.vim_cmd.msg_label.text() == "4 more lines"
+
+    vim.vim_cmd.msg_label.clear()
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'Vp')
+    assert vim.vim_cmd.msg_label.text() == "2 more lines"
+
     qtbot.keyClicks(cmd_line, 'i')
     cmd_line.focusInEvent(QFocusEvent(QEvent.FocusIn, Qt.OtherFocusReason))
     assert vim.vim_cmd.msg_label.text() == ""
@@ -136,3 +150,46 @@ def test_message(vim_bot):
     qtbot.keyClicks(cmd_line, 'c2j')
     assert vim.vim_cmd.msg_label.text() == "2 fewer lines"
 
+    qtbot.keyClicks(cmd_line, ':')
+    qtbot.keyPress(cmd_line, Qt.Key_Enter)
+    assert vim.vim_cmd.msg_label.text() == ""
+
+    vim.vim_cmd.msg_label.setText("a")
+    qtbot.keyClicks(cmd_line, '/')
+    qtbot.keyPress(cmd_line, Qt.Key_Enter)
+    assert vim.vim_cmd.msg_label.text() == ""
+
+    vim.vim_cmd.msg_label.setText("a")
+    qtbot.keyClicks(cmd_line, 'v/')
+    qtbot.keyPress(cmd_line, Qt.Key_Enter)
+    assert vim.vim_cmd.msg_label.text() == ""
+
+    vim.vim_cmd.msg_label.setText("a")
+    qtbot.keyClicks(cmd_line, 'V/')
+    qtbot.keyPress(cmd_line, Qt.Key_Enter)
+    qtbot.keyPress(cmd_line, Qt.Key_Escape)
+    assert vim.vim_cmd.msg_label.text() == ""
+
+    vim.vim_cmd.msg_label.setText("a")
+    editor.set_text("a\nb\nc\nd\ne")
+    qtbot.keyClicks(cmd_line, 'hx')
+    qtbot.keyClicks(cmd_line, 'u')
+    assert vim.vim_cmd.msg_label.text() == "1 changes"
+
+    vim.vim_cmd.msg_label.setText("a")
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert vim.vim_cmd.msg_label.text() == "1 changes"
+
+    qtbot.keyClicks(cmd_line, 'd3j')
+    qtbot.keyClicks(cmd_line, 'u')
+    assert vim.vim_cmd.msg_label.text() == "4 more lines"
+
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert vim.vim_cmd.msg_label.text() == "4 fewer lines"
+
+    qtbot.keyClicks(cmd_line, 'p')
+    qtbot.keyClicks(cmd_line, 'u')
+    assert vim.vim_cmd.msg_label.text() == "4 fewer lines"
+
+    qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
+    assert vim.vim_cmd.msg_label.text() == "4 more lines"

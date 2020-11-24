@@ -162,7 +162,7 @@ class VimShortcut(QObject):
                     False, key_list_to_cmd_line=[key_info])
 
     def redo(self):
-        """ Redo [count changes which were undone. """
+        """ Redo [count] changes which were undone. """
         if self.vim_status.sub_mode:
             self.cmd_line.esc_pressed()
             return
@@ -170,12 +170,26 @@ class VimShortcut(QObject):
         if not self.vim_status.is_normal():
             return
 
+        editor = self.vim_status.get_editor()
+        n_block_old = editor.blockCount()
+
         txt = self.cmd_line.text()
         num = 1 if not txt else int(txt)
 
         editor = self.get_editor()
         for _ in range(num):
             editor.redo()
+
+        n_block_new = editor.blockCount()
+        if n_block_new != n_block_old:
+            if n_block_new > n_block_old:
+                self.vim_status.set_message(
+                    f"{n_block_new - n_block_old} more lines")
+            else:
+                self.vim_status.set_message(
+                    f"{n_block_old - n_block_new} fewer lines")
+        else:
+            self.vim_status.set_message(f"{num} changes")
 
         self.cmd_line.esc_pressed()
 
@@ -273,7 +287,7 @@ class VimLineEdit(QLineEdit):
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
         self.to_normal()
-        self.vim_status.msg_label.clear()
+        self.vim_status.set_message("")
 
     def focusOutEvent(self, event):
         """Override Qt method."""

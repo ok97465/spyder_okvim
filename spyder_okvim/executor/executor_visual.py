@@ -328,6 +328,7 @@ class ExecutorVisualCmd(ExecutorBase):
 
     def slash(self, num=1, num_str=''):
         """Go to the next searched text."""
+        self.vim_status.set_message("")
         executor_sub = self.executor_sub_search
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)

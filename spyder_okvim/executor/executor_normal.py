@@ -45,6 +45,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def colon(self, num=1, num_str=''):
         """Execute submode for ;."""
+        self.vim_status.set_message("")
         return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
 
     def zero(self, num=1, num_str=''):
@@ -201,6 +202,8 @@ class ExecutorNormalCmd(ExecutorBase):
     def u(self, num=1, num_str=''):
         """Undo changes."""
         editor = self.get_editor()
+        n_block_old = editor.blockCount()
+
         for _ in range(num):
             editor.undo()
         cursor = editor.textCursor()
@@ -208,6 +211,17 @@ class ExecutorNormalCmd(ExecutorBase):
         if cursor.atBlockEnd() and not cursor.atBlockStart():
             cursor.movePosition(QTextCursor.Left)
             pos = cursor.position()
+
+        n_block_new = editor.blockCount()
+        if n_block_new != n_block_old:
+            if n_block_new > n_block_old:
+                self.vim_status.set_message(
+                    f"{n_block_new - n_block_old} more lines")
+            else:
+                self.vim_status.set_message(
+                    f"{n_block_old - n_block_new} fewer lines")
+        else:
+            self.vim_status.set_message(f"{num} changes")
 
         self.set_cursor_pos(pos)
 
@@ -540,6 +554,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def slash(self, num=1, num_str=''):
         """Go to the next searched text."""
+        self.vim_status.set_message("")
         executor_sub = self.executor_sub_search
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)
