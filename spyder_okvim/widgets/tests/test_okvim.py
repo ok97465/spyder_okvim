@@ -193,3 +193,15 @@ def test_message(vim_bot):
 
     qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)
     assert vim.vim_cmd.msg_label.text() == "4 more lines"
+
+    editor.set_text("aaaaaa")
+    qtbot.keyClicks(cmd_line, "/a")
+    qtbot.keyPress(cmd_line, Qt.Key_Enter)
+    assert vim.vim_cmd.msg_label.text() == "/a"
+
+    vim.vim_cmd.msg_label.setText("a")
+    qtbot.keyClicks(cmd_line, "n")
+    assert vim.vim_cmd.msg_label.text() == "/a"
+
+    qtbot.keyClicks(cmd_line, "N")
+    assert vim.vim_cmd.msg_label.text() == "?a"

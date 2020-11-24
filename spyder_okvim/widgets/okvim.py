@@ -239,7 +239,7 @@ class VimLineEdit(QLineEdit):
         self.vim_shortcut = vim_shortcut
 
         # Set size
-        tw = self.fontMetrics().width(":%s/international/internationl/g")
+        tw = self.fontMetrics().width(" :%s/international/internationl/g ")
         fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
@@ -302,7 +302,7 @@ class VimMsgLabel(QLabel):
     def __init__(self, txt, parent):
         super().__init__(txt, parent)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        tw = self.fontMetrics().width("0000 fewers lines")
+        tw = self.fontMetrics().width(" recording @q.. 0000 fewers lines ")
         fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 

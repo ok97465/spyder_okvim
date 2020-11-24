@@ -1068,6 +1068,9 @@ class HelperMotion:
         if not pos_list:
             return self._set_motion_info(None)
 
+        txt = self.vim_status.search.txt_searched
+        self.vim_status.set_message(f'/{txt}')
+
         cursor_pos = self.get_cursor().position()
 
         idx = bisect_right(pos_list, cursor_pos)
@@ -1086,6 +1089,9 @@ class HelperMotion:
         n_pos_list = len(pos_list)
         if not pos_list:
             return self._set_motion_info(None)
+
+        txt = self.vim_status.search.txt_searched
+        self.vim_status.set_message(f'?{txt}')
 
         cursor_pos = self.get_cursor().position()
 
