@@ -31,17 +31,20 @@ class StatusBarVimWidget(QWidget):
         width_msg = msg_label.width()
         width_status = status_label.width()
         width_cmd = cmd_line.width()
-        spacing = 40
+        spacing_post = 32
+        spacing = 5
 
-        width_total = width_msg + width_status + width_cmd + spacing
+        width_total = width_msg + width_status + width_cmd
 
         layout = QHBoxLayout()
-        layout.setSpacing(5)
+        layout.setSpacing(spacing)
         layout.addWidget(msg_label, int(width_msg / width_total * 100))
         layout.addWidget(status_label, int(width_status / width_total * 100))
         layout.addWidget(cmd_line, int(width_cmd / width_total * 100))
-        layout.addSpacing(spacing)
+        layout.addSpacing(spacing_post)
         layout.setContentsMargins(0, 0, 0, 0)
+
+        width_total += 2 * spacing + spacing_post
 
         self.setLayout(layout)
         self.setFixedWidth(width_total)
