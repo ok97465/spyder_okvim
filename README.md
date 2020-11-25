@@ -1,5 +1,11 @@
 # Spyder Okvim
 
+![Linux tests](https://github.com/ok97465/spyder_okvim/workflows/Linux%20tests/badge.svg)
+![Macos tests](https://github.com/ok97465/spyder_okvim/workflows/Macos%20tests/badge.svg)
+![Window tests](https://github.com/ok97465/spyder_okvim/workflows/Windows%20tests/badge.svg)
+[![codecov](https://codecov.io/gh/ok97465/spyder_okvim/branch/main/graph/badge.svg?token=7JIIKTOZMO)](https://codecov.io/gh/ok97465/spyder_okvim)
+
+
 Spyder Plugin for executing Vim commands inside the code editor.
 This repository is reusing a lot of codes of [spyder-ide/spyder-vim](https://github.com/spyder-ide/spyder-vim)
 
@@ -10,11 +16,6 @@ Don't make an issue to spyder github after install okvim.
 This project is incomplete. So it may adversely affect spyder-ide. If you have a problem after 
 installing this, please retry after uninstalling okvim.
 
-## Build status
-![Linux tests](https://github.com/ok97465/spyder_okvim/workflows/Linux%20tests/badge.svg)
-![Macos tests](https://github.com/ok97465/spyder_okvim/workflows/Macos%20tests/badge.svg)
-![Window tests](https://github.com/ok97465/spyder_okvim/workflows/Windows%20tests/badge.svg)
-[![codecov](https://codecov.io/gh/ok97465/spyder_okvim/branch/main/graph/badge.svg?token=7JIIKTOZMO)](https://codecov.io/gh/ok97465/spyder_okvim)
 
 ## Overview
 
