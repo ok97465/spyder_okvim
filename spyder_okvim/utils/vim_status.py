@@ -217,19 +217,21 @@ class ManagerMacro:
     def stop_record(self):
         """Stop recording."""
         # remove the last key if the last key is q
+        self.remove_last_key('q')
+        self.reg_name_for_record = ''
+        self.is_recording = False
+
+    def remove_last_key(self, ch):
+        """Remove last key."""
         key_list = self.registers[self.reg_name_for_record]
         if len(key_list) > 0:
             last_key = key_list[-1]
-            if last_key.text == 'q':
+            if last_key.text == ch:
                 self.registers[self.reg_name_for_record] = key_list[:-1]
-        self.reg_name_for_record = ''
-        self.is_recording = False
 
     def add_vim_keyevent(self, event):
         """Add keyevent from vim."""
         if self.is_recording:
-            if event.text() == '.':
-                return
             self.registers[self.reg_name_for_record].append(
                 KeyInfo(event.key(), event.text(), event.modifiers(), 0))
 

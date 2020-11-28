@@ -369,6 +369,8 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def dot(self, num=1, num_str=''):
         """Run previous change."""
+        # avoid to execute . command twice.
+        self.vim_status.manager_macro.remove_last_key('.')
         cmd_str = self.vim_status.dot_cmd.cmd2string(num, num_str)
 
         if not cmd_str:
