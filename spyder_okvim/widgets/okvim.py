@@ -7,9 +7,14 @@
 # -----------------------------------------------------------------------------
 """OkVim Widget."""
 # %% Import
+# Standard library imports
+import sys
+import threading
+from functools import wraps
+
 # Third party imports
-from qtpy.QtCore import QObject, Qt, Signal, Slot, QThread
-from qtpy.QtGui import QTextCursor, QKeySequence
+from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
+from qtpy.QtGui import QKeySequence, QTextCursor
 from qtpy.QtWidgets import QLabel, QLineEdit, QWidget
 from spyder.config.manager import CONF
 
@@ -19,6 +24,18 @@ from spyder_okvim.executor import (
     ExecutorLeaderKey, ExecutorNormalCmd, ExecutorVisualCmd, ExecutorVlineCmd,)
 from spyder_okvim.utils.vim_status import (
     InputCmdInfo, KeyInfo, VimState, VimStatus,)
+
+running_coverage = 'coverage' in sys.modules
+
+
+def coverage_resolve_trace(fn):
+    """Fix missing coverage of qthread."""
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if running_coverage:
+            sys.settrace(threading._trace_hook)
+        fn(*args, **kwargs)
+    return wrapped
 
 
 class VimShortcut(QObject):
@@ -324,6 +341,7 @@ class WorkerMacro(QThread):
         self.key_info_list = key_infos.copy()
         self.num_iteration = num
 
+    @coverage_resolve_trace
     def run(self):
         """Send key info to main thread."""
         is_focus_vim = True

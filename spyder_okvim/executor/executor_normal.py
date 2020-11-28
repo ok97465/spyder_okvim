@@ -618,6 +618,7 @@ class ExecutorNormalCmd(ExecutorBase):
     def at(self, num=1, num_str=''):
         """Execute contents of register."""
         if self.vim_status.is_recording_macro():
+            self.vim_status.manager_macro.remove_last_key('@')
             return
 
         executor_sub = self.executor_sub_alnum
