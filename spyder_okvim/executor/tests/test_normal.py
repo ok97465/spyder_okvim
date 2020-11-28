@@ -1911,3 +1911,19 @@ def test_enter_cmd(vim_bot, text, cmd_list, cursor_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
 
+
+def test_q_message_cmd(vim_bot):
+    """Test message of q command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text('a')
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'q$')
+    assert vim.vim_cmd.msg_label.text() == ""
+
+    qtbot.keyClicks(cmd_line, 'qq')
+
+    assert vim.vim_cmd.msg_label.text() == "recording @q... "
+
+    qtbot.keyClicks(cmd_line, 'q')
+    assert vim.vim_cmd.msg_label.text() == ""

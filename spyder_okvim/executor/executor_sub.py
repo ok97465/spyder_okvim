@@ -608,3 +608,22 @@ class ExecutorSearch(ExecutorSubBase):
         self.vim_status.sub_mode = None
 
         return True
+
+
+class ExecutorSubCmd_alnum(ExecutorSubBase):
+    """Allow the alphabetics and numbers as input."""
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+
+    def __call__(self, ch: str):
+        """."""
+        self.update_input_cmd_info(None, None, ch)
+
+        if ch.isalnum():
+            self.execute_func_deferred(ch)
+
+        self.vim_status.sub_mode = None
+
+        return True
+
