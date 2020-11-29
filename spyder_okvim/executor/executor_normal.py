@@ -15,7 +15,7 @@ from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
     ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubMotion,
-    ExecutorSubMotion_c, ExecutorSubMotion_d,)
+    ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubCmd_alnum)
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
@@ -25,7 +25,7 @@ class ExecutorNormalCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\r'
+        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\rq@'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = \
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -42,6 +42,7 @@ class ExecutorNormalCmd(ExecutorBase):
         self.executor_sub_motion_d = ExecutorSubMotion_d(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
+        self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
 
     def colon(self, num=1, num_str=''):
         """Execute submode for ;."""
@@ -368,6 +369,8 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def dot(self, num=1, num_str=''):
         """Run previous change."""
+        # avoid to execute . command twice.
+        self.vim_status.manager_macro.remove_last_key('.')
         cmd_str = self.vim_status.dot_cmd.cmd2string(num, num_str)
 
         if not cmd_str:
@@ -595,3 +598,36 @@ class ExecutorNormalCmd(ExecutorBase):
         motion_info = self.helper_motion.enter(num=num)
 
         self.set_cursor_pos(motion_info.cursor_pos)
+
+    def q(self, num=1, num_str=''):
+        """Record typed characters into register."""
+        if self.vim_status.is_recording_macro():
+            self.vim_status.stop_recoding_macro()
+            self.vim_status.set_message("")
+        else:
+            executor_sub = self.executor_sub_alnum
+
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred([
+                FUNC_INFO(self.vim_status.start_recording_macro, True),
+                FUNC_INFO(lambda: self.vim_status.set_message(""), False)])
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def at(self, num=1, num_str=''):
+        """Execute contents of register."""
+        if self.vim_status.is_recording_macro():
+            self.vim_status.manager_macro.remove_last_key('@')
+            return
+
+        executor_sub = self.executor_sub_alnum
+
+        manager_macro = self.vim_status.manager_macro
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred([
+            FUNC_INFO(lambda x:manager_macro.set_info_for_execute(x, num),
+                      True)])
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+

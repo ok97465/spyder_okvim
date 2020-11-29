@@ -118,10 +118,12 @@ class DotCmdInfo:
 class KeyInfo:
     """Save the info of QKeyEvent."""
 
-    def __init__(self, key_code: int, text: str, modifiers: int):
+    def __init__(self, key_code: int, text: str, modifiers: int,
+                 identifier: int = 1):
         self.key_code = key_code
         self.text = text
         self.modifiers = modifiers
+        self.identifier = identifier  # 0: from vim, 1: from editor
 
     def to_event(self):
         """Convert key info to qkeyevent."""
@@ -186,6 +188,57 @@ class SearchInfo:
         editor.update_extra_selections()
 
         return [i.cursor.selectionStart() for i in self.selection_list]
+
+
+class ManagerMacro:
+    """Manage macros."""
+
+    def __init__(self):
+        self.registers = defaultdict(list)
+        self.is_recording = False
+        self.reg_name_for_record = ''
+        self.editor_connected = None
+        self.reg_name_for_execute = ''
+        self.num_execute = 0
+
+    def set_info_for_execute(self, ch, num):
+        """Set info for executing contents of register."""
+        self.reg_name_for_execute = ch
+        self.num_execute = num
+
+    def start_record(self, ch):
+        """Start recording."""
+        self.reg_name_for_record = ch
+        self.is_recording = True
+
+        if ch.lower() == ch:
+            self.registers[ch] = list()
+
+    def stop_record(self):
+        """Stop recording."""
+        # remove the last key if the last key is q
+        self.remove_last_key('q')
+        self.reg_name_for_record = ''
+        self.is_recording = False
+
+    def remove_last_key(self, ch):
+        """Remove last key."""
+        key_list = self.registers[self.reg_name_for_record]
+        if len(key_list) > 0:
+            last_key = key_list[-1]
+            if last_key.text == ch:
+                self.registers[self.reg_name_for_record] = key_list[:-1]
+
+    def add_vim_keyevent(self, event):
+        """Add keyevent from vim."""
+        if self.is_recording:
+            self.registers[self.reg_name_for_record].append(
+                KeyInfo(event.key(), event.text(), event.modifiers(), 0))
+
+    def add_editor_keyevent(self, event):
+        """Add keyevent from editor."""
+        self.registers[self.reg_name_for_record].append(
+            KeyInfo(event.key(), event.text(), event.modifiers(), 1))
 
 
 class VimCursor:
@@ -563,7 +616,6 @@ class VimStatus(QObject):
         self.editor_widget = editor_widget
         self.cursor: VimCursor = VimCursor(editor_widget)
         self.main = main
-        self.msg_label = msg_label
 
         # method mapping
         self.set_cursor = self.cursor.set_cursor
@@ -598,6 +650,13 @@ class VimStatus(QObject):
 
         # search
         self.search = SearchInfo(self.cursor)
+
+        # message
+        self.msg_label = msg_label
+        self.msg_prefix = ""
+
+        # Macro
+        self.manager_macro = ManagerMacro()
 
     def clear_state(self):
         """Clear."""
@@ -684,7 +743,7 @@ class VimStatus(QObject):
     def rcv_key_from_editor(self, event):
         """Add key event from editor to list."""
         self.dot_cmd.key_list_from_editor.append(
-            KeyInfo(event.key(), event.text(), event.modifiers()))
+            KeyInfo(event.key(), event.text(), event.modifiers(), 1))
 
     def disconnect_from_editor(self):
         """Disconnect from the editor."""
@@ -764,5 +823,39 @@ class VimStatus(QObject):
 
     def set_message(self, msg, duration_ms=-1):
         """Display the massage."""
-        self.msg_label.setText(msg)
+        self.msg_label.setText(f'{self.msg_prefix}{msg}')
+
+    def start_recording_macro(self, reg_name):
+        """Start recording macro."""
+        self.msg_prefix = f'recording @{reg_name}... '
+        self.manager_macro.start_record(reg_name)
+
+        editor = self.get_editor()
+        self.manager_macro.editor_connected = editor
+        editor.sig_key_pressed.connect(
+            self.add_key_from_editor_to_macro_manager)
+
+    def is_recording_macro(self):
+        """Return is_recording."""
+        return self.manager_macro.is_recording
+
+    def stop_recoding_macro(self):
+        """Stop recording macro."""
+        self.msg_prefix = ""
+        self.manager_macro.stop_record()
+        self.disconnect_macro_manager_from_editor()
+
+    @Slot(QKeyEvent)
+    def add_key_from_editor_to_macro_manager(self, event):
+        """Add key event from editor to list to macro_manager."""
+        self.manager_macro.add_editor_keyevent(event)
+
+    def disconnect_macro_manager_from_editor(self):
+        """Disconnect macro manager from the editor."""
+        # disconnect previous connection.
+        editor = self.manager_macro.editor_connected
+        if editor:
+            editor.sig_key_pressed.disconnect(
+                self.add_key_from_editor_to_macro_manager)
+        self.manager_macro.editor_connected = None
 

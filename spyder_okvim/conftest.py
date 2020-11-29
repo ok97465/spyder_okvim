@@ -6,10 +6,10 @@ from unittest.mock import Mock
 
 # Third party imports
 import pytest
-from spyder.plugins.editor.widgets.editor import EditorStack
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QVBoxLayout, QWidget
 from spyder.config.manager import CONF
+from spyder.plugins.editor.widgets.editor import EditorStack
 
 # Local imports
 from spyder_okvim.config import CONF_DEFAULTS, CONF_SECTION
@@ -68,10 +68,11 @@ class MainMock(QWidget):
         QWidget.__init__(self, None)
         self.plugin_focus_changed = Mock()
         self.editor = EditorMock(editor_stack)
+        self.status_bar = StatusBarMock()
         layout = QVBoxLayout()
         layout.addWidget(self.editor)
+        layout.addWidget(self.status_bar)
         self.setLayout(layout)
-        self.status_bar = StatusBarMock()
 
         for name, dict_info in CONF_DEFAULTS:
             if name != CONF_SECTION:
@@ -107,9 +108,15 @@ def editor_bot(qtbot):
     editor_stack.new(osp.join(LOCATION, 'foo2.py'), 'utf-8', text)
     editor_stack.new(osp.join(LOCATION, 'foo3.py'), 'utf-8', text)
     main = MainMock(editor_stack)
-    # main.show()
+
+    # Hide GUI
     qtbot.addWidget(main)
     return main, editor_stack, finfo.editor, qtbot
+
+    # Show GUI
+    # main.show()
+    # yield main, editor_stack, finfo.editor, qtbot
+    # main.destroy()
 
 
 @pytest.fixture
@@ -119,3 +126,4 @@ def vim_bot(editor_bot):
     vim = VimTesting(main)
     vim.register_plugin()
     return main, editor_stack, editor, vim, qtbot
+

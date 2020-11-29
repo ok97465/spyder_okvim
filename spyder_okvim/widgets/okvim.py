@@ -7,9 +7,14 @@
 # -----------------------------------------------------------------------------
 """OkVim Widget."""
 # %% Import
+# Standard library imports
+import sys
+import threading
+from functools import wraps
+
 # Third party imports
-from qtpy.QtCore import QObject, Qt, Signal, Slot
-from qtpy.QtGui import QTextCursor, QKeySequence
+from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
+from qtpy.QtGui import QKeySequence, QTextCursor
 from qtpy.QtWidgets import QLabel, QLineEdit, QWidget
 from spyder.config.manager import CONF
 
@@ -19,6 +24,18 @@ from spyder_okvim.executor import (
     ExecutorLeaderKey, ExecutorNormalCmd, ExecutorVisualCmd, ExecutorVlineCmd,)
 from spyder_okvim.utils.vim_status import (
     InputCmdInfo, KeyInfo, VimState, VimStatus,)
+
+running_coverage = 'coverage' in sys.modules
+
+
+def coverage_resolve_trace(fn):
+    """Fix missing coverage of qthread."""
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
+        if running_coverage:
+            sys.settrace(threading._trace_hook)
+        fn(*args, **kwargs)
+    return wrapped
 
 
 class VimShortcut(QObject):
@@ -132,7 +149,7 @@ class VimShortcut(QObject):
             # Update dot cmd
             cmd_info = InputCmdInfo(str(num), "")
             self.vim_status.input_cmd.set(cmd_info)
-            key_info = KeyInfo(Qt.Key_A, '', Qt.ControlModifier)
+            key_info = KeyInfo(Qt.Key_A, '', Qt.ControlModifier, 0)
             self.vim_status.update_dot_cmd(
                     False, key_list_to_cmd_line=[key_info])
 
@@ -157,7 +174,7 @@ class VimShortcut(QObject):
             # Update dot cmd
             cmd_info = InputCmdInfo(str(num), "")
             self.vim_status.input_cmd.set(cmd_info)
-            key_info = KeyInfo(Qt.Key_X, '', Qt.ControlModifier)
+            key_info = KeyInfo(Qt.Key_X, '', Qt.ControlModifier, 0)
             self.vim_status.update_dot_cmd(
                     False, key_list_to_cmd_line=[key_info])
 
@@ -262,6 +279,8 @@ class VimLineEdit(QLineEdit):
 
     def keyPressEvent(self, e):
         """Override Qt method."""
+        self.vim_status.manager_macro.add_vim_keyevent(e)
+
         key = e.key()
         pressed_ctrl = e.modifiers() == Qt.ControlModifier
         if key == Qt.Key_Escape:
@@ -302,9 +321,41 @@ class VimMsgLabel(QLabel):
     def __init__(self, txt, parent):
         super().__init__(txt, parent)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        tw = self.fontMetrics().width(" recording @q.. 0000 fewers lines ")
+        tw = self.fontMetrics().width(" recording @q... 0000 fewers lines ")
         fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
+
+
+class WorkerMacro(QThread):
+    """Send keyinfo from registers to main thread."""
+    sig_focus_vim = Signal()
+    sig_send_key_info = Signal(object)
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.key_info_list = []
+        self.num_iteration = 0
+
+    def set_key_infos(self, key_infos, num):
+        """Set key infos of registers."""
+        self.key_info_list = key_infos.copy()
+        self.num_iteration = num
+
+    @coverage_resolve_trace
+    def run(self):
+        """Send key info to main thread."""
+        is_focus_vim = True
+        for _ in range(self.num_iteration):
+            for key_info in self.key_info_list:
+                if key_info.identifier == 1:
+                    is_focus_vim = False
+                elif key_info.identifier == 0 and is_focus_vim is False:
+                    is_focus_vim = True
+                    self.sig_focus_vim.emit()
+                self.sig_send_key_info.emit(key_info)
+
+        if is_focus_vim is False:
+            self.sig_focus_vim.emit()
 
 
 class VimWidget(QWidget):
@@ -342,6 +393,22 @@ class VimWidget(QWidget):
         self.leader_key = ' '
         self.set_leader_key()
 
+        # macro
+        self.worker_macro = WorkerMacro(main)
+        self.worker_macro.sig_send_key_info.connect(
+            self.send_key_event)
+        self.worker_macro.sig_focus_vim.connect(
+            self.commandline.setFocus)
+
+    @Slot(object)
+    def send_key_event(self, key_info):
+        event = key_info.to_event()
+        if key_info.identifier == 0:
+            self.commandline.keyPressEvent(event)
+        else:
+            editor = self.vim_status.get_editor()
+            editor.keyPressEvent(event)
+
     def set_leader_key(self):
         """Set leader key from CONF."""
         leader_key = CONF.get(CONF_SECTION, 'leader_key')
@@ -366,3 +433,11 @@ class VimWidget(QWidget):
 
         if executor(txt):
             self.commandline.clear()
+
+        if self.vim_status.manager_macro.reg_name_for_execute:
+            mm = self.vim_status.manager_macro
+            ch = mm.reg_name_for_execute
+            self.worker_macro.set_key_infos(
+                mm.registers[ch], mm.num_execute)
+            self.worker_macro.start()
+            mm.set_info_for_execute("", 0)
