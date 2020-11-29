@@ -63,15 +63,16 @@ class OkvimConfigPage(PluginConfigPage):
         leaderkey_group = QGroupBox('Leader Key Mapping')
         leaderkey_layout = QHBoxLayout()
 
-        leaderkey_viewer = newle('Leader key', 'leader_key',
-                                 alignment=Qt.Horizontal)
-        leaderkey_viewer.textbox.setAlignment(Qt.AlignHCenter)
-        leaderkey_viewer.textbox.setEnabled(False)
+        self.leaderkey_viewer = newle('Leader key', 'leader_key',
+                                      alignment=Qt.Horizontal)
+        self.leaderkey_viewer.textbox.setAlignment(Qt.AlignHCenter)
+        self.leaderkey_viewer.textbox.setEnabled(False)
 
-        leaderkey_edit = ShortcutLineEdit(self, leaderkey_viewer.textbox)
+        self.leaderkey_edit = ShortcutLineEdit(
+            self, self.leaderkey_viewer.textbox)
 
-        leaderkey_layout.addWidget(leaderkey_viewer)
-        leaderkey_layout.addWidget(leaderkey_edit)
+        leaderkey_layout.addWidget(self.leaderkey_viewer)
+        leaderkey_layout.addWidget(self.leaderkey_edit)
         leaderkey_group.setLayout(leaderkey_layout)
         leaderkey_layout.addStretch(1)
 
@@ -99,9 +100,6 @@ class ShortcutLineEdit(QLineEdit):
         if modifier != Qt.NoModifier:
             return
         if not key or key == Qt.Key_unknown:
-            return
-        if key in [Qt.Key_Control, Qt.Key_Shift,
-                   Qt.Key_Alt, Qt.Key_Meta]:
             return
 
         key_str = QKeySequence(key).toString()

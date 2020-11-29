@@ -12,6 +12,15 @@ from spyder_okvim.config import CONF_SECTION
 from spyder_okvim.widgets.okvim import coverage_resolve_trace
 
 
+def test_unknown_cmd(vim_bot):
+    """Test unknown cmd."""
+    _, _, _, vim, qtbot = vim_bot
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, '|')
+
+    assert cmd_line.text() == ""
+
+
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
@@ -100,6 +109,40 @@ def test_l_cmd(vim_bot, text, cmd_list, cursor_pos):
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
+
+
+def test_HML(vim_bot):
+    """Test HML."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\n")
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, 'V')
+    qtbot.keyClicks(cmd_line, 'v')
+    qtbot.keyClicks(cmd_line, 'L')
+    qtbot.keyClicks(cmd_line, 'M')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    qtbot.keyClicks(cmd_line, 'V')
+    qtbot.keyClicks(cmd_line, 'L')
+    qtbot.keyClicks(cmd_line, 'M')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    qtbot.keyPress(cmd_line, Qt.Key_Escape)
+    qtbot.keyClicks(cmd_line, 'L')
+    qtbot.keyClicks(cmd_line, 'M')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    qtbot.keyClicks(cmd_line, 'y')
+    qtbot.keyClicks(cmd_line, 'L')
+
+    qtbot.keyClicks(cmd_line, 'y')
+    qtbot.keyClicks(cmd_line, 'M')
+
+    qtbot.keyClicks(cmd_line, 'y')
+    qtbot.keyClicks(cmd_line, 'H')
+
+    assert cmd_line.text() == ""
 
 
 @pytest.mark.parametrize(
@@ -231,6 +274,7 @@ def test_caret_cmd(vim_bot, text, cmd_list, cursor_pos):
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
+
 
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
@@ -1236,6 +1280,7 @@ def test_clipboard(vim_bot):
         ('  abcd.wkdn\n b', ['3l', 'y', 'W'], 3, '"', 'bcd.wkdn'),
         ('abcd', ['$', 'y', 'b'], 0, '"', 'abc'),
         ('  abcd \n b', ['3l', 'y', 'i', 'w'], 2, '"', 'abcd'),
+        ('  abcd\n b\nc', ['3l', 'y', '3i', 'W'], 2, '"', 'abcd\n b'),
         ('abcd\ne\nf\n', ['y', 'y'], 0, '"', 'abcd\n'),
         ('abcd', ['y', 'y'], 0, '"', 'abcd\n'),
         ('abcd\ne\nf\n', ['2y', 'y'], 0, '"', 'abcd\ne\n'),

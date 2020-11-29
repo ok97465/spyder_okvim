@@ -23,7 +23,7 @@ class VimTesting(OkVim):
     CONF_FILE = False
 
     def __init(self, parent):
-        OkVim.__init__(self, parent)
+        super().__init__(parent)
 
 
 class EditorMock(QWidget):

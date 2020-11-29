@@ -81,9 +81,6 @@ class DotCmdInfo:
     def cmd2string(self, num, num_str):
         """Convert cmd info to string of vim command."""
         # TODO : apply register name.
-        if self.cmd is None:
-            return
-
         cmd_str = ''
 
         if self.vim_state == VimState.VLINE:

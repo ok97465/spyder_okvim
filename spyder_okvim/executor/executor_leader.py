@@ -17,7 +17,8 @@ class ExecutorLeaderKey(ExecutorBase):
                 '\r': self.run_cell_and_advance,
                 'r': self.run_selection,
                 'f': self.formatting,
-                'p': self.open_switcher
+                'p': self.open_switcher,
+                's': self.open_symbol_swicher
                 }
 
         self.set_selection_to_editor_using_vim_selection = \
@@ -82,4 +83,8 @@ class ExecutorLeaderKey(ExecutorBase):
     def open_switcher(self, num=1, num_str=''):
         """Open switcher for buffers."""
         self.vim_status.main.open_switcher()
+
+    def open_symbol_swicher(self, num=1, num_str=''):
+        """Open switcher for symbol."""
+        self.vim_status.main.open_switcher(symbol=True)
 

@@ -13,8 +13,8 @@ from qtpy.QtGui import QKeyEvent, QFocusEvent
 from spyder_okvim.confpage import OkvimConfigPage
 
 
-def test_ui(vim_bot):
-    """Test ui.
+def test_conf_page(vim_bot):
+    """Test conf_page.
 
     Call the methods that is difficult to make test case.
     """
@@ -24,12 +24,34 @@ def test_ui(vim_bot):
     conf_page = OkvimConfigPage(vim, vim)
     conf_page.setup_page()
 
+    old_leader_key = conf_page.leaderkey_viewer.textbox.text()
+    new_event = QKeyEvent(QEvent.KeyPress, Qt.Key_Control, Qt.NoModifier)
+    conf_page.leaderkey_edit.keyPressEvent(new_event)
+
+    assert conf_page.leaderkey_viewer.textbox.text() == old_leader_key
+
+    new_event = QKeyEvent(QEvent.KeyPress, Qt.Key_unknown, Qt.NoModifier)
+    conf_page.leaderkey_edit.keyPressEvent(new_event)
+
+    assert conf_page.leaderkey_viewer.textbox.text() == old_leader_key
+
+    new_event = QKeyEvent(QEvent.KeyPress, Qt.Key_Meta, Qt.NoModifier)
+    conf_page.leaderkey_edit.keyPressEvent(new_event)
+
+    assert conf_page.leaderkey_viewer.textbox.text() == old_leader_key
+
+    new_event = QKeyEvent(QEvent.KeyPress, Qt.Key_Enter, Qt.NoModifier)
+    conf_page.leaderkey_edit.keyPressEvent(new_event)
+
+    assert conf_page.leaderkey_viewer.textbox.text() == "Enter"
+
 
 def test_apply_config(vim_bot):
     """Run apply_plugin_settings method."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text('foo Foo foo Foo')
 
+    # test refresh the color of search result.
     cmd_line = vim.get_focus_widget()
     qtbot.keyClicks(cmd_line, '/foo')
     qtbot.keyPress(cmd_line, Qt.Key_Return)
@@ -80,40 +102,6 @@ def test_ctrl_d_f(vim_bot):
 
     # assert cmd_line.text() == ""
     # assert editor.textCursor().position() == 2
-
-
-def test_HML(vim_bot):
-    """Test HML."""
-    _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\n")
-
-    cmd_line = vim.get_focus_widget()
-    qtbot.keyClicks(cmd_line, 'V')
-    qtbot.keyClicks(cmd_line, 'v')
-    qtbot.keyClicks(cmd_line, 'L')
-    qtbot.keyClicks(cmd_line, 'M')
-    qtbot.keyClicks(cmd_line, 'H')
-
-    qtbot.keyClicks(cmd_line, 'V')
-    qtbot.keyClicks(cmd_line, 'L')
-    qtbot.keyClicks(cmd_line, 'M')
-    qtbot.keyClicks(cmd_line, 'H')
-
-    qtbot.keyPress(cmd_line, Qt.Key_Escape)
-    qtbot.keyClicks(cmd_line, 'L')
-    qtbot.keyClicks(cmd_line, 'M')
-    qtbot.keyClicks(cmd_line, 'H')
-
-    qtbot.keyClicks(cmd_line, 'y')
-    qtbot.keyClicks(cmd_line, 'L')
-
-    qtbot.keyClicks(cmd_line, 'y')
-    qtbot.keyClicks(cmd_line, 'M')
-
-    qtbot.keyClicks(cmd_line, 'y')
-    qtbot.keyClicks(cmd_line, 'H')
-
-    assert cmd_line.text() == ""
 
 
 def test_message(vim_bot):

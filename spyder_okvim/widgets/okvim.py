@@ -210,10 +210,6 @@ class VimShortcut(QObject):
 
         self.cmd_line.esc_pressed()
 
-    def open_symbols_dlg(self):
-        """Open switcher for symbol."""
-        self.main.open_switcher(symbol=True)
-
 
 class VimStateLabel(QLabel):
     """Display state of vim."""
@@ -264,7 +260,6 @@ class VimLineEdit(QLineEdit):
         vim_shortcut.signal_cmd.connect(self.setText)
         self.dispatcher = {Qt.Key_A: vim_shortcut.add_num,
                            Qt.Key_X: vim_shortcut.subtract_num,
-                           Qt.Key_S: vim_shortcut.open_symbols_dlg,
                            Qt.Key_D: vim_shortcut.pg_half_down,
                            Qt.Key_F: vim_shortcut.pg_down,
                            Qt.Key_U: vim_shortcut.pg_half_up,
