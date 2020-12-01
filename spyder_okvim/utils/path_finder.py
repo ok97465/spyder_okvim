@@ -223,7 +223,7 @@ class PathFinder(QDialog):
         """Select next row in list viewer."""
         idx = self.list_viewer.currentIndex()
         rel_path = idx.data(Qt.DisplayRole)
-        if rel_path:
+        if rel_path and isinstance(self.folder, str):
             path = osp.join(self.folder, rel_path)
             self.path_selected = path
         self.close()
