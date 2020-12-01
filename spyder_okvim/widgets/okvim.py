@@ -10,6 +10,7 @@
 # Standard library imports
 import sys
 import threading
+import os.path as osp
 from functools import wraps
 
 # Third party imports
@@ -24,6 +25,7 @@ from spyder_okvim.executor import (
     ExecutorLeaderKey, ExecutorNormalCmd, ExecutorVisualCmd, ExecutorVlineCmd,)
 from spyder_okvim.utils.vim_status import (
     InputCmdInfo, KeyInfo, VimState, VimStatus,)
+from spyder_okvim.utils.path_finder import PathFinder
 
 running_coverage = 'coverage' in sys.modules
 
@@ -210,6 +212,18 @@ class VimShortcut(QObject):
 
         self.cmd_line.esc_pressed()
 
+    def open_path_finder(self):
+        """Open path finder."""
+        root_folder = self.main.projects.get_active_project_path()
+
+        dlg = PathFinder(root_folder, self.main)
+        dlg.exec_()
+        path = dlg.path_selected
+
+        if osp.isfile(path):
+            self.main.open_file(path)
+            self.vim_status.set_focus_to_vim()
+
 
 class VimStateLabel(QLabel):
     """Display state of vim."""
@@ -264,7 +278,8 @@ class VimLineEdit(QLineEdit):
                            Qt.Key_F: vim_shortcut.pg_down,
                            Qt.Key_U: vim_shortcut.pg_half_up,
                            Qt.Key_B: vim_shortcut.pg_up,
-                           Qt.Key_R: vim_shortcut.redo}
+                           Qt.Key_R: vim_shortcut.redo,
+                           Qt.Key_P: vim_shortcut.open_path_finder}
 
     def to_normal(self):
         """Convert the state of vim to normal mode."""
