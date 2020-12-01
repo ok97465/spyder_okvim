@@ -156,19 +156,19 @@ class PathFinder(QDialog):
 
     def get_path_list(self):
         """Get path of files including subdiretorys."""
-        dir_ = QDir(self.folder)
-        it = QDirIterator(
-            self.folder,
-            ['*.py', '*.txt', '*.md'],
-            QDir.Files | QDir.NoDotAndDotDot | QDir.NoSymLinks,
-            QDirIterator.Subdirectories)
-        while it.hasNext():
-            self.path_list.append(dir_.relativeFilePath(it.next()))
-
-        self.results_old[''] = self.path_list
-
         if self.folder is None or not osp.isdir(self.folder):
             self.edit.setPlaceholderText("The project is not valid.")
+        else:
+            dir_ = QDir(self.folder)
+            it = QDirIterator(
+                self.folder,
+                ['*.py', '*.txt', '*.md'],
+                QDir.Files | QDir.NoDotAndDotDot | QDir.NoSymLinks,
+                QDirIterator.Subdirectories)
+            while it.hasNext():
+                self.path_list.append(dir_.relativeFilePath(it.next()))
+
+        self.results_old[''] = self.path_list
 
     def update_list(self):
         """Update listview."""
@@ -223,7 +223,7 @@ class PathFinder(QDialog):
         """Select next row in list viewer."""
         idx = self.list_viewer.currentIndex()
         rel_path = idx.data(Qt.DisplayRole)
-        if rel_path:
+        if rel_path and isinstance(self.folder, str):
             path = osp.join(self.folder, rel_path)
             self.path_selected = path
         self.close()
