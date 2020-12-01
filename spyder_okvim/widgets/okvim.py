@@ -218,7 +218,7 @@ class VimShortcut(QObject):
 
         dlg = PathFinder(root_folder, self.main)
         dlg.exec_()
-        path = dlg.path_selected
+        path = dlg.get_path_selected()
 
         if osp.isfile(path):
             self.main.open_file(path)

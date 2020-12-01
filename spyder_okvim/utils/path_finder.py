@@ -86,6 +86,7 @@ class PathFinderEdit(QLineEdit):
         if pressed_ctrl and key in self.dispatcher_ctrl.keys():
             self.dispatcher_ctrl[key]()
             return
+
         super().keyPressEvent(e)
 
 
@@ -140,6 +141,10 @@ class PathFinder(QDialog):
 
         self.edit.setFocus()
 
+    def get_path_selected(self):
+        """Get path selected."""
+        return self.path_selected
+
     def get_number_of_visible_lines(self):
         """Get the number of visible lines in list."""
         num_lines = 0
@@ -154,7 +159,7 @@ class PathFinder(QDialog):
         dir_ = QDir(self.folder)
         it = QDirIterator(
             self.folder,
-            ['*.py', '*.txt'],
+            ['*.py', '*.txt', '*.md'],
             QDir.Files | QDir.NoDotAndDotDot | QDir.NoSymLinks,
             QDirIterator.Subdirectories)
         while it.hasNext():

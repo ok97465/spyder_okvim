@@ -69,6 +69,9 @@ class MainMock(QWidget):
         self.plugin_focus_changed = Mock()
         self.editor = EditorMock(editor_stack)
         self.status_bar = StatusBarMock()
+        self.projects = Mock()
+        self.open_file = Mock()
+        self.projects.get_active_project_path = lambda: None
         layout = QVBoxLayout()
         layout.addWidget(self.editor)
         layout.addWidget(self.status_bar)
