@@ -9,6 +9,7 @@ import sys
 from qtpy.QtCore import QDir, QDirIterator, QStringListModel, Qt, Signal
 from qtpy.QtWidgets import (
     QApplication, QDialog, QLineEdit, QListView, QVBoxLayout,)
+from spyder.config.gui import get_font
 
 
 def fuzzyfinder(query, collection):
@@ -99,6 +100,8 @@ class PathFinder(QDialog):
     def __init__(self, folder, parent=None):
         """Init."""
         super().__init__(parent)
+        font = get_font()
+
         self.folder = folder
         self.path_selected = ""
         self.path_list = []
@@ -107,6 +110,7 @@ class PathFinder(QDialog):
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setWindowOpacity(0.95)
         self.setFixedHeight(self._MAX_HEIGHT)
+        self.setFont(font)
 
         # Set List widget
         self.list_viewer = QListView(self)
@@ -116,9 +120,11 @@ class PathFinder(QDialog):
         self.list_viewer.setUniformItemSizes(True)
         self.list_model = QStringListModel()
         self.list_viewer.setModel(self.list_model)
+        self.list_viewer.setFont(font)
 
         # Set edit
         self.edit = PathFinderEdit(self, textChanged=self.update_list)
+        self.edit.setFont(font)
         self.edit.sig_esc_key_pressed.connect(self.close)
         self.edit.sig_enter_key_pressed.connect(self.enter)
 
