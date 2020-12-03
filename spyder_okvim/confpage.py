@@ -58,7 +58,6 @@ class OkvimConfigPage(PluginConfigPage):
         options_layout.addLayout(hl_yank_layout)
 
         options_group.setLayout(options_layout)
-        options_layout.addStretch(1)
 
         leaderkey_group = QGroupBox('Leader Key Mapping')
         leaderkey_layout = QHBoxLayout()
@@ -74,7 +73,6 @@ class OkvimConfigPage(PluginConfigPage):
         leaderkey_layout.addWidget(self.leaderkey_viewer)
         leaderkey_layout.addWidget(self.leaderkey_edit)
         leaderkey_group.setLayout(leaderkey_layout)
-        leaderkey_layout.addStretch(1)
 
         layout = QVBoxLayout()
         layout.addWidget(color_group)

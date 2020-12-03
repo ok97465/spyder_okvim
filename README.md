@@ -91,15 +91,24 @@ The following motions are supported:
 - gt, gT : Cycle to next/previous file.
 - ZZ : Save and close current file.
 
-## Special Keys
+## Special keys
 
 - \<leader\>f : autoformatting (spyder >= 4.2.0)
 - \<leader\>b : Toggle break point
 - \<leader\>r : run selected text or current line in console.
 - \<leader\>enter :  run cell and advance 
+- \<leader\>p : spyder switcher 
+- \<leader\>s : spyder symbol switcher 
 - gc{motion} : toggle comment (support visual mode)
   - gcc : toggle comment of current line
+    
+## Fuzzy path finder
 
-## Config Page
+The shortcut to invoke the fuzzy path finder is Ctrl+p.
+You can use ^p, ^n, ^f, ^b, ^u, ^d to navigate the path list.
+
+![fuzzy path finder](/doc/path_finder.gif)
+
+## Config page
 
 ![config page](/doc/config_page.png)
