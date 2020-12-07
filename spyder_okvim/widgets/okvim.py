@@ -280,6 +280,7 @@ class VimLineEdit(QLineEdit):
                            Qt.Key_B: vim_shortcut.pg_up,
                            Qt.Key_R: vim_shortcut.redo,
                            Qt.Key_P: vim_shortcut.open_path_finder}
+        self.setAttribute(Qt.WA_InputMethodEnabled, False)
 
     def to_normal(self):
         """Convert the state of vim to normal mode."""
