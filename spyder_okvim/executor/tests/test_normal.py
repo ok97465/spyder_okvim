@@ -495,6 +495,7 @@ def test_b_cmd(vim_bot, text, cmd_list, cursor_pos):
         ('01 34', ['B'], 0),
         ('01.34', ['$', 'B'], 0),
         ('0\n2()\n4.\n6', ['3j', '3B'], 0),
+        ('0\n2\n .6\n\n9', ['3j', '3B'], 2),
     ]
 )
 def test_B_cmd(vim_bot, text, cmd_list, cursor_pos):
