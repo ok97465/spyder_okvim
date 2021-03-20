@@ -492,6 +492,27 @@ def test_b_cmd(vim_bot, text, cmd_list, cursor_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
+        ('01 34', ['B'], 0),
+        ('01.34', ['$', 'B'], 0),
+        ('0\n2()\n4.\n6', ['3j', '3B'], 0),
+    ]
+)
+def test_B_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test B command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
         ('', ['e'], 0),
         ('01', ['e'], 1),
         ('01 ', ['e', 'e'], 2),
@@ -962,6 +983,8 @@ def test_ZQ_cmd(vim_bot):
         ('A B C D E ', ['$', 'g', 'u', 'b'], 'A B C D e ', 8),
         ('A B C D E ', ['$', 'g', 'u', '2b'], 'A B C d e ', 6),
         ('A B C D E ', ['$', '2g', 'u', '2b'], 'A b c d e ', 2),
+        ('A.B.C D.E ', ['$', 'g', 'u', 'B'], 'A.B.C d.e ', 6),
+        ('A.B.C D.E ', ['$', '2g', 'u', 'B'], 'a.b.c d.e ', 0),
         ('AB\nC\nD\nE\nF\nG', ['l', 'g', 'u', 'G'], 'ab\nc\nd\ne\nf\ng', 1),
         ('AB\nC\nD\nE\nF\nG', ['l', 'g', 'u', '2G'], 'ab\nc\nD\nE\nF\nG', 1),
         ('AB\nC\nD\nE\nF\nG', ['l', '2g', 'u', '2G'], 'ab\nc\nd\ne\nF\nG', 1),
@@ -1033,6 +1056,8 @@ def test_gu_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
         ('a b c d e ', ['$', 'g', 'U', 'b'], 'a b c d E ', 8),
         ('a b c d e ', ['$', 'g', 'U', '2b'], 'a b c D E ', 6),
         ('a b c d e ', ['$', '2g', 'U', '2b'], 'a B C D E ', 2),
+        ('a.b.c d.e ', ['$', 'g', 'U', 'B'], 'a.b.c D.E ', 6),
+        ('a.b.c d.e ', ['$', 'g', 'U', '2B'], 'A.B.C D.E ', 0),
         ('ab\nc\nd\ne\nf\ng', ['l', 'g', 'U', 'G'], 'AB\nC\nD\nE\nF\nG', 1),
         ('ab\nc\nd\ne\nf\ng', ['l', 'g', 'U', '2G'], 'AB\nC\nd\ne\nf\ng', 1),
         ('ab\nc\nd\ne\nf\ng', ['l', '2g', 'U', '2G'], 'AB\nC\nD\nE\nf\ng', 1),
@@ -1104,6 +1129,7 @@ def test_gU_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
         ('a b c d e ', ['$', 'g', '~', 'b'], 'a b c d E ', 8),
         ('a b c d e ', ['$', 'g', '~', '2b'], 'a b c D E ', 6),
         ('a b c d e ', ['$', '2g', '~', '2b'], 'a B C D E ', 2),
+        ('a b c d.e ', ['$', 'g', '~', 'B'], 'a b c D.E ', 6),
         ('ab\nc\nd\ne\nf\ng', ['l', 'g', '~', 'G'], 'AB\nC\nD\nE\nF\nG', 1),
         ('ab\nc\nd\ne\nf\ng', ['l', 'g', '~', '2G'], 'AB\nC\nd\ne\nf\ng', 1),
         ('ab\nc\nd\ne\nf\ng', ['l', '2g', '~', '2G'], 'AB\nC\nD\nE\nf\ng', 1),
@@ -1279,6 +1305,8 @@ def test_clipboard(vim_bot):
         ('a.dk b', ['y', 'W'], 0, '"', 'a.dk '),
         ('  abcd.wkdn\n b', ['3l', 'y', 'W'], 3, '"', 'bcd.wkdn'),
         ('abcd', ['$', 'y', 'b'], 0, '"', 'abc'),
+        ('ab.cd', ['$', 'y', 'b'], 3, '"', 'c'),
+        ('ab.cd', ['$', 'y', 'B'], 0, '"', 'ab.c'),
         ('  abcd \n b', ['3l', 'y', 'i', 'w'], 2, '"', 'abcd'),
         ('  abcd\n b\nc', ['3l', 'y', '3i', 'W'], 2, '"', 'abcd\n b'),
         ('abcd\ne\nf\n', ['y', 'y'], 0, '"', 'abcd\n'),
@@ -1576,6 +1604,8 @@ def test_C_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
         ('a.dk\nb', ['c', 'e'], 0, 'dk\nb', '"', 'a.'),
         ('a.dk\nb', ['c', '2e'], 0, '\nb', '"', 'a.dk'),
         ('abcd', ['$', 'c', 'b'], 0, 'd', '"', 'abc'),
+        ('ab.cd', ['$', 'c', 'b'], 3, 'ab.d', '"', 'c'),
+        ('ab.cd', ['$', 'c', 'B'], 0, 'd', '"', 'ab.c'),
         ('  abcd \n b', ['3l', 'c', 'i', 'w'], 2, '   \n b', '"', 'abcd'),
         ('  abcd \n b', ['3l', 'c', 'a', 'w'], 2, '  \n b', '"', 'abcd '),
         ('  12\n  78', ['j', 'c', 'c'], 5, '  12\n', '"', '  78\n'),
@@ -1803,6 +1833,8 @@ def test_search_cmd_with_option(vim_bot):
         ('a.dk\nb', ['d', 'e'], 0, 'dk\nb', '"', 'a.'),
         ('a.dk\nb', ['d', '2e'], 0, '\nb', '"', 'a.dk'),
         ('abcd', ['$', 'd', 'b'], 0, 'd', '"', 'abc'),
+        ('ab.cd', ['$', 'd', 'b'], 3, 'ab.d', '"', 'c'),
+        ('ab.cd', ['$', 'd', 'B'], 0, 'd', '"', 'ab.c'),
         ('  abcd \n b', ['3l', 'd', 'i', 'w'], 2, '   \n b', '"', 'abcd'),
         ('  abcd \n b', ['3l', 'd', 'a', 'w'], 1, '  \n b', '"', 'abcd '),
         ('  12\n  78', ['j', 'd', 'd'], 2, '  12', '"', '  78\n'),

@@ -83,7 +83,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        cmds = '/nNailhkjHML$^wWbegG%fFtT;, \b\r'
+        cmds = '/nNailhkjHML$^wWbBegG%fFtT;, \b\r'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
@@ -187,6 +187,12 @@ class ExecutorSubMotion(ExecutorSubBase):
         """Move backward [num] words and execute."""
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.b(num)
+        self.execute_func_deferred(motion_info)
+
+    def B(self, num=1, num_str=''):
+        """Move backward [num] WORDS and execute."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.B(num)
         self.execute_func_deferred(motion_info)
 
     def e(self, num=1, num_str=''):
