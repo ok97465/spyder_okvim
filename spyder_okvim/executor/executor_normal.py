@@ -25,7 +25,7 @@ class ExecutorNormalCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\rq@'
+        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\rq@'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = \
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -243,6 +243,12 @@ class ExecutorNormalCmd(ExecutorBase):
     def b(self, num=1, num_str=''):
         """Move to the previous word."""
         motion_info = self.helper_motion.b(num=num)
+
+        self.set_cursor_pos(motion_info.cursor_pos)
+
+    def B(self, num=1, num_str=''):
+        """Move to the previous WORD."""
+        motion_info = self.helper_motion.B(num=num)
 
         self.set_cursor_pos(motion_info.cursor_pos)
 

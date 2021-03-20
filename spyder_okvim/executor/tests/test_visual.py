@@ -291,6 +291,29 @@ def test_b_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
     [
+        ("01.34", ['$', 'v', 'B'], 0, [0, 5]),
+    ]
+)
+def test_B_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test B command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
         ("01 34", ['v', 'e'], 1, [0, 2]),
     ]
 )

@@ -431,6 +431,31 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(),
                                      motion_type=MotionType.CharWise)
 
+    def B(self, num=1, num_str=''):
+        """Get the position of the previous WORD.
+
+        Returns
+        -------
+        MotionInfo
+            motion info
+
+        """
+        cursor = self.get_cursor()
+        for _ in range(num):
+            cursor.movePosition(QTextCursor.PreviousWord)
+            while (self._get_leading_ch(cursor.position())
+                   not in WHITE_SPACE and not cursor.atBlockStart()):
+                cursor.movePosition(QTextCursor.PreviousWord)
+
+            if cursor.atBlockEnd():
+                cursor.movePosition(QTextCursor.PreviousWord)
+                while (self._get_leading_ch(cursor.position())
+                       not in WHITE_SPACE and not cursor.atBlockStart()):
+                    cursor.movePosition(QTextCursor.PreviousWord)
+
+        return self._set_motion_info(cursor.position(),
+                                     motion_type=MotionType.CharWise)
+
     def e(self, num=1, num_str=''):
         """Get the position of the end of word.
 

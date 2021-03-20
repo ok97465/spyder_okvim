@@ -18,7 +18,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUoiaydxscVhHjJklLMwWbepP^$gG~%fFtTnN/;,"r<> \b\r'
+        cmds = 'uUoiaydxscVhHjJklLMwWbBepP^$gG~%fFtTnN/;,"r<> \b\r'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = \
@@ -131,6 +131,12 @@ class ExecutorVisualCmd(ExecutorBase):
     def b(self, num=1, num_str=''):
         """Move to the previous word."""
         motion_info = self.helper_motion.b(num=num)
+
+        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
+
+    def B(self, num=1, num_str=''):
+        """Move to the previous WORD."""
+        motion_info = self.helper_motion.B(num=num)
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
