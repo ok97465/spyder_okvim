@@ -474,6 +474,9 @@ def test_W_cmd(vim_bot, text, cmd_list, cursor_pos):
         ('01 34', ['b'], 0),
         ('01 34', ['$', 'b'], 3),
         ('0\n2\n4\n6', ['3j', '3b'], 0),
+        ('0\n2\n\n 6\n8', ['4j', '3b'], 2),
+        ('0\n2\n .6\n\n9', ['4j', '3b'], 5),
+        ('0\n\n  \n  \n9', ['4j', 'b'], 2),
     ]
 )
 def test_b_cmd(vim_bot, text, cmd_list, cursor_pos):
@@ -495,7 +498,8 @@ def test_b_cmd(vim_bot, text, cmd_list, cursor_pos):
         ('01 34', ['B'], 0),
         ('01.34', ['$', 'B'], 0),
         ('0\n2()\n4.\n6', ['3j', '3B'], 0),
-        ('0\n2\n .6\n\n9', ['3j', '3B'], 2),
+        ('0\n2\n .6\n\n9', ['4j', '3B'], 0),
+        ('0\n\n  \n  \n9', ['4j', 'B'], 2),
     ]
 )
 def test_B_cmd(vim_bot, text, cmd_list, cursor_pos):

@@ -423,10 +423,22 @@ class HelperMotion:
 
         """
         cursor = self.get_cursor()
+
+        def move2previousword(_cursor):
+            _cursor.movePosition(QTextCursor.PreviousWord)
+            while (cursor.atBlockStart()
+                    and self._get_ch(cursor.position()) in WHITE_SPACE):
+                if _cursor.position() == 0:
+                    break
+                if _cursor.atBlockStart() and cursor.atBlockEnd():
+                    break
+                _cursor.movePosition(QTextCursor.PreviousWord)
+            return _cursor
+
         for _ in range(num):
-            cursor.movePosition(QTextCursor.PreviousWord)
-            if cursor.atBlockEnd():
-                cursor.movePosition(QTextCursor.PreviousWord)
+            cursor = move2previousword(cursor)
+            while(cursor.atBlockEnd() and not cursor.atBlockStart()):
+                cursor = move2previousword(cursor)
 
         return self._set_motion_info(cursor.position(),
                                      motion_type=MotionType.CharWise)
@@ -441,17 +453,22 @@ class HelperMotion:
 
         """
         cursor = self.get_cursor()
-        for _ in range(num):
-            cursor.movePosition(QTextCursor.PreviousWord)
-            while (self._get_leading_ch(cursor.position())
-                   not in WHITE_SPACE and not cursor.atBlockStart()):
-                cursor.movePosition(QTextCursor.PreviousWord)
 
-            if cursor.atBlockEnd():
-                cursor.movePosition(QTextCursor.PreviousWord)
-                while (self._get_leading_ch(cursor.position())
-                       not in WHITE_SPACE and not cursor.atBlockStart()):
-                    cursor.movePosition(QTextCursor.PreviousWord)
+        def move2previousWORD(_cursor):
+            _cursor.movePosition(QTextCursor.PreviousWord)
+            while(self._get_leading_ch(cursor.position())
+                    not in WHITE_SPACE):
+                if _cursor.position() == 0:
+                    break
+                if _cursor.atBlockStart() and cursor.atBlockEnd():
+                    break
+                _cursor.movePosition(QTextCursor.PreviousWord)
+            return _cursor
+
+        for _ in range(num):
+            cursor = move2previousWORD(cursor)
+            while(cursor.atBlockEnd() and not cursor.atBlockStart()):
+                cursor = move2previousWORD(cursor)
 
         return self._set_motion_info(cursor.position(),
                                      motion_type=MotionType.CharWise)
