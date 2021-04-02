@@ -9,6 +9,8 @@ class ExecutorColon(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
+
         self.editor_widget = vim_status.editor_widget
 
     def __call__(self, txt):

@@ -81,6 +81,7 @@ The following motions are supported:
 - f, F, t, T, ;, ,
 - /, N, n
 - Enter, Space, Backspace
+- easymotion
 
 ## Vim keys
 
@@ -112,3 +113,13 @@ You can use ^p, ^n, ^f, ^b, ^u, ^d to navigate the path list.
 ## Config page
 
 ![config page](/doc/config_page.png)
+
+## Easymotion
+
+![easymotion](/doc/easymotion.gif)
+
+You can use EasyMotion commands as an argument for d, c, or any other command that takes motion as an argument.
+
+| Motion Command                      | Description                                                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `<leader><leader> w`                | Start of word forwards                                                                                         |

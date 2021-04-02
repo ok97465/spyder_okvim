@@ -2,7 +2,7 @@
 """Status of Vim."""
 # Standard library imports
 from collections import defaultdict
-from typing import NamedTuple
+from typing import NamedTuple, List
 
 # Third party imports
 from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
@@ -13,6 +13,8 @@ from spyder.config.manager import CONF
 # Local imports
 from spyder_okvim.config import CONF_SECTION
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
+from spyder_okvim.utils.easymotion import (
+    PainterEasyMotion, ManageMarkerEasymotion)
 
 
 class VimState:
@@ -655,6 +657,11 @@ class VimStatus(QObject):
         # Macro
         self.manager_macro = ManagerMacro()
 
+        # easymotion
+        self.painter_easymotion = PainterEasyMotion()
+        self.manager_marker_easymotion = ManageMarkerEasymotion()
+        self.editor_connected_easymotion = None
+
     def clear_state(self):
         """Clear."""
         self.is_visual_mode = False
@@ -680,6 +687,7 @@ class VimStatus(QObject):
     def to_insert(self):
         """Change vim state to insert mode."""
         self.is_visual_mode = False
+        self.remove_marker_of_easymotion()
         self.get_editor().clear_extra_selections("vim_selection")
         self.get_editor().clear_extra_selections("vim_cursor")
         self.change_label.emit(VimState.INSERT)
@@ -855,4 +863,40 @@ class VimStatus(QObject):
             editor.sig_key_pressed.disconnect(
                 self.add_key_from_editor_to_macro_manager)
         self.manager_macro.editor_connected = None
+
+    def set_marker_for_easymotion(self, positions: List[int], motion_type):
+        """Set marker for easymotion."""
+        if not positions:
+            return
+        self.remove_marker_of_easymotion()
+        editor = self.get_editor()
+        self.manager_marker_easymotion.set_positions(positions, motion_type)
+        self.painter_easymotion.editor = editor
+        self.painter_easymotion.positions = positions
+        self.painter_easymotion.names = \
+            self.manager_marker_easymotion.name_list
+        self.editor_connected_easymotion = editor
+        editor.viewport().installEventFilter(self.painter_easymotion)
+        editor.viewport().update()
+
+    def update_marker_for_easymotion(self):
+        """Update marker of easymotion."""
+        self.remove_marker_of_easymotion()
+        editor = self.get_editor()
+        self.painter_easymotion.editor = editor
+        self.painter_easymotion.positions = \
+            self.manager_marker_easymotion.position_list
+        self.painter_easymotion.names = \
+            self.manager_marker_easymotion.name_list
+        self.editor_connected_easymotion = editor
+        editor.viewport().installEventFilter(self.painter_easymotion)
+        editor.viewport().update()
+
+    def remove_marker_of_easymotion(self):
+        """Remove marker of easymotion."""
+        editor = self.editor_connected_easymotion
+        self.editor_connected_easymotion = None
+        if editor:
+            editor.viewport().removeEventFilter(self.painter_easymotion)
+            editor.viewport().update()
 

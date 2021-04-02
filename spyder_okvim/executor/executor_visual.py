@@ -10,6 +10,7 @@ from spyder_okvim.executor.executor_base import (
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
     ExecutorSubCmd_register, ExecutorSubMotion_a, ExecutorSubMotion_i,)
+from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 
 
 class ExecutorVisualCmd(ExecutorBase):
@@ -34,6 +35,7 @@ class ExecutorVisualCmd(ExecutorBase):
         self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
+        self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
 
     def zero(self, num=1, num_str=''):
         """Go to the start of the current line."""
@@ -400,4 +402,15 @@ class ExecutorVisualCmd(ExecutorBase):
         motion_info = self.helper_motion.enter(num=num)
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
+
+    def run_easymotion(self, num=1, num_str=''):
+        """Run easymotion."""
+        executor_sub = self.executor_sub_easymotion
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.apply_motion_info_in_visual, True)])
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 

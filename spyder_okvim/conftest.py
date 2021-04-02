@@ -103,6 +103,8 @@ def editor_bot(qtbot):
     font = QFont("Courier New")
     font.setPointSize(10)
     editor_stack.set_default_font(font)
+    editor_stack.setMinimumWidth(400)
+    editor_stack.setMinimumHeight(400)
 
     editor_stack.set_find_widget(Mock())
     editor_stack.set_io_actions(Mock(), Mock(), Mock(), Mock())
@@ -113,13 +115,13 @@ def editor_bot(qtbot):
     main = MainMock(editor_stack)
 
     # Hide GUI
-    qtbot.addWidget(main)
-    return main, editor_stack, finfo.editor, qtbot
+    # qtbot.addWidget(main)
+    # return main, editor_stack, finfo.editor, qtbot
 
     # Show GUI
-    # main.show()
-    # yield main, editor_stack, finfo.editor, qtbot
-    # main.destroy()
+    main.show()
+    yield main, editor_stack, finfo.editor, qtbot
+    main.destroy()
 
 
 @pytest.fixture

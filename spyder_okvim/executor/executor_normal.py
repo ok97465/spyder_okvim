@@ -16,6 +16,7 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
     ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubMotion,
     ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubCmd_alnum)
+from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
@@ -43,6 +44,7 @@ class ExecutorNormalCmd(ExecutorBase):
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
+        self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
 
     def colon(self, num=1, num_str=''):
         """Execute submode for ;."""
@@ -634,6 +636,17 @@ class ExecutorNormalCmd(ExecutorBase):
         executor_sub.set_func_list_deferred([
             FUNC_INFO(lambda x:manager_macro.set_info_for_execute(x, num),
                       True)])
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def run_easymotion(self, num=1, num_str=''):
+        """Run easymotion."""
+        executor_sub = self.executor_sub_easymotion
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.apply_motion_info_in_normal, True)])
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 

@@ -306,6 +306,7 @@ class VimLineEdit(QLineEdit):
     def esc_pressed(self):
         """Clear state."""
         self.vim_status.input_cmd.clear()
+        self.vim_status.remove_marker_of_easymotion()
         if self.vim_status.sub_mode:
             self.vim_status.sub_mode = None
             self.clear()
@@ -428,6 +429,7 @@ class VimWidget(QWidget):
         if leader_key2:
             leader_key = leader_key2
         self.leader_key = leader_key
+        self.executor_leader_key.set_easymotion_key(self.leader_key)
 
     def on_text_changed(self, txt):
         """Send input command to executor."""
@@ -437,10 +439,17 @@ class VimWidget(QWidget):
         executor = self.executors[self.vim_status.vim_state]
         if self.vim_status.sub_mode:
             executor = self.vim_status.sub_mode
-        elif txt == self.leader_key:
-            self.vim_status.sub_mode = self.executor_leader_key
-            self.commandline.clear()
-            return
+
+        # workaround for easymotion (press leader, leader)
+        if txt == self.leader_key and executor != self.executor_leader_key:
+            sub_mode = self.vim_status.sub_mode
+            if sub_mode and sub_mode.allow_leaderkey is False:
+                pass
+            else:
+                self.executor_leader_key.prev_executor = executor
+                self.vim_status.sub_mode = self.executor_leader_key
+                self.commandline.clear()
+                return
 
         if executor(txt):
             self.commandline.clear()
