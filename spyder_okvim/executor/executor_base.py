@@ -68,6 +68,7 @@ class ExecutorBase:
 
         self.has_zero_cmd = True
         self.pattern_cmd = None
+        self.allow_leaderkey = True
 
     def update_input_cmd_info(self, num_str, cmd, input_txt):
         """Update input cmd to vim_status."""

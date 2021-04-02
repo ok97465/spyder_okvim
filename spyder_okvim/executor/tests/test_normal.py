@@ -787,7 +787,8 @@ def test_percent_cmd(vim_bot, text, cmd_list, cursor_pos):
         ('\n rr', ['j', 'f', 'r', ';'], 3),
         ('\n rr', ['j', 'f', 'r', ';', ','], 2),
         ('\n rrr', ['j', 'f', 'r', '2;'], 4),
-        ('\n rrr', ['j', 'f', 'r', '2;', '2,'], 2)
+        ('\n rrr', ['j', 'f', 'r', '2;', '2,'], 2),
+        ('  ', ['f', Qt.Key_Space], 1)
     ]
 )
 def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
@@ -797,7 +798,10 @@ def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
 
     cmd_line = vim.get_focus_widget()
     for cmd in cmd_list:
-        qtbot.keyClicks(cmd_line, cmd)
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -1334,7 +1338,7 @@ def test_clipboard(vim_bot):
         (' "AAA" ', ['y', 'a', '"'], 1, '"', '"AAA" '),
         ('(AAA)', ['y', 'i', '('], 1, '"', 'AAA'),
         ('(AAA)', ['y', 'a', '('], 0, '"', '(AAA)'),
-        ('(AAA)', ['%', 'y', 'a', ')'], 0, '"', '(AAA)'),
+        ('(AAA)', ['%', 'y', 'a', ')'], 0, '"', '(AAA)')
     ]
 )
 def test_y_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, register_name,
@@ -1646,7 +1650,10 @@ def test_c_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
 
     cmd_line = vim.get_focus_widget()
     for cmd in cmd_list:
-        qtbot.keyClicks(cmd_line, cmd)
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
 
     reg = vim.vim_cmd.vim_status.register_dict[reg_name]
     assert cmd_line.text() == ""

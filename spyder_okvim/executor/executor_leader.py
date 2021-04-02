@@ -23,6 +23,11 @@ class ExecutorLeaderKey(ExecutorBase):
 
         self.set_selection_to_editor_using_vim_selection = \
             self.vim_status.cursor.set_selection_to_editor_using_vim_selection
+        self.prev_executor = None
+
+    def set_easymotion_key(self, key):
+        "Set key for easymotion."
+        self.dispatcher[key] = self.execute_easymotion
 
     def __call__(self, txt):
         """Parse txt and executor command.
@@ -34,11 +39,17 @@ class ExecutorLeaderKey(ExecutorBase):
 
         """
         method = self.dispatcher.get(txt, None)
-        if method:
-            method(1, '')
 
-        self.vim_status.sub_mode = None
-        return True
+        ret = None
+        if method:
+            ret = method(1, '')
+
+        if ret:
+            self.vim_status.sub_mode = ret.sub_mode
+            return ret.clear_command_line
+        else:
+            self.vim_status.sub_mode = None
+            return True
 
     def auto_import(self, num=1, num_str=''):
         """Insert import statements from user defined list(for personal)."""
@@ -87,4 +98,8 @@ class ExecutorLeaderKey(ExecutorBase):
     def open_symbol_swicher(self, num=1, num_str=''):
         """Open switcher for symbol."""
         self.vim_status.main.open_switcher(symbol=True)
+
+    def execute_easymotion(self, num=1, num_str=''):
+        """Execute easymotion."""
+        return self.prev_executor.run_easymotion()
 

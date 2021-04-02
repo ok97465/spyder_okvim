@@ -7,6 +7,7 @@ import re
 # Local imports
 from spyder_okvim.executor.executor_base import (ExecutorSubBase, FUNC_INFO,
                                                  RETURN_EXECUTOR_METHOD_INFO)
+from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 
 
 class ExecutorSubMotion_i(ExecutorSubBase):
@@ -14,6 +15,7 @@ class ExecutorSubMotion_i(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
         self.has_zero_cmd = False
 
@@ -48,6 +50,7 @@ class ExecutorSubMotion_a(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
         self.has_zero_cmd = False
 
@@ -90,6 +93,7 @@ class ExecutorSubMotion(ExecutorSubBase):
         self.executor_sub_motion_i = ExecutorSubMotion_i(vim_status)
         self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
+        self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
 
     def __call__(self, txt):
         """Parse command and execute."""
@@ -327,6 +331,15 @@ class ExecutorSubMotion(ExecutorSubBase):
         motion_info = self.helper_motion.enter(num)
         self.execute_func_deferred(motion_info)
 
+    def run_easymotion(self, num=1, num_str=''):
+        """Run easymotion."""
+        executor_sub = self.executor_sub_easymotion
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(self.func_list_deferred)
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
 
 class ExecutorSubMotion_d(ExecutorSubMotion):
     """Replace w, W for d command in normal."""
@@ -371,6 +384,7 @@ class ExecutorSubSubCmd_g(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
         cmds = 'g'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -389,6 +403,7 @@ class ExecutorSubCmd_g(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
         cmds = 'gdtTuUc~'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -490,6 +505,7 @@ class ExecutorSubCmd_register(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
     def __call__(self, ch: str):
         """Update command to vim status."""
@@ -505,6 +521,7 @@ class ExecutorSubCmd_f_t(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
     def __call__(self, ch: str):
         """Go to the occurrence of character and execute."""
@@ -531,6 +548,7 @@ class ExecutorSubCmd_r(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
         self.pos_start = 0
         self.pos_end = 0
@@ -554,6 +572,7 @@ class ExecutorSubCmd_Z(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
         cmds = 'ZQ'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -577,6 +596,7 @@ class ExecutorSearch(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
     def __call__(self, txt):
         """Parse txt and executor command.
@@ -621,6 +641,7 @@ class ExecutorSubCmd_alnum(ExecutorSubBase):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.allow_leaderkey = False
 
     def __call__(self, ch: str):
         """."""
