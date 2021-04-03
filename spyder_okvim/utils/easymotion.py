@@ -85,12 +85,12 @@ class PainterEasyMotion(QObject):
         painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
         painter.setBrush(QColor(57, 34, 79, 255))
         painter.setFont(editor.font())
+        ch_width = fm.width(' ')
 
         for pos_ch, marker_name in zip(self.positions, self.names):
             tc.setPosition(pos_ch)
 
             rect = editor.cursorRect(tc)
-            ch_width = fm.width(editor.document().characterAt(pos_ch))
             rect.setWidth(ch_width * len(marker_name))
 
             if rect.intersects(viewport.rect()):
