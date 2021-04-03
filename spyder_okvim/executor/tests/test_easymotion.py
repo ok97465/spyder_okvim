@@ -241,3 +241,61 @@ def test_easymotion_j_cmd_in_submotion(
     assert editor.textCursor().position() == cursor_pos
     assert reg.content == text_yanked
 
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ('', [Qt.Key_Space, Qt.Key_Space, 'k'], 0),
+        ('a b.c d;', [Qt.Key_Space, Qt.Key_Space, 'k', 'l'], 1),
+        (' a b.c d;\ne', ['j', Qt.Key_Space, Qt.Key_Space, 'k', 'h'], 1),
+        ('a b.c d;\n e', ['j', Qt.Key_Space, Qt.Key_Space, 'k', 'h'], 0),
+        ('a b.c d;\n e\n\nf', ['3j', Qt.Key_Space, Qt.Key_Space, 'k', 'l'], 0),
+        ('a\nb\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nf',
+            ['G', Qt.Key_Space, Qt.Key_Space, 'k', 'j'], 31)
+    ]
+)
+def test_easymotion_k_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
+    """Test easymotion k command in normal."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked",
+    [
+        ('a b\nkk dd\nd', ['j', 'y', Qt.Key_Space, Qt.Key_Space, 'k', 'h'],
+            0, 'a b\nkk dd\nd', '"', 'a b\nkk dd\n'),
+        ('a b\nkk dd\nd', ['j', 'd', Qt.Key_Space, Qt.Key_Space, 'k', 'h'],
+            0, 'd', '"', 'a b\nkk dd\n'),
+        ('a b\nkk dd\nd', ['j', 'c', Qt.Key_Space, Qt.Key_Space, 'k', 'h'],
+            0, '\nd', '"', 'a b\nkk dd\n')
+    ]
+)
+def test_easymotion_k_cmd_in_submotion(
+        vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name,
+        text_yanked):
+    """Test easymotion k command in submotion."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    reg = vim.vim_cmd.vim_status.register_dict[reg_name]
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == text_yanked
