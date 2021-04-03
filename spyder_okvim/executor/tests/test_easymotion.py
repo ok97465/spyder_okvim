@@ -20,8 +20,8 @@ from qtpy.QtCore import Qt
             [Qt.Key_Space, Qt.Key_Space, 'w', 'rh'], 30),
     ]
 )
-def test_easymotion_bd_w_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
-    """Test easymotion bd w command in normal."""
+def test_easymotion_w_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
+    """Test easymotion w command in normal."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
@@ -44,9 +44,9 @@ import scipy.scipy as sc""",
          ['l', 'v', Qt.Key_Space, Qt.Key_Space, 'w', 'u'], 26, [1, 27])
     ]
 )
-def test_easymotion_bd_w_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
+def test_easymotion_w_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
                                        sel_pos):
-    """Test easymotion bd w command in visual."""
+    """Test easymotion w command in visual."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
@@ -74,9 +74,9 @@ import scipy.scipy as sc""",
          ['V', Qt.Key_Space, Qt.Key_Space, 'w', 'u'], 26, [0, 50])
     ]
 )
-def test_easymotion_bd_w_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos,
-                                      sel_pos):
-    """Test easymotion bd w command in vline."""
+def test_easymotion_w_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos,
+                                   sel_pos):
+    """Test easymotion w command in vline."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
@@ -106,10 +106,10 @@ def test_easymotion_bd_w_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos,
             0, 'k', '"', 'a b.c de\nf '),
     ]
 )
-def test_easymotion_bd_w_cmd_in_submotion(
+def test_easymotion_w_cmd_in_submotion(
         vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name,
         text_yanked):
-    """Test easymotion bd w command in submotion."""
+    """Test easymotion w command in submotion."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
@@ -136,8 +136,8 @@ def test_easymotion_bd_w_cmd_in_submotion(
         ('a b.c d"e\n\nf', ['2j', Qt.Key_Space, Qt.Key_Space, 'b', 'y'], 2),
     ]
 )
-def test_easymotion_bd_b_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
-    """Test easymotion bd b command in normal."""
+def test_easymotion_b_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
+    """Test easymotion b command in normal."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
@@ -162,10 +162,10 @@ def test_easymotion_bd_b_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
             2, 'a k', '"', 'b.c de\nf '),
     ]
 )
-def test_easymotion_bd_b_cmd_in_submotion(
+def test_easymotion_b_cmd_in_submotion(
         vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name,
         text_yanked):
-    """Test easymotion bd b command in submotion."""
+    """Test easymotion b command in submotion."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
