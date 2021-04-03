@@ -82,7 +82,8 @@ class ExecutorEasymotion(ExecutorSubBase):
         self.has_zero_cmd = False
 
         self.dispatcher = {
-                'w': self.forward_words
+                'w': self.forward_words,
+                'b': self.backward_words
                 }
         self.executor_select_maker = ExecutorSelectMarkerEasymotion(vim_status)
 
@@ -149,6 +150,34 @@ class ExecutorEasymotion(ExecutorSubBase):
                 continue
 
             positions.append(cursor.position())
+
+        return self.set_position_result_to_vim_status(positions,
+                                                      MotionType.CharWise)
+
+    def backward_words(self, num=1, num_str=''):
+        """Easymotion-bd-b."""
+        editor = self.vim_status.get_editor()
+        cur_pos = editor.textCursor().position()
+        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        start_pos = min([view_end_pos, cur_pos])
+
+        cursor = editor.textCursor()
+        cursor.setPosition(start_pos)
+        texts = editor.toPlainText()
+
+        positions = []
+        while 1:
+            if cursor.movePosition(QTextCursor.PreviousWord) is False:
+                break
+            if cursor.atBlockEnd():
+                continue
+            ch = texts[cursor.position()]
+            if not ch.isalnum():
+                continue
+
+            positions.append(cursor.position())
+            if cursor.position() <= view_start_pos:
+                break
 
         return self.set_position_result_to_vim_status(positions,
                                                       MotionType.CharWise)

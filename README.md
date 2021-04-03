@@ -123,3 +123,4 @@ You can use EasyMotion commands as an argument for d, c, or any other command th
 | Motion Command                      | Description                                                                                                    |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `<leader><leader> w`                | Start of word forwards                                                                                         |
+| `<leader><leader> b`                | Start of word backwards                                                                                        |
