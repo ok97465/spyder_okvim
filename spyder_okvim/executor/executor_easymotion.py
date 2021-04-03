@@ -84,7 +84,8 @@ class ExecutorEasymotion(ExecutorSubBase):
         self.dispatcher = {
                 'w': self.forward_words,
                 'b': self.backward_words,
-                'j': self.forward_start_of_line
+                'j': self.forward_start_of_line,
+                'k': self.backward_start_of_line
                 }
         self.executor_select_maker = ExecutorSelectMarkerEasymotion(vim_status)
 
@@ -198,6 +199,33 @@ class ExecutorEasymotion(ExecutorSubBase):
             if cursor.movePosition(QTextCursor.NextBlock) is False:
                 break
             if cursor.position() >= view_end_pos:
+                break
+            pos = cursor.position()
+            text = cursor.block().text()
+
+            if text.strip():
+                pos += len(text) - len(text.lstrip())
+
+            positions.append(pos)
+
+        return self.set_position_result_to_vim_status(positions,
+                                                      MotionType.LineWise)
+
+    def backward_start_of_line(self, num=1, num_str=''):
+        """Easymotion-j."""
+        editor = self.vim_status.get_editor()
+        cur_pos = editor.textCursor().position()
+        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        start_pos = min([view_end_pos, cur_pos])
+
+        cursor = editor.textCursor()
+        cursor.setPosition(start_pos)
+
+        positions = []
+        while 1:
+            if cursor.movePosition(QTextCursor.PreviousBlock) is False:
+                break
+            if cursor.position() < view_start_pos:
                 break
             pos = cursor.position()
             text = cursor.block().text()

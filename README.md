@@ -125,3 +125,4 @@ You can use EasyMotion commands as an argument for d, c, or any other command th
 | `<leader><leader> w`                | Start of word forwards                                                                                         |
 | `<leader><leader> b`                | Start of word backwards                                                                                        |
 | `<leader><leader> j`                | Start of line forwards
+| `<leader><leader> k`                | Start of line backwards
