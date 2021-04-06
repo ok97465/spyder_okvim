@@ -45,7 +45,7 @@ import scipy.scipy as sc""",
     ]
 )
 def test_easymotion_w_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
-                                       sel_pos):
+                                    sel_pos):
     """Test easymotion w command in visual."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)

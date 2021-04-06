@@ -132,9 +132,9 @@ class ExecutorEasymotion(ExecutorSubBase):
     def forward_words(self, num=1, num_str=''):
         """Easymotion-w."""
         editor = self.vim_status.get_editor()
-        cur_pos = max([editor.textCursor().position() - 1, 0])
+        cur_pos = editor.textCursor().position()
         view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
-        start_pos = max([view_start_pos - 1, cur_pos])
+        start_pos = max([view_start_pos, cur_pos])
 
         cursor = editor.textCursor()
         cursor.setPosition(start_pos)
