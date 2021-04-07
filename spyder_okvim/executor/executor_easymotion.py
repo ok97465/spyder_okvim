@@ -6,7 +6,7 @@ from typing import Tuple
 
 # Third party imports
 from qtpy.QtCore import QPoint
-from qtpy.QtGui import QTextCursor
+from qtpy.QtGui import QTextCursor, QTextDocument
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
@@ -72,6 +72,97 @@ class ExecutorSelectMarkerEasymotion(ExecutorSubBase):
             return True
 
 
+class ExecutorSearchCharEasymotion(ExecutorSubBase):
+    """Submode for searching character in easymotion."""
+    def __init__(self, vim_status, executor_select_maker):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+        self.executor_select_maker = executor_select_maker
+        self.n_input_required = 1
+        self.search_method = None
+
+    def __call__(self, txt: str):
+        if len(txt) < self.n_input_required:
+            return False
+
+        self.vim_status.sub_mode = None
+        ret = None
+        if self.search_method:
+            ret = self.search_method(txt)
+
+        if ret:
+            self.vim_status.sub_mode = ret.sub_mode
+            return ret.clear_command_line
+        else:
+            self.vim_status.sub_mode = None
+            return True
+
+    def get_cursor_pos_of_viewport(self) -> Tuple[int, int]:
+        """Get the cursor position of viewport of editor."""
+        editor = self.vim_status.get_editor()
+        start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
+        bottom_right = QPoint(
+            editor.viewport().width() - 1, editor.viewport().height() - 1)
+        end_pos = editor.cursorForPosition(bottom_right).position()
+
+        return start_pos, end_pos
+
+    def set_search_method(self, method_name: str):
+        "Set search method."
+        self.search_method = {
+            "ch_forwards": self.forwards_find_char,
+            "ch_backwards": self.backwards_find_char
+            }.get(method_name, None)
+
+    def set_position_result_to_vim_status(self, positions, motion_type):
+        """Set positions to vim status for easymotion."""
+        executor_sub = self.executor_select_maker
+        if positions:
+            executor_sub.set_func_list_deferred(self.func_list_deferred)
+            self.vim_status.set_marker_for_easymotion(positions, motion_type)
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def forwards_find_char(self, characters: str):
+        """Find characters forwards."""
+        editor = self.vim_status.get_editor()
+
+        cur_pos = editor.textCursor().position()
+        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        start_pos = min([view_end_pos, cur_pos]) + 1
+
+        positions = []
+        while (view_start_pos <= start_pos <= view_end_pos):
+            cursor = editor.document().find(characters, start_pos)
+            if cursor.isNull():
+                break
+            positions.append(cursor.position() - len(characters))
+            start_pos = cursor.position()
+
+        return self.set_position_result_to_vim_status(
+            positions, MotionType.CharWiseIncludingEnd)
+
+    def backwards_find_char(self, characters: str):
+        """Find characters backwards."""
+        editor = self.vim_status.get_editor()
+
+        cur_pos = editor.textCursor().position()
+        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        start_pos = max([view_start_pos, cur_pos]) - 1
+
+        positions = []
+        while (view_start_pos <= start_pos <= view_end_pos):
+            cursor = editor.document().find(characters, start_pos,
+                                            QTextDocument.FindBackward)
+            print(cursor.position())
+            if cursor.isNull():
+                break
+            positions.append(cursor.position() - len(characters))
+            start_pos = cursor.position() - len(characters)
+
+        return self.set_position_result_to_vim_status(
+            positions, MotionType.CharWise)
+
+
 class ExecutorEasymotion(ExecutorSubBase):
     """Submode of easymotion."""
 
@@ -85,9 +176,13 @@ class ExecutorEasymotion(ExecutorSubBase):
                 'w': self.forward_words,
                 'b': self.backward_words,
                 'j': self.forward_start_of_line,
-                'k': self.backward_start_of_line
+                'k': self.backward_start_of_line,
+                'f': self.forwards_find_char,
+                'F': self.backwards_find_char
                 }
         self.executor_select_maker = ExecutorSelectMarkerEasymotion(vim_status)
+        self.executor_search_char = ExecutorSearchCharEasymotion(
+            vim_status, self.executor_select_maker)
 
     def __call__(self, txt: str):
         if txt.isdigit():
@@ -237,4 +332,20 @@ class ExecutorEasymotion(ExecutorSubBase):
 
         return self.set_position_result_to_vim_status(positions,
                                                       MotionType.LineWise)
+
+    def forwards_find_char(self, num=1, num_str=''):
+        """Find characters forwards."""
+        executor_sub = self.executor_search_char
+        executor_sub.set_search_method("ch_forwards")
+        executor_sub.n_input_required = num
+        executor_sub.set_func_list_deferred(self.func_list_deferred)
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def backwards_find_char(self, num=1, num_str=''):
+        """Find characters forwards."""
+        executor_sub = self.executor_search_char
+        executor_sub.set_search_method("ch_backwards")
+        executor_sub.n_input_required = num
+        executor_sub.set_func_list_deferred(self.func_list_deferred)
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 

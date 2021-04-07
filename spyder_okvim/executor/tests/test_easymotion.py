@@ -300,3 +300,170 @@ def test_easymotion_k_cmd_in_submotion(
     assert editor.toPlainText() == text_expected
     assert editor.textCursor().position() == cursor_pos
     assert reg.content == text_yanked
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ('', [Qt.Key_Space, Qt.Key_Space, 'f', 'a'], 0),
+        ('b a a\na', [Qt.Key_Space, Qt.Key_Space, 'f', 'a', 'h'], 2),
+        ('b a a\na', [Qt.Key_Space, Qt.Key_Space, 'f', 'a', 'k'], 4),
+    ]
+)
+def test_easymotion_f_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
+    """Test easymotion f command in normal."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ('import numpy as np',
+         ['v', Qt.Key_Space, Qt.Key_Space, 'f', 'p', 'h'], 2, [0, 3])
+    ]
+)
+def test_easymotion_f_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
+                                    sel_pos):
+    """Test easymotion w command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked",
+    [
+        ('a a.a aa', ['y', Qt.Key_Space, Qt.Key_Space, 'f', 'a', 'l'],
+            0, 'a a.a aa', '"', 'a a.a a'),
+        ('a a.a aa', ['d', Qt.Key_Space, Qt.Key_Space, 'f', 'a', 'l'],
+            0, 'a', '"', 'a a.a a'),
+        ('a a.a aa', ['c', Qt.Key_Space, Qt.Key_Space, 'f', 'a', 'l'],
+            0, 'a', '"', 'a a.a a'),
+    ]
+)
+def test_easymotion_f_cmd_in_submotion(
+        vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name,
+        text_yanked):
+    """Test easymotion f command in submotion."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    reg = vim.vim_cmd.vim_status.register_dict[reg_name]
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == text_yanked
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ('', [Qt.Key_Space, Qt.Key_Space, 'F', 'a'], 0),
+        ('b a a\na', ['$', Qt.Key_Space, Qt.Key_Space, 'F', 'a', 'h'], 2),
+        ('b a a\na', ['j', Qt.Key_Space, Qt.Key_Space, 'F', 'b', 'h'], 0),
+    ]
+)
+def test_easymotion_F_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
+    """Test easymotion F command in normal."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ('import numpy as np',
+         ['$', 'v', Qt.Key_Space, Qt.Key_Space, 'F', 'p', 'h'], 10, [10, 18])
+    ]
+)
+def test_easymotion_F_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
+                                    sel_pos):
+    """Test easymotion F command in visual."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked",
+    [
+        ('a a.a aa', ['$', 'y', Qt.Key_Space, Qt.Key_Space, 'F', 'a', 'l'],
+            0, 'a a.a aa', '"', 'a a.a a'),
+        ('a a.a aa', ['$', 'd', Qt.Key_Space, Qt.Key_Space, 'F', 'a', 'l'],
+            0, 'a', '"', 'a a.a a'),
+        ('a a.a aa', ['$', 'c', Qt.Key_Space, Qt.Key_Space, 'F', 'a', 'l'],
+            0, 'a', '"', 'a a.a a'),
+    ]
+)
+def test_easymotion_F_cmd_in_submotion(
+        vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name,
+        text_yanked):
+    """Test easymotion F command in submotion."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.get_focus_widget()
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    reg = vim.vim_cmd.vim_status.register_dict[reg_name]
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == text_yanked
+
