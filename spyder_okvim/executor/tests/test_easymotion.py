@@ -11,6 +11,7 @@ from qtpy.QtCore import Qt
     [
         ('', [Qt.Key_Space, Qt.Key_Space, 'w'], 0),
         ('a b.c d;e\n', [Qt.Key_Space, Qt.Key_Space, 'w', 'h'], 2),
+        ('a b.c d;e\n', ['w', Qt.Key_Space, Qt.Key_Space, 'w', 'h'], 4),
         ('a b.c d;e\n', [Qt.Key_Space, Qt.Key_Space, 'w', 'e', 'l'], 1),
         ('a b.c d;e\n', [Qt.Key_Space, Qt.Key_Space, '1', 'w', 'e'], 0),
         ('a b.c d"e\n\nf', [Qt.Key_Space, Qt.Key_Space, 'w', 'u'], 11),
