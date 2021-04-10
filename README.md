@@ -16,6 +16,9 @@ Don't make an issue to spyder github after install okvim.
 This project is incomplete. So it may adversely affect spyder-ide. If you have a problem after 
 installing this, please retry after uninstalling okvim.
 
+## Known Issues
+
+- Okvim is not working when the spyder editor is undocked from mainwindow.
 
 ## Overview
 
