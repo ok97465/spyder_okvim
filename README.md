@@ -7,7 +7,7 @@
 
 
 Spyder Plugin for executing Vim commands inside the code editor.
-This repository is reusing a lot of codes of [spyder-ide/spyder-vim](https://github.com/spyder-ide/spyder-vim)
+This repository is reusing some codes of [spyder-ide/spyder-vim](https://github.com/spyder-ide/spyder-vim)
 
 ```
 Don't make an issue to spyder github after install okvim.
