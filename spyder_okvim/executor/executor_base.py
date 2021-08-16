@@ -38,6 +38,8 @@ class ExecutorBase:
         ";": "semicolon",
         ",": "comma",
         ".": "dot",
+        "[": "opensquarebracket",
+        "]": "closesquarebracket",
     }
 
     def __init__(self, vim_status):

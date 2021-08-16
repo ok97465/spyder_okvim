@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 """Tests for the executor_normal."""
+# Standard library imports
+from unittest.mock import Mock
+
 # Third party imports
 import pytest
 from qtpy.QtCore import QEvent, Qt
@@ -2068,3 +2071,17 @@ def test_q_cmd(vim_bot):
     foo()
 
 
+def test_squarebracket_d_cmd(vim_bot):
+    """Test goto warning."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    editor.go_to_next_warning = Mock()
+    editor.go_to_previous_warning = Mock()
+
+    cmd_line = vim.get_focus_widget()
+    qtbot.keyClicks(cmd_line, '[d')
+    qtbot.keyClicks(cmd_line, ']d')
+
+    assert cmd_line.text() == ""
+    assert editor.go_to_next_warning.called
+    assert editor.go_to_previous_warning.called

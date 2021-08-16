@@ -654,3 +654,48 @@ class ExecutorSubCmd_alnum(ExecutorSubBase):
 
         return True
 
+
+class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
+    """submode of ["""
+
+    def __init__(self, vim_status):
+        """."""
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+        self.has_zero_cmd = False
+
+        cmds = 'd'
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
+
+    def d(self, num=1, num_str=''):
+        """Go to previous warning/error."""
+        num = num * self.parent_num[0]
+        editor = self.get_editor()
+        for _ in range(num):
+            editor.go_to_previous_warning()
+        self.vim_status.cursor.draw_vim_cursor()
+
+
+
+class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
+    """submode of ["""
+
+    def __init__(self, vim_status):
+        """."""
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+        self.has_zero_cmd = False
+
+        cmds = 'd'
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
+
+    def d(self, num=1, num_str=''):
+        """Go to next warning/error."""
+        num = num * self.parent_num[0]
+        editor = self.get_editor()
+        for _ in range(num):
+            editor.go_to_next_warning()
+        self.vim_status.cursor.draw_vim_cursor()
+
