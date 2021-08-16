@@ -103,6 +103,8 @@ The following motions are supported:
 - \<leader\>enter :  run cell and advance 
 - \<leader\>p : spyder switcher 
 - \<leader\>s : spyder symbol switcher 
+- [d : goto previous warning/error
+- ]d : goto next warning/error
 - gc{motion} : toggle comment (support visual mode)
   - gcc : toggle comment of current line
     

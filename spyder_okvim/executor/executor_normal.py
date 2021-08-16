@@ -15,7 +15,8 @@ from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
     ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubMotion,
-    ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubCmd_alnum)
+    ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubCmd_alnum,
+    ExecutorSubCmd_opensquarebracket, ExecutorSubCmd_closesquarebracket)
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
@@ -26,7 +27,7 @@ class ExecutorNormalCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\rq@'
+        cmds = r'aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT";,.Z/<> \b\rq@\[\]'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = \
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -45,6 +46,8 @@ class ExecutorNormalCmd(ExecutorBase):
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
+        self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(vim_status)
+        self.executor_sub_closesquarebracekt = ExecutorSubCmd_closesquarebracket(vim_status)
 
     def colon(self, num=1, num_str=''):
         """Execute submode for ;."""
@@ -650,3 +653,18 @@ class ExecutorNormalCmd(ExecutorBase):
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
+    def opensquarebracket(self, num=1, num_str=''):
+        """Start [ submode."""
+        executor_sub = self.executor_sub_opensquarebracekt
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def closesquarebracket(self, num=1, num_str=''):
+        """Start [ submode."""
+        executor_sub = self.executor_sub_closesquarebracekt
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
