@@ -12,8 +12,8 @@ from spyder.config.manager import CONF
 from spyder.plugins.editor.widgets.editor import EditorStack
 
 # Local imports
-from spyder_okvim.config import CONF_DEFAULTS, CONF_SECTION
-from spyder_okvim.plugin import OkVim
+from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
+from spyder_okvim.spyder.plugin import OkVim
 
 LOCATION = osp.realpath(osp.join(
     os.getcwd(), osp.dirname(__file__)))
@@ -22,7 +22,7 @@ LOCATION = osp.realpath(osp.join(
 class VimTesting(OkVim):
     CONF_FILE = False
 
-    def __init(self, parent):
+    def __init__(self, parent):
         super().__init__(parent)
 
 
@@ -129,6 +129,6 @@ def vim_bot(editor_bot):
     """Create an spyder-vim plugin instance."""
     main, editor_stack, editor, qtbot = editor_bot
     vim = VimTesting(main)
-    vim.register_plugin()
+    vim.on_initialize()
     return main, editor_stack, editor, vim, qtbot
 

@@ -11,7 +11,7 @@ from qtpy.QtWidgets import QApplication, QTextEdit
 from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.config import CONF_SECTION
+from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 from spyder_okvim.utils.easymotion import (
     PainterEasyMotion, ManageMarkerEasymotion)

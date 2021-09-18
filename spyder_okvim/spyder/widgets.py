@@ -16,16 +16,18 @@ from functools import wraps
 # Third party imports
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QKeySequence, QTextCursor
-from qtpy.QtWidgets import QLabel, QLineEdit, QWidget
+from qtpy.QtWidgets import QLabel, QLineEdit, QWidget, QHBoxLayout
 from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.config import CONF_SECTION, KEYCODE2STR
+from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.executor import (
     ExecutorLeaderKey, ExecutorNormalCmd, ExecutorVisualCmd, ExecutorVlineCmd,)
 from spyder_okvim.utils.vim_status import (
     InputCmdInfo, KeyInfo, VimState, VimStatus,)
 from spyder_okvim.utils.path_finder import PathFinder
+from spyder.api.widgets.main_widget import PluginMainWidget
+
 
 running_coverage = 'coverage' in sys.modules
 
@@ -38,6 +40,32 @@ def coverage_resolve_trace(fn):
             sys.settrace(threading._trace_hook)
         fn(*args, **kwargs)
     return wrapped
+
+
+class SpyderCustomLayoutWidget(PluginMainWidget):
+
+    def __init__(self, name=None, plugin=None, parent=None):
+        """."""
+        super().__init__(name, plugin, parent)
+        layout = QHBoxLayout()
+        layout.addWidget(QLabel("Please hide this pane."))
+        self.setLayout(layout)
+
+    def get_title(self):
+        """."""
+        return "Okvim"
+
+    def get_focus_widget(self):
+        """."""
+        pass
+
+    def setup(self):
+        """."""
+        pass
+
+    def update_actions(self):
+        """."""
+        pass
 
 
 class VimShortcut(QObject):

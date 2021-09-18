@@ -11,8 +11,8 @@ from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.config import CONF_SECTION
-from spyder_okvim.widgets.okvim import coverage_resolve_trace
+from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.widgets import coverage_resolve_trace
 
 
 def test_unknown_cmd(vim_bot):
