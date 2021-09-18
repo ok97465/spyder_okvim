@@ -7,7 +7,7 @@ from qtpy.QtGui import QKeyEvent, QFocusEvent
 
 # Local imports
 from spyder_okvim.utils.path_finder import PathFinder
-from spyder_okvim.confpage import OkvimConfigPage
+from spyder_okvim.spyder.confpage import OkvimConfigPage
 
 
 def test_open_path_finder(vim_bot, monkeypatch, tmpdir):

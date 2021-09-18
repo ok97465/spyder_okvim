@@ -12,7 +12,7 @@ from qtpy.QtCore import QPoint, QRegularExpression
 from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.config import CONF_SECTION
+from spyder_okvim.spyder.config import CONF_SECTION
 
 
 WHITE_SPACE = ' \t'

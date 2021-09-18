@@ -9,20 +9,23 @@
 # Third party imports
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QKeySequence, QFont
-from qtpy.QtWidgets import QHBoxLayout, QShortcut, QVBoxLayout, QWidget
-from spyder.api.plugins import SpyderPluginWidget
-from spyder.config.base import _
+from qtpy.QtGui import  QKeySequence
+from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from spyder.api.plugins import Plugins, SpyderDockablePlugin
+from spyder.api.widgets.status import StatusBarWidget
 from spyder.utils.icon_manager import MAIN_FG_COLOR
 
 # Local imports
-from spyder_okvim.config import CONF_DEFAULTS, CONF_SECTION
-from spyder_okvim.confpage import OkvimConfigPage
-from spyder_okvim.widgets.okvim import VimWidget
+from spyder_okvim.spyder.api import CustomLayout
+from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
+from spyder_okvim.spyder.confpage import OkvimConfigPage
+from spyder_okvim.spyder.widgets import SpyderCustomLayoutWidget, VimWidget
 
 
-class StatusBarVimWidget(QWidget):
+class StatusBarVimWidget(StatusBarWidget):
     """Status bar widget for okvim."""
+
+    ID = "okvim_in_statusbar"
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
         """Status bar widget base."""
@@ -49,48 +52,95 @@ class StatusBarVimWidget(QWidget):
         self.setLayout(layout)
         self.setFixedWidth(width_total)
 
+    def set_layout(self):
+        """."""
+        pass
 
-class OkVim(SpyderPluginWidget):  # pylint: disable=R0904
+    # ---- Status bar widget API
+    def set_icon(self):
+        """Set the icon for the status bar widget."""
+        pass
+
+    def set_value(self, value):
+        """Set formatted text value."""
+        pass
+
+    def update_tooltip(self):
+        """Update tooltip for widget."""
+        pass
+
+    def mouseReleaseEvent(self, event):
+        """Override Qt method to allow for click signal."""
+        super(StatusBarWidget, self).mousePressEvent(event)
+        pass
+
+    # ---- API to be defined by user
+    def get_tooltip(self):
+        """Return the widget tooltip text."""
+        return ''
+
+    def get_icon(self):
+        """Return the widget tooltip text."""
+        return None
+
+
+class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     """Implements a Vim-like command mode."""
 
     focus_changed = Signal()
+    NAME = "spyder_okvim"
+    REQUIRES = [Plugins.StatusBar]
+    OPTIONAL = []
+    WIDGET_CLASS = SpyderCustomLayoutWidget
     CONF_SECTION = CONF_SECTION
     CONFIGWIDGET_CLASS = OkvimConfigPage
     CONF_DEFAULTS = CONF_DEFAULTS
+    CUSTOM_LAYOUTS = [CustomLayout]
 
-    def __init__(self, parent):
-        SpyderPluginWidget.__init__(self, parent)
+    def __init__(self, parent, configuration=None):
+        """."""
+        super().__init__(parent, configuration)
         self.main = parent
         self.vim_cmd = VimWidget(self.main.editor, self.main)
-        layout = QVBoxLayout()
-        layout.addWidget(self.vim_cmd)
-        self.setLayout(layout)
 
         status_bar_widget = StatusBarVimWidget(
                 parent,
                 self.vim_cmd.msg_label,
                 self.vim_cmd.status_label,
                 self.vim_cmd.commandline)
-        status = self.main.statusBar()
-        status.insertPermanentWidget(0, status_bar_widget)
+        statusbar = self.get_plugin(Plugins.StatusBar)
+        statusbar.add_status_widget(status_bar_widget)
 
-    # %% SpyderPlugin API
-    def get_plugin_title(self):
-        """Return widget title."""
-        return _("Okvim")
+    # --- SpyderDockablePlugin API
+    # ------------------------------------------------------------------------
+    def get_name(self):
+        """Return name."""
+        return "Okvim"
 
-    def get_plugin_icon(self):
+    def get_description(self):
+        """Return description."""
+        return "A plugin for Spyder to enable Vim keybindings"
+
+    def get_icon(self):
         """Return widget icon."""
         return qta.icon('mdi.vimeo', color=MAIN_FG_COLOR)
 
-    def register_plugin(self):
-        """Register plugin in Spyder's main window."""
-        super(OkVim, self).register_plugin()
-
+    def on_initialize(self):
+        """."""
         sc = QShortcut(QKeySequence("Esc"),
                        self.vim_cmd.editor_widget.editorsplitter,
                        self.vim_cmd.commandline.setFocus)
         sc.setContext(Qt.WidgetWithChildrenShortcut)
+
+    def check_compatibility(self):
+        """."""
+        valid = True
+        message = ""  # Note: Remember to use _("") to localize the string
+        return valid, message
+
+    def on_close(self, cancellable=True):
+        """."""
+        return True
 
     def get_focus_widget(self):
         """Return vim command line and give it focus."""

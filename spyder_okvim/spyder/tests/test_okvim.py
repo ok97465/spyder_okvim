@@ -10,7 +10,7 @@ from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QFocusEvent
 
 # Local imports
-from spyder_okvim.confpage import OkvimConfigPage
+from spyder_okvim.spyder.confpage import OkvimConfigPage
 
 
 def test_conf_page(vim_bot):
@@ -19,7 +19,7 @@ def test_conf_page(vim_bot):
     Call the methods that is difficult to make test case.
     """
     _, _, _, vim, _ = vim_bot
-    vim.get_plugin_icon()
+    vim.get_icon()
     vim.switch_to_plugin()
     conf_page = OkvimConfigPage(vim, vim)
     conf_page.setup_page()
