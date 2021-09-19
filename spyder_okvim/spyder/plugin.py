@@ -72,7 +72,6 @@ class StatusBarVimWidget(StatusBarWidget):
     def mouseReleaseEvent(self, event):
         """Override Qt method to allow for click signal."""
         super(StatusBarWidget, self).mousePressEvent(event)
-        pass
 
     # ---- API to be defined by user
     def get_tooltip(self):
@@ -88,12 +87,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     """Implements a Vim-like command mode."""
 
     focus_changed = Signal()
-    NAME = "spyder_okvim"
+    NAME = CONF_SECTION
     REQUIRES = [Plugins.StatusBar]
     OPTIONAL = []
     WIDGET_CLASS = SpyderCustomLayoutWidget
     CONF_SECTION = CONF_SECTION
-    CONFIGWIDGET_CLASS = OkvimConfigPage
+    CONF_WIDGET_CLASS = OkvimConfigPage
     CONF_DEFAULTS = CONF_DEFAULTS
     CUSTOM_LAYOUTS = [CustomLayout]
 

@@ -15,12 +15,12 @@ from spyder.plugins.editor.widgets.editor import EditorStack
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.plugin import OkVim
 
-LOCATION = osp.realpath(osp.join(
-    os.getcwd(), osp.dirname(__file__)))
+LOCATION = osp.realpath(osp.join(os.getcwd(), osp.dirname(__file__)))
 
 
 class VimTesting(OkVim):
     CONF_FILE = False
+    CONF_SECTION = CONF_SECTION
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -66,6 +66,7 @@ class MainMock(QWidget):
     def __init__(self, editor_stack):
         """Main Window Mock constructor."""
         QWidget.__init__(self, None)
+        self.main = QWidget()
         self.plugin_focus_changed = Mock()
         self.editor = EditorMock(editor_stack)
         self.status_bar = StatusBarMock()
@@ -92,11 +93,9 @@ class MainMock(QWidget):
 @pytest.fixture
 def editor_bot(qtbot):
     """Editorstack pytest fixture."""
-    text = ('   123\n'
-            'line 1\n'
-            'line 2\n'
-            'line 3\n'
-            'line 4')  # a newline is added at end
+    text = (
+        "   123\n" "line 1\n" "line 2\n" "line 3\n" "line 4"
+    )  # a newline is added at end
     editor_stack = EditorStack(None, [])
 
     # Fix the area of the selection
@@ -108,10 +107,10 @@ def editor_bot(qtbot):
 
     editor_stack.set_find_widget(Mock())
     editor_stack.set_io_actions(Mock(), Mock(), Mock(), Mock())
-    finfo = editor_stack.new(osp.join(LOCATION, 'foo.py'), 'utf-8', text)
-    editor_stack.new(osp.join(LOCATION, 'foo1.py'), 'utf-8', text)
-    editor_stack.new(osp.join(LOCATION, 'foo2.py'), 'utf-8', text)
-    editor_stack.new(osp.join(LOCATION, 'foo3.py'), 'utf-8', text)
+    finfo = editor_stack.new(osp.join(LOCATION, "foo.py"), "utf-8", text)
+    editor_stack.new(osp.join(LOCATION, "foo1.py"), "utf-8", text)
+    editor_stack.new(osp.join(LOCATION, "foo2.py"), "utf-8", text)
+    editor_stack.new(osp.join(LOCATION, "foo3.py"), "utf-8", text)
     main = MainMock(editor_stack)
 
     # Hide GUI
@@ -131,4 +130,3 @@ def vim_bot(editor_bot):
     vim = VimTesting(main)
     vim.on_initialize()
     return main, editor_stack, editor, vim, qtbot
-

@@ -22,28 +22,37 @@ from spyder.config.manager import CONF
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.executor import (
-    ExecutorLeaderKey, ExecutorNormalCmd, ExecutorVisualCmd, ExecutorVlineCmd,)
+    ExecutorLeaderKey,
+    ExecutorNormalCmd,
+    ExecutorVisualCmd,
+    ExecutorVlineCmd,
+)
 from spyder_okvim.utils.vim_status import (
-    InputCmdInfo, KeyInfo, VimState, VimStatus,)
+    InputCmdInfo,
+    KeyInfo,
+    VimState,
+    VimStatus,
+)
 from spyder_okvim.utils.path_finder import PathFinder
 from spyder.api.widgets.main_widget import PluginMainWidget
 
 
-running_coverage = 'coverage' in sys.modules
+running_coverage = "coverage" in sys.modules
 
 
 def coverage_resolve_trace(fn):
     """Fix missing coverage of qthread."""
+
     @wraps(fn)
     def wrapped(*args, **kwargs):
         if running_coverage:
             sys.settrace(threading._trace_hook)
         fn(*args, **kwargs)
+
     return wrapped
 
 
 class SpyderCustomLayoutWidget(PluginMainWidget):
-
     def __init__(self, name=None, plugin=None, parent=None):
         """."""
         super().__init__(name, plugin, parent)
@@ -131,10 +140,10 @@ class VimShortcut(QObject):
             cursor.setPosition(_pos_end, QTextCursor.KeepAnchor)
             try:
                 text_selected = cursor.selectedText()
-                if text_selected == '-':
+                if text_selected == "-":
                     continue
                 val_ = int(text_selected)
-                if text_selected.isdigit() or text_selected[0] == '-':
+                if text_selected.isdigit() or text_selected[0] == "-":
                     val = val_
                     pos_end = _pos_end
                 else:
@@ -148,7 +157,7 @@ class VimShortcut(QObject):
             try:
                 val_ = int(cursor.selectedText())
                 text_selected = cursor.selectedText()
-                if text_selected.isdigit() or text_selected[0] == '-':
+                if text_selected.isdigit() or text_selected[0] == "-":
                     val = val_
                     pos_start = _pos_start
                 else:
@@ -179,9 +188,8 @@ class VimShortcut(QObject):
             # Update dot cmd
             cmd_info = InputCmdInfo(str(num), "")
             self.vim_status.input_cmd.set(cmd_info)
-            key_info = KeyInfo(Qt.Key_A, '', Qt.ControlModifier, 0)
-            self.vim_status.update_dot_cmd(
-                    False, key_list_to_cmd_line=[key_info])
+            key_info = KeyInfo(Qt.Key_A, "", Qt.ControlModifier, 0)
+            self.vim_status.update_dot_cmd(False, key_list_to_cmd_line=[key_info])
 
     def subtract_num(self):
         """Subtract to the number at the cursor."""
@@ -204,12 +212,11 @@ class VimShortcut(QObject):
             # Update dot cmd
             cmd_info = InputCmdInfo(str(num), "")
             self.vim_status.input_cmd.set(cmd_info)
-            key_info = KeyInfo(Qt.Key_X, '', Qt.ControlModifier, 0)
-            self.vim_status.update_dot_cmd(
-                    False, key_list_to_cmd_line=[key_info])
+            key_info = KeyInfo(Qt.Key_X, "", Qt.ControlModifier, 0)
+            self.vim_status.update_dot_cmd(False, key_list_to_cmd_line=[key_info])
 
     def redo(self):
-        """ Redo [count] changes which were undone. """
+        """Redo [count] changes which were undone."""
         if self.vim_status.sub_mode:
             self.cmd_line.esc_pressed()
             return
@@ -230,11 +237,9 @@ class VimShortcut(QObject):
         n_block_new = editor.blockCount()
         if n_block_new != n_block_old:
             if n_block_new > n_block_old:
-                self.vim_status.set_message(
-                    f"{n_block_new - n_block_old} more lines")
+                self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
             else:
-                self.vim_status.set_message(
-                    f"{n_block_old - n_block_new} fewer lines")
+                self.vim_status.set_message(f"{n_block_old - n_block_new} fewer lines")
         else:
             self.vim_status.set_message(f"{num} changes")
 
@@ -286,8 +291,7 @@ class VimStateLabel(QLabel):
 class VimLineEdit(QLineEdit):
     """Vim Command input."""
 
-    def __init__(self, vim_widget, vim_status: VimStatus,
-                 vim_shortcut: VimShortcut):
+    def __init__(self, vim_widget, vim_status: VimStatus, vim_shortcut: VimShortcut):
         super().__init__(vim_widget)
         self.vim_widget = vim_widget
         self.vim_status = vim_status
@@ -300,14 +304,16 @@ class VimLineEdit(QLineEdit):
 
         # Todo: Move setting shortcut to config file.
         vim_shortcut.signal_cmd.connect(self.setText)
-        self.dispatcher = {Qt.Key_A: vim_shortcut.add_num,
-                           Qt.Key_X: vim_shortcut.subtract_num,
-                           Qt.Key_D: vim_shortcut.pg_half_down,
-                           Qt.Key_F: vim_shortcut.pg_down,
-                           Qt.Key_U: vim_shortcut.pg_half_up,
-                           Qt.Key_B: vim_shortcut.pg_up,
-                           Qt.Key_R: vim_shortcut.redo,
-                           Qt.Key_P: vim_shortcut.open_path_finder}
+        self.dispatcher = {
+            Qt.Key_A: vim_shortcut.add_num,
+            Qt.Key_X: vim_shortcut.subtract_num,
+            Qt.Key_D: vim_shortcut.pg_half_down,
+            Qt.Key_F: vim_shortcut.pg_down,
+            Qt.Key_U: vim_shortcut.pg_half_up,
+            Qt.Key_B: vim_shortcut.pg_up,
+            Qt.Key_R: vim_shortcut.redo,
+            Qt.Key_P: vim_shortcut.open_path_finder,
+        }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
 
     def to_normal(self):
@@ -368,6 +374,7 @@ class VimMsgLabel(QLabel):
 
 class WorkerMacro(QThread):
     """Send keyinfo from registers to main thread."""
+
     sig_focus_vim = Signal()
     sig_send_key_info = Signal(object)
 
@@ -406,16 +413,14 @@ class VimWidget(QWidget):
         self.editor_widget = editor_widget
         self.main = main
         self.status_label = VimStateLabel(main)
-        self.msg_label = VimMsgLabel('', main)
+        self.msg_label = VimMsgLabel("", main)
 
         self.vim_status = VimStatus(editor_widget, main, self.msg_label)
         self.vim_status.change_label.connect(self.status_label.change_state)
 
-        self.vim_shortcut = VimShortcut(self.main,
-                                        self.vim_status)
+        self.vim_shortcut = VimShortcut(self.main, self.vim_status)
 
-        self.commandline = VimLineEdit(self, self.vim_status,
-                                       self.vim_shortcut)
+        self.commandline = VimLineEdit(self, self.vim_status, self.vim_shortcut)
         self.commandline.textChanged.connect(self.on_text_changed)
 
         self.vim_status.cmd_line = self.commandline
@@ -424,21 +429,21 @@ class VimWidget(QWidget):
         self.executor_normal_cmd = ExecutorNormalCmd(self.vim_status)
         self.executor_visual_cmd = ExecutorVisualCmd(self.vim_status)
         self.executor_vline_cmd = ExecutorVlineCmd(self.vim_status)
-        self.executors = {VimState.NORMAL: self.executor_normal_cmd,
-                          VimState.VISUAL: self.executor_visual_cmd,
-                          VimState.VLINE: self.executor_vline_cmd}
+        self.executors = {
+            VimState.NORMAL: self.executor_normal_cmd,
+            VimState.VISUAL: self.executor_visual_cmd,
+            VimState.VLINE: self.executor_vline_cmd,
+        }
 
         # leader key
         self.executor_leader_key = ExecutorLeaderKey(self.vim_status)
-        self.leader_key = ' '
+        self.leader_key = " "
         self.set_leader_key()
 
         # macro
         self.worker_macro = WorkerMacro(main)
-        self.worker_macro.sig_send_key_info.connect(
-            self.send_key_event)
-        self.worker_macro.sig_focus_vim.connect(
-            self.commandline.setFocus)
+        self.worker_macro.sig_send_key_info.connect(self.send_key_event)
+        self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
 
     @Slot(object)
     def send_key_event(self, key_info):
@@ -451,9 +456,8 @@ class VimWidget(QWidget):
 
     def set_leader_key(self):
         """Set leader key from CONF."""
-        leader_key = CONF.get(CONF_SECTION, 'leader_key')
-        leader_key2 = KEYCODE2STR.get(
-                QKeySequence.fromString(leader_key)[0], None)
+        leader_key = CONF.get(CONF_SECTION, "leader_key")
+        leader_key2 = KEYCODE2STR.get(QKeySequence.fromString(leader_key)[0], None)
         if leader_key2:
             leader_key = leader_key2
         self.leader_key = leader_key
@@ -485,7 +489,6 @@ class VimWidget(QWidget):
         if self.vim_status.manager_macro.reg_name_for_execute:
             mm = self.vim_status.manager_macro
             ch = mm.reg_name_for_execute
-            self.worker_macro.set_key_infos(
-                mm.registers[ch], mm.num_execute)
+            self.worker_macro.set_key_infos(mm.registers[ch], mm.num_execute)
             self.worker_macro.start()
             mm.set_info_for_execute("", 0)
