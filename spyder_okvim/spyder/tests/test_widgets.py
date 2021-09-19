@@ -18,10 +18,10 @@ def test_conf_page(vim_bot):
 
     Call the methods that is difficult to make test case.
     """
-    _, _, _, vim, _ = vim_bot
+    main, _, _, vim, _ = vim_bot
     vim.get_icon()
     vim.switch_to_plugin()
-    conf_page = OkvimConfigPage(vim, vim)
+    conf_page = OkvimConfigPage(vim, main)
     conf_page.setup_page()
 
     old_leader_key = conf_page.leaderkey_viewer.textbox.text()

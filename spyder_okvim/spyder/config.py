@@ -7,7 +7,7 @@
 # Third party imports
 from qtpy.QtCore import Qt
 
-CONF_SECTION = 'okvim'
+CONF_SECTION = 'spyder_okvim'
 
 KEYCODE2STR = {
         Qt.Key_Return: '\r',
