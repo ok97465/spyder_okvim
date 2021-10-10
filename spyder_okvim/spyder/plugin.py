@@ -112,7 +112,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     # --- SpyderDockablePlugin API
     # ------------------------------------------------------------------------
-    def get_name(self):
+    @staticmethod
+    def get_name():
         """Return name."""
         return "Okvim"
 

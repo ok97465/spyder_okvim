@@ -52,6 +52,7 @@ class CustomLayout(BaseGridLayoutType):
         self.add_area([Plugins.IPythonConsole], 1, 3)
         
 
-    def get_name(self):
-        return "Spyder Custom Layout"
+    @staticmethod
+    def get_name():
+        return "Spyder_okvim"
 
