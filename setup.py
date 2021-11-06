@@ -11,9 +11,10 @@ from setuptools import find_packages, setup
 
 # Local imports
 from spyder_okvim import __version__
+from spyder_okvim.spyder.config import CONF_SECTION
 
 setup(
-    name="spyder_okvim",
+    name=CONF_SECTION,
     version=__version__,
     author="ok97465",
     author_email="ok97465@kakao.com",

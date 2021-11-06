@@ -25,7 +25,8 @@ from spyder_okvim.spyder.widgets import SpyderCustomLayoutWidget, VimWidget
 class StatusBarVimWidget(StatusBarWidget):
     """Status bar widget for okvim."""
 
-    ID = "okvim_in_statusbar"
+    CONF_SECTION = CONF_SECTION + "_status_bar"
+    ID = CONF_SECTION + "_status_bar"
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
         """Status bar widget base."""
@@ -115,7 +116,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     @staticmethod
     def get_name():
         """Return name."""
-        return "Okvim"
+        return CONF_SECTION
 
     def get_description(self):
         """Return description."""
