@@ -351,7 +351,8 @@ class VimLineEdit(QLineEdit):
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
-        self.to_normal()
+        if self.vim_status.cursor.get_editor():
+            self.to_normal()
         self.vim_status.set_message("")
 
     def focusOutEvent(self, event):
