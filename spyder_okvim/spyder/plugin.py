@@ -17,7 +17,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 
 # Local imports
 from spyder_okvim.spyder.api import CustomLayout
-from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
+from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
 from spyder_okvim.spyder.widgets import SpyderCustomLayoutWidget, VimWidget
 
@@ -95,7 +95,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
     CONF_DEFAULTS = CONF_DEFAULTS
+    CONF_VERSION = CONF_VERSION
     CUSTOM_LAYOUTS = [CustomLayout]
+    CAN_BE_DISABLED = True
 
     def __init__(self, parent, configuration=None):
         """."""
