@@ -13,8 +13,7 @@ This repository is reusing some codes of [spyder-ide/spyder-vim](https://github.
 Don't make an issue to spyder github after install okvim.
 ```
 
-This project is incomplete. So it may adversely affect spyder-ide. If you have a problem after 
-installing this, please retry after uninstalling okvim.
+If you have a problem after installing this, please retry after uninstalling okvim.
 
 ## Known Issues
 
@@ -30,6 +29,8 @@ This plugin supports a combination of operators and motions
   
 This plugin supports spyder command.
   - run selection, formatting, toggle break, toggle comment, ...
+
+This plugin support macro(experimental).
 
 | Movements | Combination | Spyder command |
 |------|-------------|----------------|
@@ -94,6 +95,7 @@ The following motions are supported:
 - gd : Go to definition.
 - gt, gT : Cycle to next/previous file.
 - ZZ : Save and close current file.
+- q, @: macro
 
 ## Special keys
 
