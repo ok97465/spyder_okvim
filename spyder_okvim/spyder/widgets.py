@@ -8,34 +8,29 @@
 """OkVim Widget."""
 # %% Import
 # Standard library imports
+import os.path as osp
 import sys
 import threading
-import os.path as osp
 from functools import wraps
 
 # Third party imports
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QKeySequence, QTextCursor
-from qtpy.QtWidgets import QLabel, QLineEdit, QWidget, QHBoxLayout
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
+from spyder.api.config.decorators import on_conf_change
+from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.executor import (
     ExecutorLeaderKey,
     ExecutorNormalCmd,
     ExecutorVisualCmd,
     ExecutorVlineCmd,
 )
-from spyder_okvim.utils.vim_status import (
-    InputCmdInfo,
-    KeyInfo,
-    VimState,
-    VimStatus,
-)
+from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.utils.path_finder import PathFinder
-from spyder.api.widgets.main_widget import PluginMainWidget
-
+from spyder_okvim.utils.vim_status import InputCmdInfo, KeyInfo, VimState, VimStatus
 
 running_coverage = "coverage" in sys.modules
 
@@ -52,7 +47,9 @@ def coverage_resolve_trace(fn):
     return wrapped
 
 
-class SpyderCustomLayoutWidget(PluginMainWidget):
+class SpyderOkVimPane(PluginMainWidget):
+    """."""
+
     def __init__(self, name=None, plugin=None, parent=None):
         """."""
         super().__init__(name, plugin, parent)
@@ -60,13 +57,16 @@ class SpyderCustomLayoutWidget(PluginMainWidget):
         layout.addWidget(QLabel("Please hide this pane."))
         self.setLayout(layout)
 
+        self.main = parent
+        self.vim_cmd = VimWidget(self.main.editor, self.main)
+
     def get_title(self):
         """."""
         return "Okvim"
 
     def get_focus_widget(self):
         """."""
-        pass
+        return self.vim_cmd
 
     def setup(self):
         """."""
@@ -75,6 +75,13 @@ class SpyderCustomLayoutWidget(PluginMainWidget):
     def update_actions(self):
         """."""
         pass
+
+    @on_conf_change
+    def apply_plugin_settings(self, options):
+        """Apply the config settings."""
+        self.vim_cmd.vim_status.search.set_color()
+        self.vim_cmd.vim_status.cursor.set_config_from_conf()
+        self.vim_cmd.set_leader_key()
 
 
 class VimShortcut(QObject):

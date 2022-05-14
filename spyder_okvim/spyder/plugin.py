@@ -20,7 +20,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.widgets import SpyderCustomLayoutWidget, VimWidget
+from spyder_okvim.spyder.widgets import SpyderOkVimPane, VimWidget
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -92,7 +92,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     NAME = CONF_SECTION
     REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
     OPTIONAL = []
-    WIDGET_CLASS = SpyderCustomLayoutWidget
+    WIDGET_CLASS = SpyderOkVimPane
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
     CONF_DEFAULTS = CONF_DEFAULTS
@@ -100,21 +100,6 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     CUSTOM_LAYOUTS = [CustomLayout]
     CAN_BE_DISABLED = True
     RAISE_AND_FOCUS = True
-
-    def __init__(self, parent, configuration=None):
-        """."""
-        super().__init__(parent, configuration)
-        self.main = parent
-        self.vim_cmd = VimWidget(self.main.editor, self.main)
-
-        status_bar_widget = StatusBarVimWidget(
-            parent,
-            self.vim_cmd.msg_label,
-            self.vim_cmd.status_label,
-            self.vim_cmd.commandline,
-        )
-        statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
 
     # --- SpyderDockablePlugin API
     # ------------------------------------------------------------------------
@@ -133,10 +118,22 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def on_initialize(self):
         """."""
+        vim_cmd = self.get_widget().vim_cmd
+
+        status_bar_widget = StatusBarVimWidget(
+            self._main,
+            vim_cmd.msg_label,
+            vim_cmd.status_label,
+            vim_cmd.commandline,
+        )
+
+        statusbar = self.get_plugin(Plugins.StatusBar)
+        statusbar.add_status_widget(status_bar_widget)
+
         sc = QShortcut(
             QKeySequence("Esc"),
-            self.vim_cmd.editor_widget.editorsplitter,
-            self.vim_cmd.commandline.setFocus,
+            vim_cmd.editor_widget.editorsplitter,
+            vim_cmd.commandline.setFocus,
         )
         sc.setContext(Qt.WidgetWithChildrenShortcut)
 
@@ -163,6 +160,4 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     # ------ SpyderPluginMixin API
     def apply_plugin_settings(self, options):
         """Apply the config settings."""
-        self.vim_cmd.vim_status.search.set_color()
-        self.vim_cmd.vim_status.cursor.set_config_from_conf()
-        self.vim_cmd.set_leader_key()
+        self.get_widget().apply_plugin_settings(options)
