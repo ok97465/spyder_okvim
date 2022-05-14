@@ -9,8 +9,9 @@
 # Third party imports
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import  QKeySequence
+from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 from spyder.api.widgets.status import StatusBarWidget
 from spyder.utils.icon_manager import MAIN_FG_COLOR
@@ -77,7 +78,7 @@ class StatusBarVimWidget(StatusBarWidget):
     # ---- API to be defined by user
     def get_tooltip(self):
         """Return the widget tooltip text."""
-        return ''
+        return ""
 
     def get_icon(self):
         """Return the widget tooltip text."""
@@ -89,7 +90,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     focus_changed = Signal()
     NAME = CONF_SECTION
-    REQUIRES = [Plugins.StatusBar]
+    REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
     OPTIONAL = []
     WIDGET_CLASS = SpyderCustomLayoutWidget
     CONF_SECTION = CONF_SECTION
@@ -98,6 +99,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     CONF_VERSION = CONF_VERSION
     CUSTOM_LAYOUTS = [CustomLayout]
     CAN_BE_DISABLED = True
+    RAISE_AND_FOCUS = True
 
     def __init__(self, parent, configuration=None):
         """."""
@@ -106,10 +108,11 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self.vim_cmd = VimWidget(self.main.editor, self.main)
 
         status_bar_widget = StatusBarVimWidget(
-                parent,
-                self.vim_cmd.msg_label,
-                self.vim_cmd.status_label,
-                self.vim_cmd.commandline)
+            parent,
+            self.vim_cmd.msg_label,
+            self.vim_cmd.status_label,
+            self.vim_cmd.commandline,
+        )
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
 
@@ -126,14 +129,22 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def get_icon(self):
         """Return widget icon."""
-        return qta.icon('mdi.vimeo', color=MAIN_FG_COLOR)
+        return qta.icon("mdi.vimeo", color=MAIN_FG_COLOR)
 
     def on_initialize(self):
         """."""
-        sc = QShortcut(QKeySequence("Esc"),
-                       self.vim_cmd.editor_widget.editorsplitter,
-                       self.vim_cmd.commandline.setFocus)
+        sc = QShortcut(
+            QKeySequence("Esc"),
+            self.vim_cmd.editor_widget.editorsplitter,
+            self.vim_cmd.commandline.setFocus,
+        )
         sc.setContext(Qt.WidgetWithChildrenShortcut)
+
+    @on_plugin_available(plugin=Plugins.Preferences)
+    def on_preferences_available(self):
+        """Connect when preferences available."""
+        preferences = self.get_plugin(Plugins.Preferences)
+        preferences.register_plugin_preferences(self)
 
     def check_compatibility(self):
         """."""
@@ -145,25 +156,13 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """."""
         return True
 
-    def get_focus_widget(self):
-        """Return vim command line and give it focus."""
-        return self.vim_cmd.commandline
-
     def get_plugin_actions(self):
         """Return plugin actions."""
         return []
 
-# ------ SpyderPluginMixin API
-    def switch_to_plugin(self):
-        """Switch to plots pane plugin by shortcut key.
-
-        This method is called when pressing plugin's shortcut key
-        """
-        self.vim_cmd.commandline.setFocus()
-
+    # ------ SpyderPluginMixin API
     def apply_plugin_settings(self, options):
         """Apply the config settings."""
         self.vim_cmd.vim_status.search.set_color()
         self.vim_cmd.vim_status.cursor.set_config_from_conf()
         self.vim_cmd.set_leader_key()
-
