@@ -3,11 +3,10 @@
 # Third party imports
 import pytest
 from qtpy.QtCore import QEvent, Qt
-from qtpy.QtGui import QKeyEvent, QFocusEvent
+from qtpy.QtGui import QKeyEvent
 
 # Local imports
 from spyder_okvim.utils.path_finder import PathFinder
-from spyder_okvim.spyder.confpage import OkvimConfigPage
 
 
 def test_open_path_finder(vim_bot, monkeypatch, tmpdir):
@@ -25,7 +24,6 @@ def test_open_path_finder(vim_bot, monkeypatch, tmpdir):
 def test_invaild_folder(qtbot):
     """Test if input of path finder is invalid."""
     pf = PathFinder(None)
-
     qtbot.addWidget(pf)
     pf.show()
 
@@ -135,5 +133,4 @@ def test_valid_folder(qtbot, tmpdir):
     qtbot.keyClicks(edit, 'ok9')
     qtbot.keyPress(edit, Qt.Key_Enter)
     assert pf.get_path_selected() != ''
-
 

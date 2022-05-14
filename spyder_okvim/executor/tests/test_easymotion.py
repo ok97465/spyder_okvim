@@ -26,7 +26,7 @@ def test_easymotion_w_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -51,7 +51,7 @@ def test_easymotion_w_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -81,7 +81,7 @@ def test_easymotion_w_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -114,7 +114,7 @@ def test_easymotion_w_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -142,7 +142,7 @@ def test_easymotion_b_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -170,7 +170,7 @@ def test_easymotion_b_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -201,7 +201,7 @@ def test_easymotion_j_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -229,7 +229,7 @@ def test_easymotion_j_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -260,7 +260,7 @@ def test_easymotion_k_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -288,7 +288,7 @@ def test_easymotion_k_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -315,7 +315,7 @@ def test_easymotion_f_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -338,7 +338,7 @@ def test_easymotion_f_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -371,7 +371,7 @@ def test_easymotion_f_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -398,7 +398,7 @@ def test_easymotion_F_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -421,7 +421,7 @@ def test_easymotion_F_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -454,7 +454,7 @@ def test_easymotion_F_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)

@@ -15,7 +15,7 @@ def test_auto_import(vim_bot):
     editor.auto_import = Mock()
     editor.auto_import.auto_import = Mock()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, 'i')
 
@@ -29,7 +29,7 @@ def test_toggle_breakpoint(vim_bot):
 
     editor_stack.set_or_clear_breakpoint = Mock()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, 'b')
 
@@ -42,7 +42,7 @@ def test_run_cell_and_advance(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     with qtbot.waitSignal(
             editor.sig_run_cell_and_advance,
             timeout=1000) as blocker:
@@ -58,7 +58,7 @@ def test_run_selection(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     with qtbot.waitSignal(
             editor.sig_run_selection,
             timeout=1000) as blocker:
@@ -86,7 +86,7 @@ def test_formatting(vim_bot):
 
     editor.format_document_or_range = Mock()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, 'f')
 
@@ -96,7 +96,7 @@ def test_formatting(vim_bot):
     editor.format_document_or_range = Mock()
     qtbot.keyClicks(cmd_line, 'ggVj')
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, 'f')
 
@@ -110,7 +110,7 @@ def test_open_swithcer(vim_bot):
 
     main.open_switcher = Mock()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, 'p')
 
@@ -124,7 +124,7 @@ def test_open_symbol_swithcer(vim_bot):
 
     main.open_switcher = Mock()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, 's')
 

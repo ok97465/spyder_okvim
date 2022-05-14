@@ -101,6 +101,11 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     CAN_BE_DISABLED = True
     RAISE_AND_FOCUS = True
 
+    @property
+    def vim_cmd(self):
+        """Return vim_cmd for test."""
+        return self.get_widget().vim_cmd
+
     # --- SpyderDockablePlugin API
     # ------------------------------------------------------------------------
     @staticmethod

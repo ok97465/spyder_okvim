@@ -18,7 +18,7 @@ from spyder_okvim.spyder.widgets import coverage_resolve_trace
 def test_unknown_cmd(vim_bot):
     """Test unknown cmd."""
     _, _, _, vim, qtbot = vim_bot
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '|')
 
     assert cmd_line.text() == ""
@@ -39,7 +39,7 @@ def test_h_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -63,7 +63,7 @@ def test_j_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -83,7 +83,7 @@ def test_k_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -106,7 +106,7 @@ def test_l_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -119,7 +119,7 @@ def test_HML(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'V')
     qtbot.keyClicks(cmd_line, 'v')
     qtbot.keyClicks(cmd_line, 'L')
@@ -162,7 +162,7 @@ def test_zero_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -181,7 +181,7 @@ def test_i_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -204,7 +204,7 @@ def test_I_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -226,7 +226,7 @@ def test_a_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -248,7 +248,7 @@ def test_A_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -271,7 +271,7 @@ def test_caret_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -293,7 +293,7 @@ def test_dollar_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -312,7 +312,7 @@ def test_K_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -332,7 +332,7 @@ def test_o_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -353,7 +353,7 @@ def test_O_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -370,7 +370,7 @@ def test_undo_redo(vim_bot):
     qtbot.keyPress(editor, Qt.Key_Enter)
     qtbot.keyPress(editor, Qt.Key_1)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '2u')
 
     assert editor.toPlainText() == 'a'
@@ -414,7 +414,7 @@ def test_J_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -438,7 +438,7 @@ def test_w_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -463,7 +463,7 @@ def test_W_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -487,7 +487,7 @@ def test_b_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -510,7 +510,7 @@ def test_B_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -538,7 +538,7 @@ def test_e_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -552,48 +552,48 @@ def test_gt_cmd(vim_bot):
 
     assert 0 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gt')
     assert 1 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gt')
     assert 2 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gt')
     assert 3 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gT')
     assert 2 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '1gt')
     assert 0 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '2gt')
     assert 1 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '3gt')
     assert 2 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gt')
     qtbot.keyClicks(cmd_line, 'gT')
     assert 2 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '2gT')
     assert 0 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gT')
     assert 3 == editor_stack.get_stack_index()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'gt')
     assert 0 == editor_stack.get_stack_index()
 
@@ -613,7 +613,7 @@ def test_G_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -638,7 +638,7 @@ def test_gg_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -661,7 +661,7 @@ def test_tilde_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -694,7 +694,7 @@ def test_add_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if cmd != '^A':
             qtbot.keyClicks(cmd_line, cmd)
@@ -731,7 +731,7 @@ def test_subtract_num_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if cmd != '^X':
             qtbot.keyClicks(cmd_line, cmd)
@@ -766,7 +766,7 @@ def test_percent_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -799,7 +799,7 @@ def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -830,7 +830,7 @@ def test_F_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -871,7 +871,7 @@ def test_t_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -905,7 +905,7 @@ def test_T_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -934,7 +934,7 @@ def test_r_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -946,7 +946,7 @@ def test_r_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
 def test_ZZ_cmd(vim_bot):
     """Test ZZ command."""
     main, editor_stack, editor, vim, qtbot = vim_bot
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'ZZ')
     main.editor.save_action.trigger.assert_called_once_with()
     main.editor.close_action.trigger.assert_called_once_with()
@@ -955,7 +955,7 @@ def test_ZZ_cmd(vim_bot):
 def test_ZQ_cmd(vim_bot):
     """Test ZQ command."""
     main, editor_stack, editor, vim, qtbot = vim_bot
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'ZQ')
     main.editor.close_action.trigger.assert_called_once_with()
 
@@ -1027,7 +1027,7 @@ def test_gu_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1100,7 +1100,7 @@ def test_gU_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1169,7 +1169,7 @@ def test_gtilde_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1207,7 +1207,7 @@ def test_greater_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1246,7 +1246,7 @@ def test_less_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1267,7 +1267,7 @@ def test_get_register_name(vim_bot, cmd_list, register_name):
     """Test get_register name."""
     _, _, _, vim, qtbot = vim_bot
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1282,7 +1282,7 @@ def test_clipboard(vim_bot):
     clipboard = QApplication.clipboard()
     clipboard.setText("dhrwodn")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
 
     qtbot.keyClicks(cmd_line, '"')
     qtbot.keyClicks(cmd_line, '+')
@@ -1354,7 +1354,7 @@ def test_y_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, register_name,
 
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -1378,7 +1378,7 @@ def test_highlight_yank(vim_bot):
     CONF.set(CONF_SECTION, 'highlight_yank', False)
     vim.apply_plugin_settings(None)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'yy')
 
     sel = editor.get_extra_selections('hl_yank')
@@ -1387,7 +1387,7 @@ def test_highlight_yank(vim_bot):
     CONF.set(CONF_SECTION, 'highlight_yank', True)
     vim.apply_plugin_settings(None)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'yy')
 
     sel = editor.get_extra_selections('hl_yank')
@@ -1421,7 +1421,7 @@ def test_p_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1451,7 +1451,7 @@ def test_P_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1474,7 +1474,7 @@ def test_s_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1498,7 +1498,7 @@ def test_S_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1523,7 +1523,7 @@ def test_x_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1551,7 +1551,7 @@ def test_D_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1577,7 +1577,7 @@ def test_C_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected, reg
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1651,7 +1651,7 @@ def test_c_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -1690,7 +1690,7 @@ def test_dot_cmd_with_insert(vim_bot, text, cmd_list1, input_editor,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     cmd_line.setFocus()
     for cmd in cmd_list1:
         qtbot.keyClicks(cmd_line, cmd)
@@ -1733,7 +1733,7 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -1756,7 +1756,7 @@ def test_search_corner_case_cmd(vim_bot, text, cmd_list):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -1770,7 +1770,7 @@ def test_search_corner_case_cmd(vim_bot, text, cmd_list):
 def test_search_backspace_command(vim_bot):
     """Test backspace in search."""
     main, editor_stack, editor, vim, qtbot = vim_bot
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '/')
     qtbot.keyClicks(cmd_line, 'n')
     qtbot.keyPress(cmd_line, Qt.Key_Backspace)
@@ -1788,7 +1788,7 @@ def test_search_cmd_with_option(vim_bot):
     """Test / command with option."""
     _, _, editor, vim, qtbot = vim_bot
     get_start_list = vim.vim_cmd.vim_status.search.get_sel_start_list
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
 
     editor.set_text('foo Foo foo Foo')
 
@@ -1887,7 +1887,7 @@ def test_d_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected,
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1918,7 +1918,7 @@ def test_gc_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         qtbot.keyClicks(cmd_line, cmd)
 
@@ -1946,7 +1946,7 @@ def test_space_cmd(vim_bot, text, cmd_list, cursor_pos):
 
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -1970,7 +1970,7 @@ def test_backspace_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -1994,7 +1994,7 @@ def test_enter_cmd(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
@@ -2010,7 +2010,7 @@ def test_q_cmd_message(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text('a')
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'q$')
     assert vim.vim_cmd.msg_label.text() == ""
 
@@ -2027,7 +2027,7 @@ def test_q_cmd(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text('def foo(a, b, c)\n\ndef foo(a, b, c)\n\ndef foo(a, b, c)\n\n')
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'qq')
     qtbot.keyClicks(cmd_line, '@')
     qtbot.wait(500)
@@ -2078,7 +2078,7 @@ def test_squarebracket_d_cmd(vim_bot):
     editor.go_to_next_warning = Mock()
     editor.go_to_previous_warning = Mock()
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '[d')
     qtbot.keyClicks(cmd_line, ']d')
 

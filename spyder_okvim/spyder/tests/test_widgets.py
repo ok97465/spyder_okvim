@@ -52,7 +52,7 @@ def test_apply_config(vim_bot):
     editor.set_text('foo Foo foo Foo')
 
     # test refresh the color of search result.
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, '/foo')
     qtbot.keyPress(cmd_line, Qt.Key_Return)
 
@@ -64,7 +64,7 @@ def test_ctrl_u_b(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'j')
 
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_U, Qt.ControlModifier)
@@ -87,7 +87,7 @@ def test_ctrl_d_f(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
 
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_D, Qt.ControlModifier)
     vim.vim_cmd.commandline.keyPressEvent(event)
@@ -109,21 +109,21 @@ def test_message(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\nd\ne")
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'y2j')
     assert vim.vim_cmd.msg_label.text() == "3 lines yanked"
 
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'p')
     assert vim.vim_cmd.msg_label.text() == "3 more lines"
 
     vim.vim_cmd.msg_label.clear()
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'vp')
     assert vim.vim_cmd.msg_label.text() == "4 more lines"
 
     vim.vim_cmd.msg_label.clear()
-    cmd_line = vim.get_focus_widget()
+    cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, 'Vp')
     assert vim.vim_cmd.msg_label.text() == "2 more lines"
 

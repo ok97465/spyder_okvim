@@ -22,9 +22,6 @@ class VimTesting(OkVim):
     CONF_FILE = False
     CONF_SECTION = CONF_SECTION
 
-    def __init__(self, parent):
-        super().__init__(parent)
-
 
 class EditorMock(QWidget):
     """Editor plugin mock."""
@@ -127,6 +124,6 @@ def editor_bot(qtbot):
 def vim_bot(editor_bot):
     """Create an spyder-vim plugin instance."""
     main, editor_stack, editor, qtbot = editor_bot
-    vim = VimTesting(main)
+    vim = VimTesting(main, None)
     vim.on_initialize()
     return main, editor_stack, editor, vim, qtbot
