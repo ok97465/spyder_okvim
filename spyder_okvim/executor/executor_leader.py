@@ -3,6 +3,7 @@
 # %% Import
 # Local imports
 from spyder_okvim.executor.executor_base import ExecutorBase
+from qtpy.QtCore import QTimer
 
 
 class ExecutorLeaderKey(ExecutorBase):
@@ -79,17 +80,20 @@ class ExecutorLeaderKey(ExecutorBase):
             editor.setTextCursor(old_cursor)
         self.vim_status.set_focus_to_vim()
 
+    def retrieve_curosr_pos(self, pos: int, delay: int):
+        """Retrieve the cursor position."""
+        def _retrieve():
+            self.vim_status.cursor.set_cursor_pos(pos)
+            self.vim_status.set_focus_to_vim()
+            self.vim_status.cursor.draw_vim_cursor()
+        QTimer.singleShot(delay, _retrieve)
+
     def formatting(self, num=1, num_str=''):
         """Format document automatically."""
         editor = self.get_editor()
-        old_cursor = self.set_selection_to_editor_using_vim_selection()
-        try:
-            editor.format_document_or_range()
-            if old_cursor:
-                editor.setTextCursor(old_cursor)
-            self.vim_status.set_focus_to_vim()
-        except AttributeError:
-            pass
+        pos = self.vim_status.get_cursor().position()
+        editor.format_document_or_range()
+        self.retrieve_curosr_pos(pos, 1000)
 
     def open_switcher(self, num=1, num_str=''):
         """Open switcher for buffers."""
