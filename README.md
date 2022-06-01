@@ -109,6 +109,13 @@ The following motions are supported:
 - ]d : goto next warning/error
 - gc{motion} : toggle comment (support visual mode)
   - gcc : toggle comment of current line
+
+## Vim Surround
+
+- surroundings : '"()[]{}
+
+The following action are supported:
+- yS in visual mode
     
 ## Fuzzy path finder
 

@@ -11,6 +11,7 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
     ExecutorSubCmd_register, ExecutorSubMotion_a, ExecutorSubMotion_i,)
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
+from spyder_okvim.executor.executor_surround import ExecutorVisualSurround
 
 
 class ExecutorVisualCmd(ExecutorBase):
@@ -19,7 +20,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUoiaydxscVhHjJklLMwWbBepP^$gG~%fFtTnN/;,"r<> \b\r'
+        cmds = 'uUoiaydxscVhHjJklLMwWbBSepP^$gG~%fFtTnN/;,"r<> \b\r'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = \
@@ -36,6 +37,7 @@ class ExecutorVisualCmd(ExecutorBase):
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
+        self.executor_sub_surround = ExecutorVisualSurround(vim_status)
 
     def zero(self, num=1, num_str=''):
         """Go to the start of the current line."""
@@ -326,6 +328,22 @@ class ExecutorVisualCmd(ExecutorBase):
     def s(self, num=1, num_str=''):
         """Delete text and start insert."""
         self.c(num, num_str)
+
+    def S(self, num=1, num_str=''):
+        """Add surroundings: parentheses, brackets, quotes."""
+        self.vim_status.set_message("")
+        executor_sub = self.executor_sub_surround
+
+        executor_sub.pos_start = self.get_pos_start_in_selection()
+        executor_sub.pos_end = self.get_pos_end_in_selection()
+
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.vim_status.to_normal, False),
+             FUNC_INFO(
+                 lambda: self.set_cursor_pos(executor_sub.pos_start),
+                 False)])
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def y(self, num=1, num_str=''):
         """Yank selected text."""

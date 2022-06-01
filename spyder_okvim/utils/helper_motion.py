@@ -12,6 +12,7 @@ from qtpy.QtCore import QPoint, QRegularExpression
 from spyder.config.manager import CONF
 
 # Local imports
+from spyder_okvim.utils.misc import BRACKET_PAIR
 from spyder_okvim.spyder.config import CONF_SECTION
 
 
@@ -543,13 +544,6 @@ class HelperMotion:
 
     def percent(self, num=1, num_str=''):
         """Get the position of matching bracket."""
-        bracket_pair = {"(": ")",
-                        ")": "(",
-                        "[": "]",
-                        "]": "[",
-                        "{": "}",
-                        "}": "{"}
-
         txt = self.get_editor().toPlainText()
         cursor_pos = self.get_cursor().position()
         pos_start = None
@@ -572,7 +566,7 @@ class HelperMotion:
         stack = [ch_start]
 
         for idx, ch in enumerate(sub_txt):
-            if ch == bracket_pair.get(stack[-1], None):
+            if ch == BRACKET_PAIR.get(stack[-1], None):
                 stack.pop()
             elif ch in "()[]{}":
                 stack.append(ch)
