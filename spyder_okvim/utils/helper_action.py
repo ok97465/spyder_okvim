@@ -22,19 +22,14 @@ class HelperAction:
         self.set_cursor = vim_status.set_cursor
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
 
-        self.get_block_no_start_in_selection = \
+        self.get_block_no_start_in_selection = (
             vim_status.get_block_no_start_in_selection
-        self.get_block_no_end_in_selection = \
-            vim_status.get_block_no_end_in_selection
-        self.get_pos_start_in_selection = \
-            vim_status.get_pos_start_in_selection
-        self.get_pos_end_in_selection = \
-            vim_status.get_pos_end_in_selection
+        )
+        self.get_block_no_end_in_selection = vim_status.get_block_no_end_in_selection
+        self.get_pos_start_in_selection = vim_status.get_pos_start_in_selection
+        self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
 
-    def join_lines(self,
-                   cursor_pos_start: int,
-                   block_no_start: int,
-                   block_no_end: int):
+    def join_lines(self, cursor_pos_start: int, block_no_start: int, block_no_end: int):
         """Join lines."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
@@ -49,7 +44,7 @@ class HelperAction:
             return
 
         n_line = block_no_end - block_no_start + 1
-        text_list = ['']
+        text_list = [""]
         cursor.setPosition(cursor_pos_start)
         for _ in range(n_line - 1):
             cursor.movePosition(QTextCursor.NextBlock)
@@ -60,10 +55,9 @@ class HelperAction:
         # Replace text
         cursor.setPosition(cursor_pos_start)
         cursor.movePosition(QTextCursor.EndOfLine)
-        cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor,
-                            n_line - 1)
+        cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor, n_line - 1)
         cursor.movePosition(QTextCursor.EndOfLine, QTextCursor.KeepAnchor)
-        cursor.insertText(' '.join(text_list))
+        cursor.insertText(" ".join(text_list))
 
         # Move position of cursor
         cursor.movePosition(QTextCursor.EndOfBlock)
@@ -85,8 +79,51 @@ class HelperAction:
         cursor = self.get_cursor()
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-        text = cursor.selectedText().replace('\u2029', '\n')
-        text_sub = re.sub(r'.', ch, text)
+        text = cursor.selectedText().replace("\u2029", "\n")
+        text_sub = re.sub(r".", ch, text)
+        cursor.insertText(text_sub)
+
+        if self.vim_status.is_normal():
+            self.vim_status.cursor.set_cursor_pos(pos_end - 1)
+
+        editor = self.get_editor()
+        editor.document_did_change()
+
+    def add_surrounding(self, pos_start: int, pos_end: int, ch: str):
+        """Add surrouding."""
+        self.vim_status.update_dot_cmd(connect_editor=False)
+
+        if self.vim_status.is_normal() and pos_start == pos_end:
+            self.vim_status.cursor.set_cursor_pos(pos_start)
+            return
+
+        prefix_dict = {
+            "'": "'",
+            '"': '"',
+            "(": "( ",
+            "{": "{ ",
+            "[": "[ ",
+            ")": "(",
+            "}": "{",
+            "]": "[",
+        }
+
+        suffix_dict = {
+            "'": "'",
+            '"': '"',
+            "(": " )",
+            "{": " }",
+            "[": " ]",
+            ")": ")",
+            "}": "}",
+            "]": "]",
+        }
+
+        cursor = self.get_cursor()
+        cursor.setPosition(pos_start)
+        cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
+        text = cursor.selectedText().replace("\u2029", "\n")
+        text_sub = prefix_dict[ch] + text + suffix_dict[ch]
         cursor.insertText(text_sub)
 
         if self.vim_status.is_normal():
@@ -106,8 +143,7 @@ class HelperAction:
             self.vim_status.to_normal()
             self.vim_status.cursor.set_cursor_pos(sel_start)
         elif motion_info.motion_type == MotionType.BlockWise:
-            self._handle_case(motion_info.sel_start, motion_info.sel_end,
-                              method)
+            self._handle_case(motion_info.sel_start, motion_info.sel_end, method)
             self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)
         else:
             cursor = self.get_cursor()
@@ -142,9 +178,9 @@ class HelperAction:
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText()
-        if method == 'swap':
+        if method == "swap":
             cursor.insertText(text.swapcase())
-        elif method == 'lower':
+        elif method == "lower":
             cursor.insertText(text.lower())
         else:
             cursor.insertText(text.upper())
@@ -187,8 +223,8 @@ class HelperAction:
             if text:
                 text_list_indent.append(indent + text)
             else:
-                text_list_indent.append('')
-        texts_indent = '\n'.join(text_list_indent)
+                text_list_indent.append("")
+        texts_indent = "\n".join(text_list_indent)
 
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
@@ -197,8 +233,7 @@ class HelperAction:
         block_start, _ = self.vim_status.cursor.get_block(pos_start)
         len_blank = len(block_start.text()) - len(block_start.text().lstrip())
 
-        self.vim_status.cursor.set_cursor_pos(block_start.position()
-                                              + len_blank)
+        self.vim_status.cursor.set_cursor_pos(block_start.position() + len_blank)
         editor.document_did_change()
 
     def unindent(self, motion_info: MotionInfo):
@@ -237,7 +272,7 @@ class HelperAction:
             n_space = len(text) - len(text.lstrip())
             idx_discard = min([n_space, len_indent])
             text_list_unindent.append(text[idx_discard:])
-        texts_unindent = '\n'.join(text_list_unindent)
+        texts_unindent = "\n".join(text_list_unindent)
 
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
@@ -246,8 +281,7 @@ class HelperAction:
         block_start, _ = self.vim_status.cursor.get_block(pos_start)
         len_blank = len(block_start.text()) - len(block_start.text().lstrip())
 
-        self.vim_status.cursor.set_cursor_pos(block_start.position()
-                                              + len_blank)
+        self.vim_status.cursor.set_cursor_pos(block_start.position() + len_blank)
         editor.document_did_change()
 
     def yank(self, motion_info: MotionInfo, is_explicit=False):
@@ -263,8 +297,7 @@ class HelperAction:
         """
         if self.vim_status.is_normal():
             if motion_info.motion_type == MotionType.BlockWise:
-                if (motion_info.sel_start is None
-                        or motion_info.sel_end is None):
+                if motion_info.sel_start is None or motion_info.sel_end is None:
                     return None, None
             elif motion_info.cursor_pos is None:
                 return None, None
@@ -298,21 +331,20 @@ class HelperAction:
         cursor = self.get_cursor()
         cursor.setPosition(sel_start)
         cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
-        txt = cursor.selectedText().replace('\u2029', '\n')
+        txt = cursor.selectedText().replace("\u2029", "\n")
         if register_type == VimState.VLINE:
-            txt += '\n'
+            txt += "\n"
 
         self.vim_status.set_register(register_name, txt, register_type)
         if is_explicit is True and register_name == '"':
-            self.vim_status.set_register('0', txt, register_type)
+            self.vim_status.set_register("0", txt, register_type)
 
         # Set message
         doc = cursor.document()
         nb_start = doc.findBlock(sel_start).blockNumber()
         nb_end = doc.findBlock(sel_end).blockNumber()
         if nb_start != nb_end:
-            self.vim_status.set_message(
-                f"{nb_end - nb_start + 1} lines yanked")
+            self.vim_status.set_message(f"{nb_end - nb_start + 1} lines yanked")
 
         # highlight yank
         if is_explicit is True and self.vim_status.is_normal():
@@ -332,8 +364,7 @@ class HelperAction:
     def paste_in_normal(self, num, is_lower):
         """Put the text before the cursor."""
         reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(connect_editor=False,
-                                       register_name=reg.name)
+        self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
 
         editor = self.get_editor()
         n_block_old = editor.blockCount()
@@ -341,7 +372,7 @@ class HelperAction:
         if reg.content:
             content = reg.content * num
         else:
-            content = ''
+            content = ""
 
         cursor = self.get_cursor()
         if reg.type != VimState.VLINE:
@@ -355,8 +386,7 @@ class HelperAction:
             cursor.movePosition(QTextCursor.StartOfLine)
             block_number_old = cursor.block().blockNumber()
             cursor.insertText(content)
-            block = self.get_editor().document().findBlockByNumber(
-                block_number_old)
+            block = self.get_editor().document().findBlockByNumber(block_number_old)
             cursor.setPosition(block.position())
             cursor = self._move_cursor_after_space(cursor)
             self.set_cursor_pos(cursor.position())
@@ -364,7 +394,7 @@ class HelperAction:
             cursor.movePosition(QTextCursor.EndOfLine)
             cursor_pos_old = cursor.position()
             if cursor.atEnd():
-                cursor.insertText('\n' + content[:-1])
+                cursor.insertText("\n" + content[:-1])
             else:
                 cursor.movePosition(QTextCursor.Right)
                 cursor.insertText(content)
@@ -375,8 +405,7 @@ class HelperAction:
 
         n_block_new = editor.blockCount()
         if n_block_new != n_block_old:
-            self.vim_status.set_message(
-                f"{n_block_new - n_block_old} more lines")
+            self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
 
         editor = self.get_editor()
         editor.document_did_change()
@@ -385,8 +414,7 @@ class HelperAction:
         """Put the text before the cursor."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(connect_editor=False,
-                                       register_name=reg.name)
+        self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
 
         editor = self.get_editor()
         n_block_old = editor.blockCount()
@@ -394,9 +422,9 @@ class HelperAction:
         if reg.content:
             content = reg.content * num
             if reg.type == VimState.VLINE:
-                content = '\n' + content
+                content = "\n" + content
         else:
-            content = ''
+            content = ""
 
         cursor = self.get_cursor()
         sel_start = self.get_pos_start_in_selection()
@@ -411,27 +439,25 @@ class HelperAction:
             block = editor.document().findBlockByNumber(block_no_start + 1)
             cursor_pos_new = block.position()
         else:
-            if '\n' in content:
+            if "\n" in content:
                 cursor_pos_new = sel_start
             else:
                 cursor_pos_new = sel_start + len(content) - 1
 
         n_block_new = editor.blockCount()
         if n_block_new != n_block_old:
-            self.vim_status.set_message(
-                f"{n_block_new - n_block_old} more lines")
+            self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
 
         editor.document_did_change()
 
         self.vim_status.to_normal()
         self.vim_status.cursor.set_cursor_pos(cursor_pos_new)
 
-    def paste_in_vline(self, num):   
+    def paste_in_vline(self, num):
         """Put the text before the cursor."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(connect_editor=False,
-                                       register_name=reg.name)
+        self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
 
         editor = self.get_editor()
         n_block_old = editor.blockCount()
@@ -443,10 +469,10 @@ class HelperAction:
             else:
                 content = reg.content
                 if num > 1:
-                    content = (reg.content + '\n') * num
+                    content = (reg.content + "\n") * num
                     content = content[:-1]
         else:
-            content = ''
+            content = ""
 
         cursor = self.get_cursor()
         sel_start = self.get_pos_start_in_selection()
@@ -458,28 +484,24 @@ class HelperAction:
 
         n_block_new = editor.blockCount()
         if n_block_new != n_block_old:
-            self.vim_status.set_message(
-                f"{n_block_new - n_block_old} more lines")
+            self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
 
         editor.document_did_change()
 
         self.vim_status.to_normal()
         self.vim_status.cursor.set_cursor_pos(sel_start)
 
-    def delete(self, motion_info: MotionInfo, is_insert, replace_txt=''):
+    def delete(self, motion_info: MotionInfo, is_insert, replace_txt=""):
         """Delete selected text."""
         reg = self.vim_status.get_register()
         if is_insert:
-            self.vim_status.update_dot_cmd(connect_editor=True,
-                                           register_name=reg.name)
+            self.vim_status.update_dot_cmd(connect_editor=True, register_name=reg.name)
         else:
-            self.vim_status.update_dot_cmd(connect_editor=False,
-                                           register_name=reg.name)
+            self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
 
         if self.vim_status.is_normal():
             if motion_info.motion_type == MotionType.BlockWise:
-                if (motion_info.sel_start is None
-                        or motion_info.sel_end is None):
+                if motion_info.sel_start is None or motion_info.sel_end is None:
                     return
             elif motion_info.cursor_pos is None:
                 return
@@ -534,8 +556,7 @@ class HelperAction:
         # Set message
         n_block_new = editor.blockCount()
         if n_block_new != n_block_old:
-            self.vim_status.set_message(
-                f"{n_block_old - n_block_new} fewer lines")
+            self.vim_status.set_message(f"{n_block_old - n_block_new} fewer lines")
 
         # Set cursor pos in normal
         if self.vim_status.is_normal():
@@ -545,15 +566,13 @@ class HelperAction:
                 block_no = min([block_no_start, n_block - 1])
                 block = editor.document().findBlockByNumber(block_no)
                 txt = block.text()
-                cursor_pos_new = (block.position()
-                                  + len(txt) - len(txt.lstrip()))
+                cursor_pos_new = block.position() + len(txt) - len(txt.lstrip())
                 cursor.setPosition(cursor_pos_new)
 
             if is_insert:
                 self.set_cursor_pos(cursor_pos_new + len(replace_txt))
             else:
-                self.vim_status.cursor.set_cursor_pos_without_end(
-                    cursor_pos_new)
+                self.vim_status.cursor.set_cursor_pos_without_end(cursor_pos_new)
 
         editor.document_did_change()
 
@@ -577,8 +596,7 @@ class HelperAction:
                 return
             pos_start, pos_end = sorted([cursor_pos_cur, cursor_pos_new])
 
-        block_start, block_no_start = self.vim_status.cursor.get_block(
-                pos_start)
+        block_start, block_no_start = self.vim_status.cursor.get_block(pos_start)
         block_end, _ = self.vim_status.cursor.get_block(pos_end)
         pos_start = block_start.position()
         pos_end = block_end.position() + block_end.length() - 1
@@ -599,4 +617,3 @@ class HelperAction:
         self.vim_status.cursor.set_cursor_pos(pos_start)
 
         editor.document_did_change()
-

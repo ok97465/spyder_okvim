@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-"""."""
 """Tests for the executor_easymotion."""
 # Third party imports
 import pytest
