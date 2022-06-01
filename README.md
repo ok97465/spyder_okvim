@@ -115,7 +115,7 @@ The following motions are supported:
 - surroundings : '"()[]{}
 
 The following action are supported:
-- yS in visual mode
+- S in visual mode
     
 ## Fuzzy path finder
 
