@@ -60,7 +60,7 @@ class StatusBarMock(QWidget):
 class MainMock(QWidget):
     """Spyder MainWindow mock."""
 
-    def __init__(self, editor_stack):
+    def __init__(self, editor_stack, qtbot):
         """Main Window Mock constructor."""
         QWidget.__init__(self, None)
         self.main = QWidget()
@@ -81,7 +81,10 @@ class MainMock(QWidget):
             for key, val in dict_info.items():
                 CONF.set(name, key, val)
 
-    add_dockwidget = Mock()
+        self.add_dockwidget = Mock()
+        qtbot.add_widget(self.main)
+        qtbot.add_widget(self.editor)
+        qtbot.add_widget(self.status_bar)
 
     def get_plugin(self, dummy):
         return self.status_bar
@@ -108,7 +111,10 @@ def editor_bot(qtbot):
     editor_stack.new(osp.join(LOCATION, "foo1.py"), "utf-8", text)
     editor_stack.new(osp.join(LOCATION, "foo2.py"), "utf-8", text)
     editor_stack.new(osp.join(LOCATION, "foo3.py"), "utf-8", text)
-    main = MainMock(editor_stack)
+    main = MainMock(editor_stack, qtbot)
+
+    qtbot.add_widget(editor_stack)
+    qtbot.add_widget(main)
 
     # Hide GUI
     # qtbot.addWidget(main)
@@ -117,6 +123,7 @@ def editor_bot(qtbot):
     # Show GUI
     main.show()
     yield main, editor_stack, finfo.editor, qtbot
+    editor_stack.destroy()
     main.destroy()
 
 

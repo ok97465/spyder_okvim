@@ -1,11 +1,12 @@
 """Surround."""
 # Local imports
 from spyder_okvim.executor.executor_base import ExecutorSubBase
+from spyder_okvim.utils.helper_motion import MotionType, MotionInfo
 
 SURROUNDINGS = "'\"{[()]}"
 
 
-class ExecutorVisualSurround(ExecutorSubBase):
+class ExecutorAddSurround(ExecutorSubBase):
     """Vim-surround in Visual mode."""
 
     def __init__(self, vim_status):
@@ -17,16 +18,42 @@ class ExecutorVisualSurround(ExecutorSubBase):
         self.pos_start = 0
         self.pos_end = 0
 
+    def set_motion_info(self, motion_info: MotionInfo):
+        """Set motion_info."""
+        if motion_info.motion_type == MotionType.BlockWise:
+            sel_start = motion_info.sel_start
+            sel_end = motion_info.sel_end
+        else:
+            cursor = self.get_cursor()
+            cursor_pos_cur = cursor.position()
+            cursor_pos_new = motion_info.cursor_pos
+            sel_start, sel_end = sorted([cursor_pos_cur, cursor_pos_new])
+
+            if motion_info.motion_type == MotionType.CharWiseIncludingEnd:
+                sel_end += 1
+            elif motion_info.motion_type == MotionType.LineWise:
+                block_start, _ = self.vim_status.cursor.get_block(sel_start)
+                block_end, _ = self.vim_status.cursor.get_block(sel_end)
+                sel_start = block_start.position()
+                sel_end = block_end.position() + block_end.length() - 1
+
+        self.pos_start = sel_start
+        self.pos_end = sel_end
+
     def __call__(self, ch: str):
         """."""
         self.vim_status.sub_mode = None
 
-        if ch not in SURROUNDINGS:
-            self.vim_status.to_normal()
-            self.vim_status.cursor.set_cursor_pos(self.pos_start)
-        else:
+        if ch == "b":
+            ch = ")"
+        elif ch == "B":
+            ch = "}"
+
+        if ch in SURROUNDINGS:
             self.update_input_cmd_info(None, None, ch)
             self.helper_action.add_surrounding(self.pos_start, self.pos_end, ch)
-            self.execute_func_deferred(None)
+
+        self.vim_status.to_normal()
+        self.vim_status.cursor.set_cursor_pos(self.pos_start)
 
         return True

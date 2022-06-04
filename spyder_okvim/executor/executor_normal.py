@@ -15,7 +15,7 @@ from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch, ExecutorSubCmd_f_t, ExecutorSubCmd_g, ExecutorSubCmd_r,
     ExecutorSubCmd_register, ExecutorSubCmd_Z, ExecutorSubMotion,
-    ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubCmd_alnum,
+    ExecutorSubMotion_c, ExecutorSubMotion_d, ExecutorSubMotion_y, ExecutorSubCmd_alnum,
     ExecutorSubCmd_opensquarebracket, ExecutorSubCmd_closesquarebracket)
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
@@ -42,6 +42,7 @@ class ExecutorNormalCmd(ExecutorBase):
         self.executor_sub_motion = ExecutorSubMotion(vim_status)
         self.executor_sub_motion_c = ExecutorSubMotion_c(vim_status)
         self.executor_sub_motion_d = ExecutorSubMotion_d(vim_status)
+        self.executor_sub_motion_y = ExecutorSubMotion_y(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
@@ -461,7 +462,7 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def y(self, num=1, num_str=''):
         """Yank {motion} text into register."""
-        executor_sub = self.executor_sub_motion_d
+        executor_sub = self.executor_sub_motion_y
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 

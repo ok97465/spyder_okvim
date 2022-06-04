@@ -120,6 +120,10 @@ class ExecutorBase:
         else:
             ret = method(num=num, num_str=num_str)
 
+        return self.process_return(ret)
+
+    def process_return(self, ret: Any):
+        """Process return of method."""
         if ret:
             self.vim_status.sub_mode = ret.sub_mode
             return ret.clear_command_line
@@ -138,6 +142,7 @@ class ExecutorSubBase(ExecutorBase):
         self.parent_num = []
         self.parent_num_str = []
         self.func_list_deferred: List[FUNC_INFO] = []
+        self.return_deferred: Any = None
 
     def set_parent_info_to_submode(self, submode, num, num_str):
         """Set parent and self into to submode."""
@@ -147,9 +152,10 @@ class ExecutorSubBase(ExecutorBase):
         submode.parent_num.append(num)
         submode.parent_num_str.append(num_str)
 
-    def set_func_list_deferred(self, f_list: List[FUNC_INFO]):
+    def set_func_list_deferred(self, f_list: List[FUNC_INFO], ret: Any = None):
         """Set func list."""
         self.func_list_deferred = f_list
+        self.return_deferred = ret
 
     def execute_func_deferred(self, arg=None):
         """Execute method passed in from previous executor."""
@@ -158,6 +164,7 @@ class ExecutorSubBase(ExecutorBase):
                 func_info.func(arg)
             else:
                 func_info.func()
+        return self.return_deferred
 
     def update_input_cmd_info(self, num_str, cmd, input_txt):
         """Add input cmd to vim_status."""

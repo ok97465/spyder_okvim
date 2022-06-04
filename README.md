@@ -112,10 +112,11 @@ The following motions are supported:
 
 ## Vim Surround
 
-- surroundings : '"()[]{}
+- surroundings : '"()[]{}bB
 
 The following action are supported:
-- S in visual mode
+- ys{motion}{surroundings} in normal mode: add surroundings in pairs.
+- S{surroundings} in visual mode: add surroundings in pairs.
     
 ## Fuzzy path finder
 
