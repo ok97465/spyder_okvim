@@ -90,14 +90,8 @@ class HelperAction:
         editor = self.get_editor()
         editor.document_did_change()
 
-    def add_surrounding(self, pos_start: int, pos_end: int, ch: str):
-        """Add surrouding."""
-        self.vim_status.update_dot_cmd(connect_editor=False)
-
-        if self.vim_status.is_normal() and pos_start == pos_end:
-            self.vim_status.cursor.set_cursor_pos(pos_start)
-            return
-
+    def _add_surrounding(self, ch: str, text: str) -> str:
+        """Add surroundings."""
         prefix_dict = {
             "'": "'",
             '"': '"',
@@ -120,20 +114,37 @@ class HelperAction:
             "]": "]",
         }
 
+        return prefix_dict[ch] + text + suffix_dict[ch]
+
+    def add_surrounding(self, pos_start: int, pos_end: int, ch: str):
+        """Add surrouding."""
+        self.vim_status.update_dot_cmd(connect_editor=False)
+
+        if self.vim_status.is_normal() and pos_start == pos_end:
+            self.vim_status.cursor.set_cursor_pos(pos_start)
+            return
+
         cursor = self.get_cursor()
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText().replace("\u2029", "\n")
-        text_sub = prefix_dict[ch] + text + suffix_dict[ch]
+        text_sub = self._add_surrounding(ch, text)
         cursor.insertText(text_sub)
 
         editor = self.get_editor()
         editor.document_did_change()
 
+    def _delete_surrounding(self, ch: str, text: str) -> str:
+        """Delete surroundings."""
+        open_brackets = "([{"
+        text_sub = text[1:-1]
+        if ch in open_brackets:
+            text_sub = text_sub.strip()
+        return text_sub
+
     def delete_surrounding(self, ch: str) -> MotionInfo:
         """Delete surrouding."""
         self.vim_status.update_dot_cmd(connect_editor=False)
-        open_brackets = "([{"
 
         if ch in "'\"":
             motion_info = self.helper_motion.i_quote(ch)
@@ -150,9 +161,35 @@ class HelperAction:
         cursor.setPosition(motion_info.sel_start)
         cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText().replace("\u2029", "\n")
-        text_sub = text[1:-1]
-        if ch in open_brackets:
-            text_sub = text_sub.strip()
+        text_sub = self._delete_surrounding(ch, text)
+        cursor.insertText(text_sub)
+
+        editor = self.get_editor()
+        editor.document_did_change()
+
+        return motion_info
+
+    def change_surrounding(self, ch_delete: str, ch_insert: str) -> MotionInfo:
+        """Change surrouding."""
+        self.vim_status.update_dot_cmd(connect_editor=False)
+
+        if ch_delete in "'\"":
+            motion_info = self.helper_motion.i_quote(ch_delete)
+            if motion_info.sel_start and motion_info.sel_end:
+                motion_info.sel_start -= 1
+                motion_info.sel_end += 1
+        else:
+            motion_info = self.helper_motion.a_bracket(1, ch_delete)
+
+        if motion_info.sel_start is None:
+            return motion_info
+
+        cursor = self.get_cursor()
+        cursor.setPosition(motion_info.sel_start)
+        cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
+        text = cursor.selectedText().replace("\u2029", "\n")
+        text_sub = self._delete_surrounding(ch_delete, text)
+        text_sub = self._add_surrounding(ch_insert, text_sub)
         cursor.insertText(text_sub)
 
         editor = self.get_editor()

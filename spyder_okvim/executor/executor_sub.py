@@ -13,6 +13,7 @@ from spyder_okvim.executor.executor_base import (
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_surround import (
     ExecutorAddSurround,
+    ExecutorChangeSurround,
     ExecutorDeleteSurround,
 )
 
@@ -396,6 +397,9 @@ class ExecutorSubMotion_c(ExecutorSubMotion):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.cmds += "s"
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
+        self.executor_sub_change_surround = ExecutorChangeSurround(vim_status)
 
     def w(self, num=1, num_str=""):
         """Move forward [num] words and delete and start insert mode."""
@@ -408,6 +412,12 @@ class ExecutorSubMotion_c(ExecutorSubMotion):
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.W_for_c(num)
         return self.execute_func_deferred(motion_info)
+
+    def s(self, num=1, num_str=""):
+        """Change surroundings."""
+        executor_sub = self.executor_sub_change_surround
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
 
 class ExecutorSubMotion_y(ExecutorSubMotion_d):

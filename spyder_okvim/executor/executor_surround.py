@@ -81,3 +81,32 @@ class ExecutorDeleteSurround(ExecutorSubBase):
                 self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)
 
         return True
+
+
+class ExecutorChangeSurround(ExecutorSubBase):
+    """Executor for chaging surrounding."""
+
+    def __init__(self, vim_status):
+        """."""
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+        self.has_zero_cmd = False
+
+    def __call__(self, txt: str):
+        """."""
+        if len(txt) < 2:
+            return False
+
+        self.vim_status.sub_mode = None
+
+        txt = txt.replace("b", ")")
+        txt = txt.replace("B", "}")
+
+        if txt[0] in SURROUNDINGS and txt[1] in SURROUNDINGS:
+            self.update_input_cmd_info(None, None, txt)
+            motion_info = self.helper_action.change_surrounding(txt[0], txt[1])
+            if isinstance(motion_info.sel_start, int):
+                self.vim_status.to_normal()
+                self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)
+
+        return True
