@@ -116,6 +116,7 @@ The following motions are supported:
 
 The following action are supported:
 - ys{motion}{surroundings} in normal mode: add surroundings in pairs.
+- ds{surroundings} in normal mode: delete surroundings in pairs.
 - S{surroundings} in visual mode: add surroundings in pairs.
     
 ## Fuzzy path finder

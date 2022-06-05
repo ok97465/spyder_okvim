@@ -82,9 +82,9 @@ class MainMock(QWidget):
                 CONF.set(name, key, val)
 
         self.add_dockwidget = Mock()
-        qtbot.add_widget(self.main)
-        qtbot.add_widget(self.editor)
-        qtbot.add_widget(self.status_bar)
+        # qtbot.add_widget(self.main)
+        # qtbot.add_widget(self.editor)
+        # qtbot.add_widget(self.status_bar)
 
     def get_plugin(self, dummy):
         return self.status_bar
@@ -113,8 +113,8 @@ def editor_bot(qtbot):
     editor_stack.new(osp.join(LOCATION, "foo3.py"), "utf-8", text)
     main = MainMock(editor_stack, qtbot)
 
-    qtbot.add_widget(editor_stack)
-    qtbot.add_widget(main)
+    # qtbot.add_widget(editor_stack)
+    # qtbot.add_widget(main)
 
     # Hide GUI
     # qtbot.addWidget(main)
@@ -123,7 +123,7 @@ def editor_bot(qtbot):
     # Show GUI
     main.show()
     yield main, editor_stack, finfo.editor, qtbot
-    editor_stack.destroy()
+    # editor_stack.destroy()
     main.destroy()
 
 

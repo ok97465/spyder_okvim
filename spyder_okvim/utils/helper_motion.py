@@ -4,19 +4,19 @@
 # Standard library imports
 import re
 from bisect import bisect_left, bisect_right
+from typing import Optional
 
 # Third party imports
-from qtpy.QtWidgets import QTextEdit
-from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtCore import QPoint, QRegularExpression
+from qtpy.QtGui import QTextCursor, QTextDocument
+from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
 
 # Local imports
-from spyder_okvim.utils.misc import BRACKET_PAIR
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.misc import BRACKET_PAIR
 
-
-WHITE_SPACE = ' \t'
+WHITE_SPACE = " \t"
 
 
 class MotionType:
@@ -49,13 +49,16 @@ class HelperMotion:
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.motion_info = MotionInfo()
 
-        self.find_cmd_map = {'f': self.find_ch,
-                             'F': self.rfind_ch,
-                             't': self.t,
-                             'T': self.T}
+        self.find_cmd_map = {
+            "f": self.find_ch,
+            "F": self.rfind_ch,
+            "t": self.t,
+            "T": self.T,
+        }
 
-    def _set_motion_info(self, cur_pos, sel_start=None, sel_end=None,
-                         motion_type=MotionType.LineWise):
+    def _set_motion_info(
+        self, cur_pos, sel_start=None, sel_end=None, motion_type=MotionType.LineWise
+    ):
         """Set motion info.
 
         Parameters
@@ -85,7 +88,7 @@ class HelperMotion:
     def _get_ch(self, pos):
         """Get character of position."""
         if pos >= self.vim_status.cursor.get_end_position():
-            return ''
+            return ""
         cursor = self.get_cursor()
         cursor.setPosition(pos)
         cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
@@ -98,7 +101,7 @@ class HelperMotion:
         cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor)
         return cursor.selectedText()
 
-    def zero(self, num=1, num_str=''):
+    def zero(self, num=1, num_str=""):
         """Get the start position of the current line.
 
         Returns
@@ -109,10 +112,9 @@ class HelperMotion:
         """
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.StartOfLine)
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def l(self, num=1, num_str=''):
+    def l(self, num=1, num_str=""):
         """Get the position on the right side of the cursor.
 
         Returns
@@ -125,8 +127,7 @@ class HelperMotion:
         pos_cur = cursor.position()
 
         if cursor.atBlockStart() and cursor.atBlockEnd():
-            return self._set_motion_info(pos_cur,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(pos_cur, motion_type=MotionType.CharWise)
 
         cursor.movePosition(QTextCursor.EndOfBlock)
         pos_end = cursor.position()
@@ -135,10 +136,9 @@ class HelperMotion:
         if pos_new > pos_end:
             pos_new = pos_end
 
-        return self._set_motion_info(pos_new,
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(pos_new, motion_type=MotionType.CharWise)
 
-    def h(self, num=1, num_str=''):
+    def h(self, num=1, num_str=""):
         """Get the position on the left side of the cursor.
 
         Returns
@@ -151,8 +151,7 @@ class HelperMotion:
         pos_cur = cursor.position()
 
         if cursor.atBlockStart() and cursor.atBlockEnd():
-            return self._set_motion_info(pos_cur,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(pos_cur, motion_type=MotionType.CharWise)
 
         cursor.movePosition(QTextCursor.StartOfBlock)
         pos_start = cursor.position()
@@ -161,10 +160,9 @@ class HelperMotion:
         if pos_new < pos_start:
             pos_new = pos_start
 
-        return self._set_motion_info(pos_new,
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(pos_new, motion_type=MotionType.CharWise)
 
-    def k(self, num=1, num_str=''):
+    def k(self, num=1, num_str=""):
         """Get the position above the cursor.
 
         Returns
@@ -181,7 +179,7 @@ class HelperMotion:
 
         return self._set_motion_info(pos_new)
 
-    def j(self, num=1, num_str=''):
+    def j(self, num=1, num_str=""):
         """Get the position below the cursor.
 
         Returns
@@ -198,27 +196,27 @@ class HelperMotion:
 
         return self._set_motion_info(pos_new)
 
-    def H(self, num=1, num_str=''):
+    def H(self, num=1, num_str=""):
         """Get the position of the top of page."""
         editor = self.get_editor()
         pos = editor.cursorForPosition(QPoint(0, 0)).position()
         return self._set_motion_info(pos)
 
-    def M(self, num=1, num_str=''):
+    def M(self, num=1, num_str=""):
         """Get the position of the middle of page."""
         editor = self.get_editor()
         qpos_mid = int(editor.viewport().height() * 0.5)
         block = editor.cursorForPosition(QPoint(0, qpos_mid)).block()
         return self._set_motion_info(block.position())
 
-    def L(self, num=1, num_str=''):
+    def L(self, num=1, num_str=""):
         """Get the position of the bottom of page."""
         editor = self.get_editor()
         qpos_mid = int(editor.viewport().height())
         block = editor.cursorForPosition(QPoint(0, qpos_mid)).block()
         return self._set_motion_info(block.position())
 
-    def dollar(self, num=1, num_str=''):
+    def dollar(self, num=1, num_str=""):
         """Get the position of the end of the current line.
 
         Returns
@@ -231,10 +229,9 @@ class HelperMotion:
         cursor.movePosition(QTextCursor.EndOfLine, n=num)
         pos_new = cursor.position()
 
-        return self._set_motion_info(pos_new,
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(pos_new, motion_type=MotionType.CharWise)
 
-    def caret(self, num=1, num_str=''):
+    def caret(self, num=1, num_str=""):
         """Get the position of the first non-blank character of the line.
 
         Returns
@@ -251,10 +248,9 @@ class HelperMotion:
             start_of_line = len(text) - len(text.lstrip())
             pos = block.position() + start_of_line
 
-        return self._set_motion_info(pos,
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(pos, motion_type=MotionType.CharWise)
 
-    def w(self, num=1, num_str=''):
+    def w(self, num=1, num_str=""):
         """Get the position of the next word.
 
         Returns
@@ -271,10 +267,9 @@ class HelperMotion:
                 if self._get_ch(cursor.position()) in WHITE_SPACE:
                     cursor.movePosition(QTextCursor.NextWord)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def w_for_d(self, num=1, num_str=''):
+    def w_for_d(self, num=1, num_str=""):
         """Get the position of the next word in d command.
 
         Returns
@@ -294,10 +289,9 @@ class HelperMotion:
             else:
                 cursor.movePosition(QTextCursor.NextWord)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def w_for_c(self, num=1, num_str=''):
+    def w_for_c(self, num=1, num_str=""):
         """Get the position of the next word for c command.
 
         Returns
@@ -319,10 +313,9 @@ class HelperMotion:
         else:
             cursor.movePosition(QTextCursor.EndOfWord)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def W(self, num=1, num_str=''):
+    def W(self, num=1, num_str=""):
         """Get the position of the next WORD.
 
         Returns
@@ -339,8 +332,7 @@ class HelperMotion:
                     cursor.movePosition(QTextCursor.NextWord)
             else:
                 cursor.movePosition(QTextCursor.NextWord)
-                while (self._get_leading_ch(cursor.position())
-                       not in WHITE_SPACE):
+                while self._get_leading_ch(cursor.position()) not in WHITE_SPACE:
                     if cursor.atBlockEnd():
                         cursor.movePosition(QTextCursor.NextWord)
                         if self._get_ch(cursor.position()) in WHITE_SPACE:
@@ -348,10 +340,9 @@ class HelperMotion:
                         break
                     cursor.movePosition(QTextCursor.NextWord)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def W_for_d(self, num=1, num_str=''):
+    def W_for_d(self, num=1, num_str=""):
         """Get the position of the next WORD.
 
         Returns
@@ -368,15 +359,14 @@ class HelperMotion:
                     cursor.movePosition(QTextCursor.NextWord)
 
             cursor.movePosition(QTextCursor.NextWord)
-            while (self._get_leading_ch(cursor.position()) not in WHITE_SPACE):
+            while self._get_leading_ch(cursor.position()) not in WHITE_SPACE:
                 if cursor.atBlockEnd():
                     break
                 cursor.movePosition(QTextCursor.NextWord)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def W_for_c(self, num=1, num_str=''):
+    def W_for_c(self, num=1, num_str=""):
         """Get the position of the next WORD for c command.
 
         Returns
@@ -393,8 +383,7 @@ class HelperMotion:
                     cursor.movePosition(QTextCursor.NextWord)
             else:
                 cursor.movePosition(QTextCursor.NextWord)
-                while (self._get_leading_ch(cursor.position())
-                       not in WHITE_SPACE):
+                while self._get_leading_ch(cursor.position()) not in WHITE_SPACE:
                     if cursor.atBlockEnd():
                         cursor.movePosition(QTextCursor.NextWord)
                         if self._get_ch(cursor.position()) in WHITE_SPACE:
@@ -406,15 +395,16 @@ class HelperMotion:
             cursor.movePosition(QTextCursor.NextWord)
         else:
             cursor.movePosition(QTextCursor.EndOfWord)
-            while (self._get_ch(cursor.position()) not in WHITE_SPACE
-                   and not cursor.atBlockEnd()):
+            while (
+                self._get_ch(cursor.position()) not in WHITE_SPACE
+                and not cursor.atBlockEnd()
+            ):
                 cursor.movePosition(QTextCursor.Right)
                 cursor.movePosition(QTextCursor.EndOfWord)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def b(self, num=1, num_str=''):
+    def b(self, num=1, num_str=""):
         """Get the position of the previous word.
 
         Returns
@@ -427,8 +417,9 @@ class HelperMotion:
 
         def move2previousword(_cursor):
             _cursor.movePosition(QTextCursor.PreviousWord)
-            while (cursor.atBlockStart()
-                    and self._get_ch(cursor.position()) in WHITE_SPACE):
+            while (
+                cursor.atBlockStart() and self._get_ch(cursor.position()) in WHITE_SPACE
+            ):
                 if _cursor.position() == 0:
                     break
                 if _cursor.atBlockStart() and cursor.atBlockEnd():
@@ -438,13 +429,12 @@ class HelperMotion:
 
         for _ in range(num):
             cursor = move2previousword(cursor)
-            while(cursor.atBlockEnd() and not cursor.atBlockStart()):
+            while cursor.atBlockEnd() and not cursor.atBlockStart():
                 cursor = move2previousword(cursor)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def B(self, num=1, num_str=''):
+    def B(self, num=1, num_str=""):
         """Get the position of the previous WORD.
 
         Returns
@@ -457,8 +447,7 @@ class HelperMotion:
 
         def move2previousWORD(_cursor):
             _cursor.movePosition(QTextCursor.PreviousWord)
-            while(self._get_leading_ch(cursor.position())
-                    not in WHITE_SPACE):
+            while self._get_leading_ch(cursor.position()) not in WHITE_SPACE:
                 if _cursor.position() == 0:
                     break
                 if _cursor.atBlockStart() and cursor.atBlockEnd():
@@ -468,13 +457,12 @@ class HelperMotion:
 
         for _ in range(num):
             cursor = move2previousWORD(cursor)
-            while(cursor.atBlockEnd() and not cursor.atBlockStart()):
+            while cursor.atBlockEnd() and not cursor.atBlockStart():
                 cursor = move2previousWORD(cursor)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def e(self, num=1, num_str=''):
+    def e(self, num=1, num_str=""):
         """Get the position of the end of word.
 
         Does not stop in an empty line.
@@ -492,9 +480,11 @@ class HelperMotion:
             cursor.movePosition(QTextCursor.Right)
 
         def _helper_e(cursor):
-            while (cursor.atBlockEnd()
-                    or not cursor.block().text().strip()
-                    or self._get_ch(cursor.position()) in WHITE_SPACE):
+            while (
+                cursor.atBlockEnd()
+                or not cursor.block().text().strip()
+                or self._get_ch(cursor.position()) in WHITE_SPACE
+            ):
                 cursor.movePosition(QTextCursor.NextWord)
                 if cursor.atEnd():
                     break
@@ -509,9 +499,10 @@ class HelperMotion:
             cursor.movePosition(QTextCursor.Left)
 
         return self._set_motion_info(
-                cursor.position(), motion_type=MotionType.CharWiseIncludingEnd)
+            cursor.position(), motion_type=MotionType.CharWiseIncludingEnd
+        )
 
-    def G(self, num=1, num_str=''):
+    def G(self, num=1, num_str=""):
         """Get the position of the Line.
 
         if num_str is False, this function return the last line position.
@@ -542,14 +533,14 @@ class HelperMotion:
 
         return self._set_motion_info(pos)
 
-    def percent(self, num=1, num_str=''):
+    def percent(self, num=1, num_str=""):
         """Get the position of matching bracket."""
         txt = self.get_editor().toPlainText()
         cursor_pos = self.get_cursor().position()
         pos_start = None
         pos_end = None
 
-        for match in re.finditer(r'[\(\[\{\}\]\)]', txt[cursor_pos::]):
+        for match in re.finditer(r"[\(\[\{\}\]\)]", txt[cursor_pos::]):
             pos_start = match.start()
             ch_start = match.group()
             if ch_start in ")]}":
@@ -578,12 +569,13 @@ class HelperMotion:
                 break
 
         return self._set_motion_info(
-            pos_end, motion_type=MotionType.CharWiseIncludingEnd)
+            pos_end, motion_type=MotionType.CharWiseIncludingEnd
+        )
 
     def find_ch(self, ch, num=1, by_repeat_cmd=False):
         """Get the position of the next occurrence of a character."""
         if by_repeat_cmd is False:
-            self.vim_status.find_info.set('f', ch)
+            self.vim_status.find_info.set("f", ch)
         cursor = self.get_cursor()
         block = cursor.block()
         search_pos = cursor.positionInBlock() + 1
@@ -596,17 +588,16 @@ class HelperMotion:
             search_pos = ch_pos + 1
 
         if ch_pos < 0:
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
         else:
             return self._set_motion_info(
-                ch_pos + block.position(),
-                motion_type=MotionType.CharWiseIncludingEnd)
+                ch_pos + block.position(), motion_type=MotionType.CharWiseIncludingEnd
+            )
 
     def rfind_ch(self, ch, num=1, by_repeat_cmd=False):
         """Get the position of the previous occurrence of a character."""
         if by_repeat_cmd is False:
-            self.vim_status.find_info.set('F', ch)
+            self.vim_status.find_info.set("F", ch)
         cursor = self.get_cursor()
         block = cursor.block()
         search_pos = cursor.positionInBlock()
@@ -619,16 +610,16 @@ class HelperMotion:
             search_pos = ch_pos
 
         if ch_pos < 0:
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
         else:
-            return self._set_motion_info(ch_pos + block.position(),
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(
+                ch_pos + block.position(), motion_type=MotionType.CharWise
+            )
 
     def t(self, ch, num=1, by_repeat_cmd=False):
         """Get the position - 1 of the next occurrence of a character."""
         if by_repeat_cmd is False:
-            self.vim_status.find_info.set('t', ch)
+            self.vim_status.find_info.set("t", ch)
         cursor = self.get_cursor()
         block = cursor.block()
         search_pos = cursor.positionInBlock() + 1
@@ -644,17 +635,16 @@ class HelperMotion:
 
         ch_pos -= 1
         if ch_pos < 0:
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
         else:
             return self._set_motion_info(
-                ch_pos + block.position(),
-                motion_type=MotionType.CharWiseIncludingEnd)
+                ch_pos + block.position(), motion_type=MotionType.CharWiseIncludingEnd
+            )
 
     def T(self, ch, num=1, by_repeat_cmd=False):
         """Get the position + 1 of the previous occurrence of a character."""
         if by_repeat_cmd is False:
-            self.vim_status.find_info.set('T', ch)
+            self.vim_status.find_info.set("T", ch)
         cursor = self.get_cursor()
         block = cursor.block()
         search_pos = cursor.positionInBlock()
@@ -671,35 +661,32 @@ class HelperMotion:
             search_pos = ch_pos
 
         if ch_pos < 0:
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
 
         ch_pos += 1
         if ch_pos >= block.length():
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
-        return self._set_motion_info(ch_pos + block.position(),
-                                     motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
+        return self._set_motion_info(
+            ch_pos + block.position(), motion_type=MotionType.CharWise
+        )
 
-    def semicolon(self, num=1, num_str=''):
+    def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, F or T."""
         name = self.vim_status.find_info.cmd_name
         ch = self.vim_status.find_info.ch
         method = self.find_cmd_map.get(name, None)
         if method is None:
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
         motion_info = method(ch, num, True)
         return motion_info
 
-    def comma(self, num=1, num_str=''):
+    def comma(self, num=1, num_str=""):
         """Repeat latest f, t, F or T in opposite direction."""
         name = self.vim_status.find_info.cmd_name
         ch = self.vim_status.find_info.ch
         method = self.find_cmd_map.get(name.swapcase(), None)
         if method is None:
-            return self._set_motion_info(None,
-                                         motion_type=MotionType.CharWise)
+            return self._set_motion_info(None, motion_type=MotionType.CharWise)
         motion_info = method(ch, num, True)
         return motion_info
 
@@ -715,8 +702,7 @@ class HelperMotion:
         if self._get_ch(cursor.position()) == quote:
             # When the cursor starts on a quote, Vim will figure out which
             # quote pairs form a string by searching from the start of the line
-            quote_pos = [m.start() for m in re.finditer(quote,
-                                                        text[:cursor_pos])]
+            quote_pos = [m.start() for m in re.finditer(quote, text[:cursor_pos])]
             if len(quote_pos) % 2 == 0:
                 sel_start = cursor_pos
                 sel_end = text.find(quote, cursor_pos + 1)
@@ -742,8 +728,9 @@ class HelperMotion:
             sel_start = None
             sel_end = None
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )
 
     def _include_trailing_white(self, pos_end):
         """Add the position of trailing white space."""
@@ -752,8 +739,10 @@ class HelperMotion:
         cursor.setPosition(pos_end)
 
         # including trailing text
-        if (pos_end < self.vim_status.cursor.get_end_position()
-                and not cursor.atBlockEnd()):
+        if (
+            pos_end < self.vim_status.cursor.get_end_position()
+            and not cursor.atBlockEnd()
+        ):
             cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
             ch = cursor.selectedText()
 
@@ -771,7 +760,7 @@ class HelperMotion:
         cursor.setPosition(pos_start)
         block = cursor.block()
         text = block.text()
-        text = text[:pos_start - block.position()]
+        text = text[: pos_start - block.position()]
 
         pos_start -= len(text) - len(text.rstrip())
 
@@ -789,8 +778,7 @@ class HelperMotion:
         if self._get_ch(cursor.position()) == quote:
             # When the cursor starts on a quote, Vim will figure out which
             # quote pairs form a string by searching from the start of the line
-            quote_pos = [m.start() for m in re.finditer(quote,
-                                                        text[:cursor_pos])]
+            quote_pos = [m.start() for m in re.finditer(quote, text[:cursor_pos])]
             if len(quote_pos) % 2 == 0:
                 sel_start = cursor_pos
                 sel_end = text.find(quote, cursor_pos + 1)
@@ -820,8 +808,9 @@ class HelperMotion:
             sel_start = None
             sel_end = None
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )
 
     def i_w(self, num):
         """Find word block position."""
@@ -864,8 +853,9 @@ class HelperMotion:
 
         sel_end = cursor.position()
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )
 
     def i_W(self, num):
         """Find WORD block position."""
@@ -887,9 +877,10 @@ class HelperMotion:
             cursor.movePosition(QTextCursor.EndOfWord)
             cursor.movePosition(QTextCursor.StartOfWord)
 
-            while (not cursor.atBlockStart()
-                    and self._get_leading_ch(cursor.position()) not in
-                    WHITE_SPACE):
+            while (
+                not cursor.atBlockStart()
+                and self._get_leading_ch(cursor.position()) not in WHITE_SPACE
+            ):
                 cursor.movePosition(QTextCursor.Left)
                 cursor.movePosition(QTextCursor.StartOfWord)
 
@@ -901,12 +892,12 @@ class HelperMotion:
                     cursor.movePosition(QTextCursor.NextWord, n=2)
                 else:
                     cursor.movePosition(QTextCursor.EndOfWord)
-                    while (not cursor.atBlockEnd()
-                           and self._get_ch(cursor.position())
-                           not in WHITE_SPACE):
+                    while (
+                        not cursor.atBlockEnd()
+                        and self._get_ch(cursor.position()) not in WHITE_SPACE
+                    ):
                         cursor.movePosition(QTextCursor.Right)
-                        if (self._get_ch(cursor.position())
-                                not in WHITE_SPACE):
+                        if self._get_ch(cursor.position()) not in WHITE_SPACE:
                             cursor.movePosition(QTextCursor.EndOfWord)
             else:
                 # go to the end of blank
@@ -917,8 +908,9 @@ class HelperMotion:
 
         sel_end = cursor.position()
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )
 
     def a_w(self, num):
         """Find word block position including white space."""
@@ -973,25 +965,28 @@ class HelperMotion:
 
         sel_end = cursor.position()
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )
 
-    def a_bracket(self, num, bracket):
+    def get_pos_bracket(
+        self, num: int, bracket: str, cursor_pos: int
+    ) -> tuple[Optional[int], Optional[int]]:
         """Get the position of the bracket block."""
         # Todo: apply num
-        pair_bracket = {'(': ['(', ')', r'[()]'],
-                        ')': ['(', ')', r'[()]'],
-                        '[': ['[', ']', r'[\[\]]'],
-                        ']': ['[', ']', r'[\[\]]'],
-                        '{': ['{', '}', r'[{}]'],
-                        '}': ['{', '}', r'[{}]']}
+        pair_bracket = {
+            "(": ["(", ")", r"[()]"],
+            ")": ["(", ")", r"[()]"],
+            "[": ["[", "]", r"[\[\]]"],
+            "]": ["[", "]", r"[\[\]]"],
+            "{": ["{", "}", r"[{}]"],
+            "}": ["{", "}", r"[{}]"],
+        }
         b_open, b_close, pattern_str = pair_bracket[bracket]
         txt = self.get_editor().toPlainText()
 
         sel_start = None
         sel_end = None
-        cursor = self.get_cursor()
-        cursor_pos = cursor.position()
 
         pattern = re.compile(pattern_str)
 
@@ -1000,7 +995,7 @@ class HelperMotion:
             sel_end = cursor_pos + 1
         else:
             n_open = 0
-            for match in pattern.finditer(txt[cursor_pos + 1::]):
+            for match in pattern.finditer(txt[cursor_pos + 1 : :]):
                 ch = match.group()
                 if ch == b_open:
                     n_open += 1
@@ -1032,14 +1027,38 @@ class HelperMotion:
             sel_start = None
             sel_end = None
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return sel_start, sel_end
 
-    def i_bracket(self, num, bracket):
+    def a_bracket(self, num: int, bracket: str) -> MotionInfo:
+        """Get the position of the bracket block."""
+        cursor = self.get_cursor()
+        cursor_pos = cursor.position()
+        sel_start, sel_end = self.get_pos_bracket(num, bracket, cursor_pos)
+
+        if sel_start is None:
+            # There are an open bracket after the cursor on the same line.
+            open_bracket = {"(": "(", ")": "(", "[": "[", "]": "[", "{": "{", "}": "{"}[
+                bracket
+            ]
+            block = cursor.block()
+            txt = block.text()
+            block_pos = block.position()
+
+            txt_right = txt[cursor_pos - block_pos:]
+            open_bracket_pos = txt_right.find(open_bracket) + cursor_pos
+            if open_bracket_pos > cursor_pos:
+                sel_start, sel_end = self.get_pos_bracket(
+                    num, bracket, open_bracket_pos
+                )
+
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )
+
+    def i_bracket(self, num: int, bracket: str) -> MotionInfo:
         """Get the position of the bracket inner block."""
         motion_info = self.a_bracket(num, bracket)
-        if (motion_info.sel_start is not None
-                and motion_info.sel_end is not None):
+        if motion_info.sel_start is not None and motion_info.sel_end is not None:
             motion_info.sel_start += 1
             motion_info.sel_end -= 1
             if motion_info.sel_start == motion_info.sel_end:
@@ -1055,8 +1074,8 @@ class HelperMotion:
         cursor.movePosition(QTextCursor.Start)
 
         # Apply the option for search
-        is_ignorecase = CONF.get(CONF_SECTION, 'ignorecase')
-        is_smartcase = CONF.get(CONF_SECTION, 'smartcase')
+        is_ignorecase = CONF.get(CONF_SECTION, "ignorecase")
+        is_smartcase = CONF.get(CONF_SECTION, "smartcase")
 
         if is_ignorecase is True:
             option = None
@@ -1072,8 +1091,7 @@ class HelperMotion:
         # Find key in document forward
         search_stack = []
         if option:
-            cursor = editor.document().find(QRegularExpression(txt),
-                                            options=option)
+            cursor = editor.document().find(QRegularExpression(txt), options=option)
         else:
             cursor = editor.document().find(QRegularExpression(txt))
 
@@ -1087,25 +1105,26 @@ class HelperMotion:
             search_stack.append(selection)
             if option:
                 cursor = editor.document().find(
-                        QRegularExpression(txt), cursor, options=option)
+                    QRegularExpression(txt), cursor, options=option
+                )
             else:
-                cursor = editor.document().find(
-                        QRegularExpression(txt), cursor)
+                cursor = editor.document().find(QRegularExpression(txt), cursor)
         self.vim_status.cursor.set_extra_selections(
-            'vim_search', [i for i in search_stack])
+            "vim_search", [i for i in search_stack]
+        )
         editor.update_extra_selections()
 
         self.vim_status.search.selection_list = search_stack
         self.vim_status.search.txt_searched = txt
 
-    def n(self, num=1, num_str=''):
+    def n(self, num=1, num_str=""):
         """Get position to the next searched text(from spyder-vim)."""
         pos_list = self.vim_status.search.get_sel_start_list()
         if not pos_list:
             return self._set_motion_info(None)
 
         txt = self.vim_status.search.txt_searched
-        self.vim_status.set_message(f'/{txt}')
+        self.vim_status.set_message(f"/{txt}")
 
         cursor_pos = self.get_cursor().position()
 
@@ -1116,10 +1135,9 @@ class HelperMotion:
         idx += num - 1
         idx = idx % len(pos_list)
 
-        return self._set_motion_info(pos_list[idx],
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(pos_list[idx], motion_type=MotionType.CharWise)
 
-    def N(self, num=1, num_str=''):
+    def N(self, num=1, num_str=""):
         """Get position to the previous searched text(from spyder-vim)."""
         pos_list = self.vim_status.search.get_sel_start_list()
         n_pos_list = len(pos_list)
@@ -1127,7 +1145,7 @@ class HelperMotion:
             return self._set_motion_info(None)
 
         txt = self.vim_status.search.txt_searched
-        self.vim_status.set_message(f'?{txt}')
+        self.vim_status.set_message(f"?{txt}")
 
         cursor_pos = self.get_cursor().position()
 
@@ -1135,10 +1153,9 @@ class HelperMotion:
         idx -= num - 1
         idx = idx % n_pos_list
 
-        return self._set_motion_info(pos_list[idx - 1],
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(pos_list[idx - 1], motion_type=MotionType.CharWise)
 
-    def space(self, num=1, num_str=''):
+    def space(self, num=1, num_str=""):
         """Get the position on the right side of the cursor.
 
         Returns
@@ -1154,10 +1171,9 @@ class HelperMotion:
             if cursor.atBlockEnd():
                 cursor.movePosition(QTextCursor.Right)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def backspace(self, num=1, num_str=''):
+    def backspace(self, num=1, num_str=""):
         """Get the position on the right side of the cursor.
 
         Returns
@@ -1170,10 +1186,9 @@ class HelperMotion:
 
         cursor.movePosition(QTextCursor.Left, n=num)
 
-        return self._set_motion_info(cursor.position(),
-                                     motion_type=MotionType.CharWise)
+        return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
-    def enter(self, num=1, num_str=''):
+    def enter(self, num=1, num_str=""):
         """Get the position below the cursor.
 
         Returns
@@ -1235,5 +1250,6 @@ class HelperMotion:
 
         sel_end = cursor.position()
 
-        return self._set_motion_info(None, sel_start, sel_end,
-                                     motion_type=MotionType.BlockWise)
+        return self._set_motion_info(
+            None, sel_start, sel_end, motion_type=MotionType.BlockWise
+        )

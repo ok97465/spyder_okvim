@@ -7,7 +7,7 @@ SURROUNDINGS = "'\"{[()]}"
 
 
 class ExecutorAddSurround(ExecutorSubBase):
-    """Vim-surround in Visual mode."""
+    """Executor for adding surrounding."""
 
     def __init__(self, vim_status):
         """."""
@@ -44,10 +44,8 @@ class ExecutorAddSurround(ExecutorSubBase):
         """."""
         self.vim_status.sub_mode = None
 
-        if ch == "b":
-            ch = ")"
-        elif ch == "B":
-            ch = "}"
+        ch = ch.replace("b", ")")
+        ch = ch.replace("B", "}")
 
         if ch in SURROUNDINGS:
             self.update_input_cmd_info(None, None, ch)
@@ -55,5 +53,31 @@ class ExecutorAddSurround(ExecutorSubBase):
 
         self.vim_status.to_normal()
         self.vim_status.cursor.set_cursor_pos(self.pos_start)
+
+        return True
+
+
+class ExecutorDeleteSurround(ExecutorSubBase):
+    """Executor for deleting surrounding."""
+
+    def __init__(self, vim_status):
+        """."""
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+        self.has_zero_cmd = False
+
+    def __call__(self, ch: str):
+        """."""
+        self.vim_status.sub_mode = None
+
+        ch = ch.replace("b", ")")
+        ch = ch.replace("B", "}")
+
+        if ch in SURROUNDINGS:
+            self.update_input_cmd_info(None, None, ch)
+            motion_info = self.helper_action.delete_surrounding(ch)
+            if isinstance(motion_info.sel_start, int):
+                self.vim_status.to_normal()
+                self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)
 
         return True

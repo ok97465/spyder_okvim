@@ -8,7 +8,7 @@ import re
 from qtpy.QtGui import QTextCursor
 
 # Local imports
-from spyder_okvim.utils.helper_motion import MotionType, MotionInfo
+from spyder_okvim.utils.helper_motion import HelperMotion, MotionInfo, MotionType
 from spyder_okvim.utils.vim_status import VimState
 
 
@@ -28,6 +28,7 @@ class HelperAction:
         self.get_block_no_end_in_selection = vim_status.get_block_no_end_in_selection
         self.get_pos_start_in_selection = vim_status.get_pos_start_in_selection
         self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
+        self.helper_motion = HelperMotion(vim_status)
 
     def join_lines(self, cursor_pos_start: int, block_no_start: int, block_no_end: int):
         """Join lines."""
@@ -126,11 +127,38 @@ class HelperAction:
         text_sub = prefix_dict[ch] + text + suffix_dict[ch]
         cursor.insertText(text_sub)
 
-        if self.vim_status.is_normal():
-            self.vim_status.cursor.set_cursor_pos(pos_end - 1)
+        editor = self.get_editor()
+        editor.document_did_change()
+
+    def delete_surrounding(self, ch: str) -> MotionInfo:
+        """Delete surrouding."""
+        self.vim_status.update_dot_cmd(connect_editor=False)
+        open_brackets = "([{"
+
+        if ch in "'\"":
+            motion_info = self.helper_motion.i_quote(ch)
+            if motion_info.sel_start and motion_info.sel_end:
+                motion_info.sel_start -= 1
+                motion_info.sel_end += 1
+        else:
+            motion_info = self.helper_motion.a_bracket(1, ch)
+
+        if motion_info.sel_start is None:
+            return motion_info
+
+        cursor = self.get_cursor()
+        cursor.setPosition(motion_info.sel_start)
+        cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
+        text = cursor.selectedText().replace("\u2029", "\n")
+        text_sub = text[1:-1]
+        if ch in open_brackets:
+            text_sub = text_sub.strip()
+        cursor.insertText(text_sub)
 
         editor = self.get_editor()
         editor.document_did_change()
+
+        return motion_info
 
     def handle_case(self, motion_info: MotionInfo, method):
         """Swap case."""
