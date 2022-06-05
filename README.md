@@ -5,11 +5,10 @@
 ![Window tests](https://github.com/ok97465/spyder_okvim/workflows/Windows%20tests/badge.svg)
 [![codecov](https://codecov.io/gh/ok97465/spyder_okvim/branch/main/graph/badge.svg?token=7JIIKTOZMO)](https://codecov.io/gh/ok97465/spyder_okvim)
 
-
 Spyder Plugin for executing Vim commands inside the code editor.
 This repository is reusing some codes of [spyder-ide/spyder-vim](https://github.com/spyder-ide/spyder-vim)
 
-```
+```text
 Don't make an issue to spyder github after install okvim.
 ```
 
@@ -22,13 +21,16 @@ If you have a problem after installing this, please retry after uninstalling okv
 ## Overview
 
 This plugin supports movements.
-  - hjkl, ^u, %, iw, i(, /, n, N, ;, ...
+
+- hjkl, ^u, %, iw, i(, /, n, N, ;, ...
   
 This plugin supports a combination of operators and motions
-  - diw, di(, c%, c/foo, cn, ygg, d2w, 2d2W ...
+
+- diw, di(, c%, c/foo, cn, ygg, d2w, 2d2W ...
   
 This plugin supports spyder command.
-  - run selection, formatting, toggle break, toggle comment, ...
+
+- run selection, formatting, toggle break, toggle comment, ...
 
 This plugin support macro(experimental).
 
@@ -36,11 +38,11 @@ This plugin support macro(experimental).
 |------|-------------|----------------|
 |![movement gif](/doc/ex_movement.gif) | ![combination gif](/doc/ex_combination.gif)| ![spyder cmd gif](/doc/ex_spyder_cmd.gif) |
 
-
 ## Installation
+
 To install this plugin, you can install the package locally using pip as it follows.
 
-```
+```text
 pip install -U .
 ```
 
@@ -89,9 +91,9 @@ The following motions are supported:
 
 ## Vim keys
 
-- ^A : Add [count] to number 
-- ^X : Subtract [count] to number 
-- K : Inspect current object 
+- ^A : Add [count] to number
+- ^X : Subtract [count] to number
+- K : Inspect current object
 - gd : Go to definition.
 - gt, gT : Cycle to next/previous file.
 - ZZ : Save and close current file.
@@ -102,9 +104,9 @@ The following motions are supported:
 - \<leader\>f : autoformatting (spyder >= 4.2.0)
 - \<leader\>b : Toggle break point
 - \<leader\>r : run selected text or current line in console.
-- \<leader\>enter :  run cell and advance 
-- \<leader\>p : spyder switcher 
-- \<leader\>s : spyder symbol switcher 
+- \<leader\>enter :  run cell and advance
+- \<leader\>p : spyder switcher
+- \<leader\>s : spyder symbol switcher
 - [d : goto previous warning/error
 - ]d : goto next warning/error
 - gc{motion} : toggle comment (support visual mode)
@@ -115,10 +117,12 @@ The following motions are supported:
 - surroundings : '"()[]{}bB
 
 The following action are supported:
+
 - ys{motion}{surroundings} in normal mode: add surroundings in pairs.
 - ds{surroundings} in normal mode: delete surroundings in pairs.
+- cs{surroundings}{surroundings} in normal mode: change surroundings in pairs.
 - S{surroundings} in visual mode: add surroundings in pairs.
-    
+
 ## Fuzzy path finder
 
 The shortcut to invoke the fuzzy path finder is Ctrl+p.
@@ -144,4 +148,3 @@ You can use EasyMotion commands as an argument for d, c, or any other command th
 | `<leader><leader> k`                | Start of line backwards                                                                                        |
 | `<leader><leader> f <char>`         | Find character forwards                                                                                        |
 | `<leader><leader> F <char>`         | Find character backwards                                                                                       |
-

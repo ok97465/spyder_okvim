@@ -102,13 +102,15 @@ def test_add_surround_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expect
     [
         ("(a)", ["ds", ")"], 0, "a"),
         ("( a )", ["ds", "b"], 0, " a "),
-        ("( a )", ["ds", "("], 0, "a"),
+        ("( a ) ( a )", ["ds", "("], 0, "a ( a )"),
+        ("( a ) ( a )", ["ds", "(", "."], 2, "a a"),
         ("{a}", ["ds", "}"], 0, "a"),
         ("{ a }", ["ds", "B"], 0, " a "),
         ("{ a }", ["ds", "{"], 0, "a"),
         ("[ a ]", ["ds", "]"], 0, " a "),
         ("[ a ]", ["ds", "["], 0, "a"),
-        ('"a"', ["ds", '"'], 0, "a"),
+        ('"a" "a"', ["ds", '"'], 0, 'a "a"'),
+        ('"a" "a"', ["ds", '"', "."], 2, "a a"),
         ("'a'", ["ds", "'"], 0, "a"),
         ("  (a)", ["ds", ")"], 2, "  a"),
         ("  'a'", ["ds", "'"], 2, "  a"),
@@ -121,6 +123,37 @@ def test_add_surround_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expect
 )
 def test_delete_surround_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected):
     """Test to delete surround in normal."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert vim.vim_cmd.vim_status.vim_state == VimState.NORMAL
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, text_expected",
+    [
+        ("(a) (a)", ["cs", "b", "B"], 0, "{a} (a)"),
+        ("(a) (a)", ["cs", "b", "B", "."], 4, "{a} {a}"),
+        ("( a )", ["cs", "b", "'"], 0, "' a '"),
+        ("( a )", ["cs", "(", "'"], 0, "'a'"),
+        ("{ a }", ["cs", "B", '"'], 0, '" a "'),
+        ("{ a }", ["cs", "{", "["], 0, "[ a ]"),
+        ("[ a ]", ["cs", "[", "]"], 0, "[a]"),
+        ("' a '", ["cs", "'", '"'], 0, '" a "'),
+    ],
+)
+def test_change_surround_in_normal(vim_bot, text, cmd_list, cursor_pos, text_expected):
+    """Test to change surround in normal."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
