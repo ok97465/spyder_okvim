@@ -6,12 +6,15 @@ import re
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
-    ExecutorSubBase,
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,
+    ExecutorSubBase,
 )
-from spyder_okvim.executor.executor_surround import ExecutorAddSurround
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
+from spyder_okvim.executor.executor_surround import (
+    ExecutorAddSurround,
+    ExecutorDeleteSurround,
+)
 
 
 class ExecutorSubMotion_i(ExecutorSubBase):
@@ -365,6 +368,9 @@ class ExecutorSubMotion_d(ExecutorSubMotion):
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+        self.cmds += "s"
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
+        self.executor_sub_delete_surround = ExecutorDeleteSurround(vim_status)
 
     def w(self, num=1, num_str=""):
         """Move forward [num] words and delete."""
@@ -377,6 +383,12 @@ class ExecutorSubMotion_d(ExecutorSubMotion):
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.W_for_d(num)
         return self.execute_func_deferred(motion_info)
+
+    def s(self, num=1, num_str=""):
+        """Delete surroundings."""
+        executor_sub = self.executor_sub_delete_surround
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
 
 class ExecutorSubMotion_c(ExecutorSubMotion):
