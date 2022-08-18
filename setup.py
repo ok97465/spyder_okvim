@@ -18,15 +18,13 @@ setup(
     version=__version__,
     author="ok97465",
     author_email="ok97465@kakao.com",
-    description="A plugin to enable vim keybingins to the spyder editor",
+    description="A plugin to enable vim keybindings to the spyder editor",
     license="MIT license",
     url="https://github.com/ok97465/spyder_okvim",
-    install_requires=["spyder>=5.1.5"],
+    install_requires=["spyder>=5.3.3"],
     packages=find_packages(),
     entry_points={
-        "spyder.plugins": [
-            "spyder_okvim = spyder_okvim.spyder.plugin:OkVim"
-        ],
+        "spyder.plugins": ["spyder_okvim = spyder_okvim.spyder.plugin:OkVim"],
     },
     classifiers=[
         "Operating System :: MacOS",
