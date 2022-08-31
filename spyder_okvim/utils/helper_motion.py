@@ -1112,7 +1112,6 @@ class HelperMotion:
         self.vim_status.cursor.set_extra_selections(
             "vim_search", [i for i in search_stack]
         )
-        editor.update_extra_selections()
 
         self.vim_status.search.selection_list = search_stack
         self.vim_status.search.txt_searched = txt

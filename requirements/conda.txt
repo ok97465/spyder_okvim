@@ -1,2 +1,2 @@
 pyqt < 5.13
-spyder >=5.1.5
+spyder >=5.3.3

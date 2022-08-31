@@ -9,6 +9,7 @@ from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 from qtpy.QtGui import QBrush, QColor, QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication, QTextEdit
 from spyder.config.manager import CONF
+from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION
@@ -167,7 +168,6 @@ class SearchInfo:
 
     def get_sel_start_list(self):
         """Get the start position of selection."""
-        editor = self.vim_cursor.get_editor()
         cursor = self.vim_cursor.get_cursor()
 
         tmp = []
@@ -184,7 +184,6 @@ class SearchInfo:
 
         self.vim_cursor.set_extra_selections('vim_search',
                                              [i for i in self.selection_list])
-        editor.update_extra_selections()
 
         return [i.cursor.selectionStart() for i in self.selection_list]
 
@@ -262,10 +261,10 @@ class VimCursor:
         self.set_config_from_conf()
 
         # Order of Selections
-        self.draw_orders_sel = {'vim_search': 6,
-                                'hl_yank': 7,
-                                'vim_selection': 8,
-                                'vim_cursor': 9}
+        DRAW_ORDERS["vim_search"] = 6
+        DRAW_ORDERS["hl_yank"] = 7
+        DRAW_ORDERS["vim_selection"] = 8
+        DRAW_ORDERS["vim_cursor"] = 9
 
     def set_config_from_conf(self):
         """Set config from conf."""
@@ -317,7 +316,7 @@ class VimCursor:
         vim_cursor.cursor.movePosition(QTextCursor.Right,
                                        QTextCursor.KeepAnchor)
         self.set_extra_selections('vim_cursor', [vim_cursor])
-        editor.update_extra_selections()
+        # editor.update()
 
     def create_selection(self, start, end):
         """Create selection."""
@@ -566,20 +565,9 @@ class VimCursor:
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
     def set_extra_selections(self, key, sels):
-        """Set the selection info to editor.
-
-        We can use editor.set_extra_selections for setting selections.
-        But that method does not support setting order. So we need this method.
-        """
-        order = self.draw_orders_sel.get(key, 0)
+        """Set the selection info to editor."""
         editor = self.get_editor()
-
-        for sel in sels:
-            sel.draw_order = order
-            sel.kind = key
-
-        editor.clear_extra_selections(key)
-        editor.extra_selections_dict[key] = sels
+        editor.set_extra_selections(key, sels)
 
     def highlight_yank(self, pos_start, pos_end):
         """Highlight after yank."""

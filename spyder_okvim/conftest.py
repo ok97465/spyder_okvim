@@ -86,7 +86,7 @@ class MainMock(QWidget):
         # qtbot.add_widget(self.editor)
         # qtbot.add_widget(self.status_bar)
 
-    def get_plugin(self, dummy):
+    def get_plugin(self, dummy, error=True):
         return self.status_bar
 
 
