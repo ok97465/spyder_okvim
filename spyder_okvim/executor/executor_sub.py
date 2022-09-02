@@ -761,3 +761,56 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
         for _ in range(num):
             editor.go_to_next_warning()
         self.vim_status.cursor.draw_vim_cursor()
+
+
+class ExecutorSubCmd_z(ExecutorSubBase):
+    """Submode of z."""
+
+    def __init__(self, vim_status):
+        """."""
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+        self.has_zero_cmd = False
+
+        cmds = "ztb"
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
+
+    def scroll_cursor_to_center(self, offset: int):
+        """Scroll cursor line to center."""
+        pos = self.vim_status.get_cursor().position()
+
+        editor = self.get_editor()
+        line, _ = editor.get_cursor_line_column()
+        editor.go_to_line(line + offset)
+
+        self.vim_status.cursor.set_cursor_pos(pos)
+        self.vim_status.cursor.draw_vim_cursor()
+
+    def t(self, num=1, num_str=""):
+        """Cursor line to top of screen."""
+        visible_lines = self.vim_status.get_number_of_visible_lines()
+        offset = visible_lines // 2 - 1
+        self.scroll_cursor_to_center(offset)
+
+        editor = self.get_editor()
+        n_block = editor.blockCount()
+        idx_block, _ = editor.get_cursor_line_column()
+        leftover = offset - (n_block - idx_block)
+
+        # When current line is near the end of the document, vim control scrollbar.
+        if leftover > 0:
+            scroll = editor.verticalScrollBar()
+            v_max = scroll.maximum()
+            v_current = scroll.value()
+            offset_scroll = min([v_max, v_current + leftover])
+            scroll.setValue(offset_scroll)
+
+    def b(self, num=1, num_str=""):
+        """Cursor line to bottom of screen."""
+        visible_lines = self.vim_status.get_number_of_visible_lines()
+        self.scroll_cursor_to_center(-(visible_lines // 2 - 1))
+
+    def z(self, num=1, num_str=""):
+        """Cursor line to center of screen."""
+        self.scroll_cursor_to_center(1)

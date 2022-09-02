@@ -96,12 +96,13 @@ The following motions are supported:
 - K : Inspect current object
 - gd : Go to definition.
 - gt, gT : Cycle to next/previous file.
+- zz, zt, tb : Cursor line to some locations of screen.
 - ZZ : Save and close current file.
 - q, @: macro
 
 ## Special keys
 
-- \<leader\>f : autoformatting (spyder >= 4.2.0)
+- \<leader\>f : autoformatting
 - \<leader\>b : Toggle break point
 - \<leader\>r : run selected text or current line in console.
 - \<leader\>enter :  run cell and advance
