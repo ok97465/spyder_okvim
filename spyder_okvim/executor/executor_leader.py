@@ -13,17 +13,18 @@ class ExecutorLeaderKey(ExecutorBase):
         super().__init__(vim_status)
 
         self.dispatcher = {
-                'i': self.auto_import,
-                'b': self.toggle_breakpoint,
-                '\r': self.run_cell_and_advance,
-                'r': self.run_selection,
-                'f': self.formatting,
-                'p': self.open_switcher,
-                's': self.open_symbol_swicher
-                }
+            "i": self.auto_import,
+            "b": self.toggle_breakpoint,
+            "\r": self.run_cell_and_advance,
+            "r": self.run_selection,
+            "f": self.formatting,
+            "p": self.open_switcher,
+            "s": self.open_symbol_swicher,
+        }
 
-        self.set_selection_to_editor_using_vim_selection = \
+        self.set_selection_to_editor_using_vim_selection = (
             self.vim_status.cursor.set_selection_to_editor_using_vim_selection
+        )
         self.prev_executor = None
 
     def set_easymotion_key(self, key):
@@ -43,7 +44,7 @@ class ExecutorLeaderKey(ExecutorBase):
 
         ret = None
         if method:
-            ret = method(1, '')
+            ret = method(1, "")
 
         if ret:
             self.vim_status.sub_mode = ret.sub_mode
@@ -52,7 +53,7 @@ class ExecutorLeaderKey(ExecutorBase):
             self.vim_status.sub_mode = None
             return True
 
-    def auto_import(self, num=1, num_str=''):
+    def auto_import(self, num=1, num_str=""):
         """Insert import statements from user defined list(for personal)."""
         editor = self.get_editor()
         try:
@@ -82,28 +83,29 @@ class ExecutorLeaderKey(ExecutorBase):
 
     def retrieve_curosr_pos(self, pos: int, delay: int):
         """Retrieve the cursor position."""
+
         def _retrieve():
             self.vim_status.cursor.set_cursor_pos(pos)
             self.vim_status.set_focus_to_vim()
             self.vim_status.cursor.draw_vim_cursor()
+
         QTimer.singleShot(delay, _retrieve)
 
-    def formatting(self, num=1, num_str=''):
+    def formatting(self, num=1, num_str=""):
         """Format document automatically."""
         editor = self.get_editor()
         pos = self.vim_status.get_cursor().position()
         editor.format_document_or_range()
         self.retrieve_curosr_pos(pos, 1000)
 
-    def open_switcher(self, num=1, num_str=''):
+    def open_switcher(self, num=1, num_str=""):
         """Open switcher for buffers."""
         self.vim_status.main.open_switcher()
 
-    def open_symbol_swicher(self, num=1, num_str=''):
+    def open_symbol_swicher(self, num=1, num_str=""):
         """Open switcher for symbol."""
         self.vim_status.main.open_switcher(symbol=True)
 
-    def execute_easymotion(self, num=1, num_str=''):
+    def execute_easymotion(self, num=1, num_str=""):
         """Execute easymotion."""
         return self.prev_executor.run_easymotion()
-

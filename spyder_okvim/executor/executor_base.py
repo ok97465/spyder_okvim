@@ -8,10 +8,10 @@ from typing import NamedTuple, Any, List
 from spyder_okvim.utils.helper_motion import HelperMotion
 from spyder_okvim.utils.helper_action import HelperAction
 
-FUNC_INFO = NamedTuple("FUNC_INFO", [('func', Any), ('has_arg', bool)])
-RETURN_EXECUTOR_METHOD_INFO = NamedTuple("RETURN_EXECUTOR_METHOD_INFO",
-                                         [('sub_mode', Any),
-                                          ('clear_command_line', bool)])
+FUNC_INFO = NamedTuple("FUNC_INFO", [("func", Any), ("has_arg", bool)])
+RETURN_EXECUTOR_METHOD_INFO = NamedTuple(
+    "RETURN_EXECUTOR_METHOD_INFO", [("sub_mode", Any), ("clear_command_line", bool)]
+)
 
 
 class ExecutorBase:
@@ -30,7 +30,7 @@ class ExecutorBase:
         "$": "dollar",
         "0": "zero",
         "^": "caret",
-        "\"": "quote",
+        '"': "quote",
         "%": "percent",
         "~": "tilde",
         ":": "colon",
@@ -56,14 +56,12 @@ class ExecutorBase:
         self.set_cursor = vim_status.set_cursor
         self.get_editor = vim_status.get_editor
         self.get_editorstack = vim_status.get_editorstack
-        self.get_block_no_start_in_selection = \
+        self.get_block_no_start_in_selection = (
             vim_status.get_block_no_start_in_selection
-        self.get_block_no_end_in_selection = \
-            vim_status.get_block_no_end_in_selection
-        self.get_pos_start_in_selection = \
-            vim_status.get_pos_start_in_selection
-        self.get_pos_end_in_selection = \
-            vim_status.get_pos_end_in_selection
+        )
+        self.get_block_no_end_in_selection = vim_status.get_block_no_end_in_selection
+        self.get_pos_start_in_selection = vim_status.get_pos_start_in_selection
+        self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.helper_motion = HelperMotion(vim_status)
         self.helper_action = HelperAction(vim_status)

@@ -17,7 +17,7 @@ def test_auto_import(vim_bot):
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
-    qtbot.keyClicks(cmd_line, 'i')
+    qtbot.keyClicks(cmd_line, "i")
 
     assert cmd_line.text() == ""
     assert editor.auto_import.auto_import.called
@@ -31,7 +31,7 @@ def test_toggle_breakpoint(vim_bot):
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
-    qtbot.keyClicks(cmd_line, 'b')
+    qtbot.keyClicks(cmd_line, "b")
 
     assert cmd_line.text() == ""
     assert editor_stack.set_or_clear_breakpoint.called
@@ -43,9 +43,7 @@ def test_run_cell_and_advance(vim_bot):
     editor.set_text("a\nb\nc\n")
 
     cmd_line = vim.vim_cmd.commandline
-    with qtbot.waitSignal(
-            editor.sig_run_cell_and_advance,
-            timeout=1000) as blocker:
+    with qtbot.waitSignal(editor.sig_run_cell_and_advance, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyPress(cmd_line, Qt.Key_Enter)
 
@@ -59,21 +57,17 @@ def test_run_selection(vim_bot):
     editor.set_text("a\nb\nc\n")
 
     cmd_line = vim.vim_cmd.commandline
-    with qtbot.waitSignal(
-            editor.sig_run_selection,
-            timeout=1000) as blocker:
+    with qtbot.waitSignal(editor.sig_run_selection, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
-        qtbot.keyClicks(cmd_line, 'r')
+        qtbot.keyClicks(cmd_line, "r")
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
 
-    qtbot.keyClicks(cmd_line, 'Vj')
-    with qtbot.waitSignal(
-            editor.sig_run_selection,
-            timeout=1000) as blocker:
+    qtbot.keyClicks(cmd_line, "Vj")
+    with qtbot.waitSignal(editor.sig_run_selection, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
-        qtbot.keyClicks(cmd_line, 'r')
+        qtbot.keyClicks(cmd_line, "r")
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
@@ -88,17 +82,17 @@ def test_formatting(vim_bot):
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
-    qtbot.keyClicks(cmd_line, 'f')
+    qtbot.keyClicks(cmd_line, "f")
 
     assert cmd_line.text() == ""
     assert editor.format_document_or_range.called
 
     editor.format_document_or_range = Mock()
-    qtbot.keyClicks(cmd_line, 'ggVj')
+    qtbot.keyClicks(cmd_line, "ggVj")
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
-    qtbot.keyClicks(cmd_line, 'f')
+    qtbot.keyClicks(cmd_line, "f")
 
     assert cmd_line.text() == ""
     assert editor.format_document_or_range.called
@@ -112,7 +106,7 @@ def test_open_swithcer(vim_bot):
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
-    qtbot.keyClicks(cmd_line, 'p')
+    qtbot.keyClicks(cmd_line, "p")
 
     assert cmd_line.text() == ""
     assert main.open_switcher.called
@@ -126,7 +120,7 @@ def test_open_symbol_swithcer(vim_bot):
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
-    qtbot.keyClicks(cmd_line, 's')
+    qtbot.keyClicks(cmd_line, "s")
 
     assert cmd_line.text() == ""
     assert main.open_switcher.called

@@ -8,7 +8,12 @@ import sys
 # Third party imports
 from qtpy.QtCore import QDir, QDirIterator, QStringListModel, Qt, Signal
 from qtpy.QtWidgets import (
-    QApplication, QDialog, QLineEdit, QListView, QVBoxLayout,)
+    QApplication,
+    QDialog,
+    QLineEdit,
+    QListView,
+    QVBoxLayout,
+)
 from spyder.config.gui import get_font
 
 
@@ -27,9 +32,9 @@ def fuzzyfinder(query, collection):
             suggestions narrowed down from `collection` using the `input`.
     """
     suggestions = []
-    pat = '.*?'.join(map(re.escape, query))
+    pat = ".*?".join(map(re.escape, query))
     # lookahead regex to manage overlapping matches
-    pat = '(?=({0}))'.format(pat)
+    pat = "(?=({0}))".format(pat)
     regex = re.compile(pat, re.IGNORECASE)
 
     for txt in collection:
@@ -63,7 +68,8 @@ class PathFinderEdit(QLineEdit):
             Qt.Key_Return: self.sig_enter_key_pressed.emit,
             Qt.Key_Escape: self.sig_esc_key_pressed.emit,
             Qt.Key_PageUp: self.sig_pg_up_key_pressed.emit,
-            Qt.Key_PageDown: self.sig_pg_down_key_pressed.emit}
+            Qt.Key_PageDown: self.sig_pg_down_key_pressed.emit,
+        }
 
         self.dispatcher_ctrl = {
             Qt.Key_P: self.sig_up_key_pressed.emit,
@@ -71,7 +77,8 @@ class PathFinderEdit(QLineEdit):
             Qt.Key_U: self.sig_pg_half_up_key_pressed.emit,
             Qt.Key_N: self.sig_down_key_pressed.emit,
             Qt.Key_F: self.sig_pg_down_key_pressed.emit,
-            Qt.Key_D: self.sig_pg_half_down_key_pressed.emit}
+            Qt.Key_D: self.sig_pg_half_down_key_pressed.emit,
+        }
 
     def keyPressEvent(self, e):
         """Override Qt method."""
@@ -168,18 +175,19 @@ class PathFinder(QDialog):
             dir_ = QDir(self.folder)
             it = QDirIterator(
                 self.folder,
-                ['*.py', '*.txt', '*.md'],
+                ["*.py", "*.txt", "*.md"],
                 QDir.Files | QDir.NoDotAndDotDot | QDir.NoSymLinks,
-                QDirIterator.Subdirectories)
+                QDirIterator.Subdirectories,
+            )
             while it.hasNext():
                 self.path_list.append(dir_.relativeFilePath(it.next()))
 
-        self.results_old[''] = self.path_list
+        self.results_old[""] = self.path_list
 
     def update_list(self):
         """Update listview."""
         query = self.edit.text()
-        query = query.replace(" ", '')
+        query = query.replace(" ", "")
         paths = self.results_old.get(query, None)
 
         if paths is None:
@@ -233,4 +241,3 @@ class PathFinder(QDialog):
             path = osp.join(self.folder, rel_path)
             self.path_selected = path
         self.close()
-

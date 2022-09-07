@@ -23,17 +23,17 @@ class ManageMarkerEasymotion:
 
     def init_marker_keys(self):
         """Initialize markers."""
-        keys1 = 'hklyuiopnm,qwe'
-        keys2 = 'rtzxcvbasdgjf;'
+        keys1 = "hklyuiopnm,qwe"
+        keys2 = "rtzxcvbasdgjf;"
 
         self.marker_keys = list(keys1)
-        self.marker_keys += [''.join(pro) for pro in product(keys2, keys1)]
+        self.marker_keys += ["".join(pro) for pro in product(keys2, keys1)]
 
     def set_positions(self, position_list: List[int], motion_type):
         """Set positions."""
         self.name_list = []
         self.position_list = position_list
-        self.name_list = self.marker_keys[:len(position_list)]
+        self.name_list = self.marker_keys[: len(position_list)]
         self.motion_type = motion_type
 
     def handle_user_input(self, ch):
@@ -59,6 +59,7 @@ class PainterEasyMotion(QObject):
     Ref: github.com/serpheroth/QtCreator-EasyMotion
 
     """
+
     def __init__(self, editor: QPlainTextEdit = None):
         super().__init__()
         self.editor = editor
@@ -85,7 +86,7 @@ class PainterEasyMotion(QObject):
         painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
         painter.setBrush(QColor(57, 34, 79, 255))
         painter.setFont(editor.font())
-        ch_width = fm.width(' ')
+        ch_width = fm.width(" ")
 
         for pos_ch, marker_name in zip(self.positions, self.names):
             tc.setPosition(pos_ch)

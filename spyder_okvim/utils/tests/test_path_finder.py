@@ -13,8 +13,8 @@ def test_open_path_finder(vim_bot, monkeypatch, tmpdir):
     """Test open path finder."""
     _, _, _, vim, qtbot = vim_bot
 
-    fn = tmpdir.join('tmp.txt')
-    fn.write('content')
+    fn = tmpdir.join("tmp.txt")
+    fn.write("content")
     monkeypatch.setattr(PathFinder, "exec_", lambda x: x)
     monkeypatch.setattr(PathFinder, "get_path_selected", lambda x: str(fn))
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_P, Qt.ControlModifier)
@@ -61,25 +61,25 @@ def test_invaild_folder(qtbot):
 
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_Enter, Qt.NoModifier)
     edit.keyPressEvent(event)
-    assert pf.get_path_selected() == ''
+    assert pf.get_path_selected() == ""
 
     pf.show()
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier)
     edit.keyPressEvent(event)
-    assert pf.get_path_selected() == ''
+    assert pf.get_path_selected() == ""
 
 
 def test_valid_folder(qtbot, tmpdir):
     """Test valid folder."""
-    folder = tmpdir.mkdir('projects')
-    for name in ['a', 'ok97465.py', 'test.md', 'fig.txt']:
+    folder = tmpdir.mkdir("projects")
+    for name in ["a", "ok97465.py", "test.md", "fig.txt"]:
         tmp = folder.join(name)
-        tmp.write('contents')
+        tmp.write("contents")
 
-    folder_sub = folder.mkdir('sub1')
-    for name in ['b', 'path_finder.py', '__init__.md', 'config.txt']:
+    folder_sub = folder.mkdir("sub1")
+    for name in ["b", "path_finder.py", "__init__.md", "config.txt"]:
         tmp = folder_sub.join(name)
-        tmp.write('contents')
+        tmp.write("contents")
 
     pf = PathFinder(str(folder))
 
@@ -124,13 +124,12 @@ def test_valid_folder(qtbot, tmpdir):
     qtbot.keyPress(edit, Qt.Key_PageUp)
     assert lv.currentIndex().row() == 0
 
-    qtbot.keyClicks(edit, 'o')
+    qtbot.keyClicks(edit, "o")
     assert lm.rowCount() == 2
 
     qtbot.keyPress(edit, Qt.Key_Backspace)
     assert lm.rowCount() == 6
 
-    qtbot.keyClicks(edit, 'ok9')
+    qtbot.keyClicks(edit, "ok9")
     qtbot.keyPress(edit, Qt.Key_Enter)
-    assert pf.get_path_selected() != ''
-
+    assert pf.get_path_selected() != ""

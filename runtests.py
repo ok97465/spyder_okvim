@@ -11,9 +11,17 @@ import pytest
 
 def main():
     """Run pytest tests."""
-    errno = pytest.main(['-x', 'spyder_okvim', '-v',
-                         '-rw', '--durations=30',
-                         '--cov=spyder_okvim', '--cov-report=term-missing'])
+    errno = pytest.main(
+        [
+            "-x",
+            "spyder_okvim",
+            "-v",
+            "-rw",
+            "--durations=30",
+            "--cov=spyder_okvim",
+            "--cov-report=term-missing",
+        ]
+    )
 
     # sys.exit doesn't work here because some things could be running
     # in the background (e.g. closing the main window) when this point
@@ -23,5 +31,5 @@ def main():
         raise SystemExit(errno)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

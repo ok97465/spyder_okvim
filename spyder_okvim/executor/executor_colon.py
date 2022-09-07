@@ -22,14 +22,14 @@ class ExecutorColon(ExecutorSubBase):
             if return is True, Clear command line
 
         """
-        if txt[-1] == '\b':
+        if txt[-1] == "\b":
             cmd_line = self.vim_status.cmd_line
             if len(txt) <= 2:
                 self.vim_status.sub_mode = None
                 return True
             else:
                 cmd_line.setText(txt[:-2])
-        if txt[-1] != '\r':
+        if txt[-1] != "\r":
             return False
 
         if txt[0] != ":" or len(txt) <= 2:
@@ -84,5 +84,3 @@ class ExecutorColon(ExecutorSubBase):
         """Create new file."""
         self.editor_widget.new_action.trigger()
         self.vim_status.set_focus_to_vim()
-
-

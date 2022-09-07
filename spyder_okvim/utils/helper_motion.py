@@ -1044,7 +1044,7 @@ class HelperMotion:
             txt = block.text()
             block_pos = block.position()
 
-            txt_right = txt[cursor_pos - block_pos:]
+            txt_right = txt[cursor_pos - block_pos :]
             open_bracket_pos = txt_right.find(open_bracket) + cursor_pos
             if open_bracket_pos > cursor_pos:
                 sel_start, sel_end = self.get_pos_bracket(

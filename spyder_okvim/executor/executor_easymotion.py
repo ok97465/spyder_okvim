@@ -72,9 +72,7 @@ class ExecutorSelectMarkerEasymotion(ExecutorSubBase):
             self.vim_status.remove_marker_of_easymotion()
             self.vim_status.sub_mode = None
             self._set_motion_info(pos_list[0], motion_type=motion_type)
-            return self.process_return(
-                self.execute_func_deferred(self.motion_info)
-            )
+            return self.process_return(self.execute_func_deferred(self.motion_info))
 
 
 class ExecutorSearchCharEasymotion(ExecutorSubBase):
@@ -233,7 +231,8 @@ class ExecutorEasymotion(ExecutorSubBase):
         executor_sub = self.executor_select_maker
         if positions:
             executor_sub.set_func_list_deferred(
-                self.func_list_deferred, self.return_deferred,
+                self.func_list_deferred,
+                self.return_deferred,
             )
             self.vim_status.set_marker_for_easymotion(positions, motion_type)
             return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)

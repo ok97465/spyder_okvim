@@ -14,8 +14,7 @@ from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
-from spyder_okvim.utils.easymotion import (
-    PainterEasyMotion, ManageMarkerEasymotion)
+from spyder_okvim.utils.easymotion import PainterEasyMotion, ManageMarkerEasymotion
 
 
 class VimState:
@@ -32,8 +31,8 @@ class FindInfo:
     """f,F,t,T command Info."""
 
     def __init__(self):
-        self.cmd_name: str = ''
-        self.ch: str = ''
+        self.cmd_name: str = ""
+        self.ch: str = ""
 
     def set(self, cmd_name: str, ch: str):
         """Set infomation of find commmand."""
@@ -84,28 +83,28 @@ class DotCmdInfo:
     def cmd2string(self, num, num_str):
         """Convert cmd info to string of vim command."""
         # TODO : apply register name.
-        cmd_str = ''
+        cmd_str = ""
 
         if self.vim_state == VimState.VLINE:
-            cmd_str += 'V'
+            cmd_str += "V"
             n_lines = self.sel_block_no_end - self.sel_block_no_start
             if n_lines > 0:
-                cmd_str += f'{n_lines}j'
+                cmd_str += f"{n_lines}j"
             cmd_str += self.cmd
             return cmd_str
 
         if self.vim_state == VimState.VISUAL:
-            cmd_str += 'v'
+            cmd_str += "v"
             n_lines = self.sel_block_no_end - self.sel_block_no_start
             if n_lines > 0:
-                cmd_str += f'{n_lines}j0'
+                cmd_str += f"{n_lines}j0"
 
                 if self.sel_col_end > 1:
-                    cmd_str += f'{self.sel_col_end - 1}l'
+                    cmd_str += f"{self.sel_col_end - 1}l"
             else:
                 n = self.sel_col_end - self.sel_col_start - 1
                 if n > 0:
-                    cmd_str += f'{n}l'
+                    cmd_str += f"{n}l"
             cmd_str += self.cmd
             return cmd_str
 
@@ -118,8 +117,7 @@ class DotCmdInfo:
 class KeyInfo:
     """Save the info of QKeyEvent."""
 
-    def __init__(self, key_code: int, text: str, modifiers: int,
-                 identifier: int = 1):
+    def __init__(self, key_code: int, text: str, modifiers: int, identifier: int = 1):
         self.key_code = key_code
         self.text = text
         self.modifiers = modifiers
@@ -127,8 +125,7 @@ class KeyInfo:
 
     def to_event(self):
         """Convert key info to qkeyevent."""
-        event = QKeyEvent(
-                QEvent.KeyPress, self.key_code, self.modifiers, self.text)
+        event = QKeyEvent(QEvent.KeyPress, self.key_code, self.modifiers, self.text)
         event.ignore()
         return event
 
@@ -137,8 +134,8 @@ class RegisterInfo:
     """Info of register."""
 
     def __init__(self):
-        self.name = ''
-        self.content = ''
+        self.name = ""
+        self.content = ""
         self.type = VimState.NORMAL
 
 
@@ -146,9 +143,9 @@ class SearchInfo:
     """Result of search."""
 
     def __init__(self, vim_cursor):
-        self.color_fg = QBrush(QColor('#A9B7C6'))
-        self.color_bg = QBrush(QColor('#30652F'))
-        self.txt_searched = ''
+        self.color_fg = QBrush(QColor("#A9B7C6"))
+        self.color_bg = QBrush(QColor("#30652F"))
+        self.txt_searched = ""
         self.selection_list = []
         self.vim_cursor = vim_cursor
         self.ignorecase = True
@@ -157,10 +154,8 @@ class SearchInfo:
 
     def set_color(self):
         """Set the color of search results."""
-        self.color_fg = QBrush(QColor(
-            CONF.get(CONF_SECTION, 'search_fg_color')))
-        self.color_bg = QBrush(QColor(
-            CONF.get(CONF_SECTION, 'search_bg_color')))
+        self.color_fg = QBrush(QColor(CONF.get(CONF_SECTION, "search_fg_color")))
+        self.color_bg = QBrush(QColor(CONF.get(CONF_SECTION, "search_bg_color")))
 
         for sel in self.selection_list:
             sel.format.setForeground(self.color_fg)
@@ -173,17 +168,17 @@ class SearchInfo:
         tmp = []
         for sel in self.selection_list:
             cursor.setPosition(sel.cursor.selectionStart())
-            cursor.setPosition(sel.cursor.selectionEnd(),
-                               QTextCursor.KeepAnchor)
+            cursor.setPosition(sel.cursor.selectionEnd(), QTextCursor.KeepAnchor)
             txt_sel = cursor.selectedText()
-            if ((txt_sel == self.txt_searched)
-                    or (self.ignorecase is True
-                        and txt_sel.lower() == self.txt_searched.lower())):
+            if (txt_sel == self.txt_searched) or (
+                self.ignorecase is True and txt_sel.lower() == self.txt_searched.lower()
+            ):
                 tmp.append(sel)
         self.selection_list = tmp
 
-        self.vim_cursor.set_extra_selections('vim_search',
-                                             [i for i in self.selection_list])
+        self.vim_cursor.set_extra_selections(
+            "vim_search", [i for i in self.selection_list]
+        )
 
         return [i.cursor.selectionStart() for i in self.selection_list]
 
@@ -194,9 +189,9 @@ class ManagerMacro:
     def __init__(self):
         self.registers = defaultdict(list)
         self.is_recording = False
-        self.reg_name_for_record = ''
+        self.reg_name_for_record = ""
         self.editor_connected = None
-        self.reg_name_for_execute = ''
+        self.reg_name_for_execute = ""
         self.num_execute = 0
 
     def set_info_for_execute(self, ch, num):
@@ -215,8 +210,8 @@ class ManagerMacro:
     def stop_record(self):
         """Stop recording."""
         # remove the last key if the last key is q
-        self.remove_last_key('q')
-        self.reg_name_for_record = ''
+        self.remove_last_key("q")
+        self.reg_name_for_record = ""
         self.is_recording = False
 
     def remove_last_key(self, ch):
@@ -231,12 +226,14 @@ class ManagerMacro:
         """Add keyevent from vim."""
         if self.is_recording:
             self.registers[self.reg_name_for_record].append(
-                KeyInfo(event.key(), event.text(), event.modifiers(), 0))
+                KeyInfo(event.key(), event.text(), event.modifiers(), 0)
+            )
 
     def add_editor_keyevent(self, event):
         """Add keyevent from editor."""
         self.registers[self.reg_name_for_record].append(
-            KeyInfo(event.key(), event.text(), event.modifiers(), 1))
+            KeyInfo(event.key(), event.text(), event.modifiers(), 1)
+        )
 
 
 class VimCursor:
@@ -246,15 +243,15 @@ class VimCursor:
         self.editor_widget = editor_widget
 
         self.vim_cursor = QTextEdit.ExtraSelection()
-        self.vim_cursor.format.setForeground(QBrush(QColor('#000000')))
-        self.vim_cursor.format.setBackground(QBrush(QColor('#BBBBBB')))
+        self.vim_cursor.format.setForeground(QBrush(QColor("#000000")))
+        self.vim_cursor.format.setBackground(QBrush(QColor("#BBBBBB")))
 
         self.selection = QTextEdit.ExtraSelection()
-        self.selection.format.setForeground(QBrush(QColor('#A9B7C6')))
-        self.selection.format.setBackground(QBrush(QColor('#214283')))
+        self.selection.format.setForeground(QBrush(QColor("#A9B7C6")))
+        self.selection.format.setBackground(QBrush(QColor("#214283")))
 
-        self.yank_fg_color = QBrush(QColor('#B9C7D6'))
-        self.yank_bg_color = QBrush(QColor('#7D7920'))
+        self.yank_fg_color = QBrush(QColor("#B9C7D6"))
+        self.yank_bg_color = QBrush(QColor("#7D7920"))
         self.hl_yank_dur = 400  # duration of highlight after yank
         self.hl_yank = True
 
@@ -268,22 +265,24 @@ class VimCursor:
 
     def set_config_from_conf(self):
         """Set config from conf."""
-        self.vim_cursor.format.setForeground(QBrush(QColor(
-            CONF.get(CONF_SECTION, 'cursor_fg_color'))))
-        self.vim_cursor.format.setBackground(QBrush(QColor(
-            CONF.get(CONF_SECTION, 'cursor_bg_color'))))
+        self.vim_cursor.format.setForeground(
+            QBrush(QColor(CONF.get(CONF_SECTION, "cursor_fg_color")))
+        )
+        self.vim_cursor.format.setBackground(
+            QBrush(QColor(CONF.get(CONF_SECTION, "cursor_bg_color")))
+        )
 
-        self.selection.format.setForeground(QBrush(QColor(
-            CONF.get(CONF_SECTION, 'select_fg_color'))))
-        self.selection.format.setBackground(QBrush(QColor(
-            CONF.get(CONF_SECTION, 'select_bg_color'))))
+        self.selection.format.setForeground(
+            QBrush(QColor(CONF.get(CONF_SECTION, "select_fg_color")))
+        )
+        self.selection.format.setBackground(
+            QBrush(QColor(CONF.get(CONF_SECTION, "select_bg_color")))
+        )
 
-        self.yank_fg_color = QBrush(QColor(
-            CONF.get(CONF_SECTION, 'yank_fg_color')))
-        self.yank_bg_color = QBrush(QColor(
-            CONF.get(CONF_SECTION, 'yank_bg_color')))
-        self.hl_yank_dur = CONF.get(CONF_SECTION, 'highlight_yank_duration')
-        self.hl_yank = CONF.get(CONF_SECTION, 'highlight_yank')
+        self.yank_fg_color = QBrush(QColor(CONF.get(CONF_SECTION, "yank_fg_color")))
+        self.yank_bg_color = QBrush(QColor(CONF.get(CONF_SECTION, "yank_bg_color")))
+        self.hl_yank_dur = CONF.get(CONF_SECTION, "highlight_yank_duration")
+        self.hl_yank = CONF.get(CONF_SECTION, "highlight_yank")
 
     def get_editor(self):
         """Get the editor focused."""
@@ -313,9 +312,8 @@ class VimCursor:
         vim_cursor = self.vim_cursor
         editor = self.get_editor()
         vim_cursor.cursor = editor.textCursor()
-        vim_cursor.cursor.movePosition(QTextCursor.Right,
-                                       QTextCursor.KeepAnchor)
-        self.set_extra_selections('vim_cursor', [vim_cursor])
+        vim_cursor.cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
+        self.set_extra_selections("vim_cursor", [vim_cursor])
         # editor.update()
 
     def create_selection(self, start, end):
@@ -587,8 +585,8 @@ class VimCursor:
         self.set_extra_selections("hl_yank", [sel])
 
         QTimer.singleShot(
-            self.hl_yank_dur,
-            lambda: editor.clear_extra_selections("hl_yank"))
+            self.hl_yank_dur, lambda: editor.clear_extra_selections("hl_yank")
+        )
 
 
 class VimStatus(QObject):
@@ -609,14 +607,12 @@ class VimStatus(QObject):
         self.get_cursor = self.cursor.get_cursor
         self.get_editor = self.cursor.get_editor
         self.get_editorstack = self.cursor.get_editorstack
-        self.get_block_no_start_in_selection = \
+        self.get_block_no_start_in_selection = (
             self.cursor.get_block_no_start_in_selection
-        self.get_block_no_end_in_selection = \
-            self.cursor.get_block_no_end_in_selection
-        self.get_pos_start_in_selection = \
-            self.cursor.get_pos_start_in_selection
-        self.get_pos_end_in_selection = \
-            self.cursor.get_pos_end_in_selection
+        )
+        self.get_block_no_end_in_selection = self.cursor.get_block_no_end_in_selection
+        self.get_pos_start_in_selection = self.cursor.get_pos_start_in_selection
+        self.get_pos_end_in_selection = self.cursor.get_pos_end_in_selection
 
         self.cmd_line = None
 
@@ -726,9 +722,11 @@ class VimStatus(QObject):
         Spyder is focused after receiving the result of pyls.
         So set_focus_to_vim method is useless.
         """
+
         def focus():
             self.set_focus_to_vim()
             self.cursor.draw_vim_cursor()
+
         if self.cmd_line:
             QTimer.singleShot(delay, focus)
 
@@ -736,7 +734,8 @@ class VimStatus(QObject):
     def rcv_key_from_editor(self, event):
         """Add key event from editor to list."""
         self.dot_cmd.key_list_from_editor.append(
-            KeyInfo(event.key(), event.text(), event.modifiers(), 1))
+            KeyInfo(event.key(), event.text(), event.modifiers(), 1)
+        )
 
     def disconnect_from_editor(self):
         """Disconnect from the editor."""
@@ -746,8 +745,9 @@ class VimStatus(QObject):
             editor.sig_key_pressed.disconnect(self.rcv_key_from_editor)
         self.dot_cmd.editor_connected = None
 
-    def update_dot_cmd(self, connect_editor, register_name=None,
-                       key_list_to_cmd_line=None):
+    def update_dot_cmd(
+        self, connect_editor, register_name=None, key_list_to_cmd_line=None
+    ):
         """Update input command info to dot command info."""
         if self.running_dot_cmd is True:
             return
@@ -805,9 +805,9 @@ class VimStatus(QObject):
     def get_register(self):
         """Get content from register_dict."""
         name = self.get_register_name()
-        if name == '+':
+        if name == "+":
             info = RegisterInfo()
-            info.name = '+'
+            info.name = "+"
             info.content = QApplication.clipboard().text()
             info.type = VimState.NORMAL
             return info
@@ -816,17 +816,16 @@ class VimStatus(QObject):
 
     def set_message(self, msg, duration_ms=-1):
         """Display the massage."""
-        self.msg_label.setText(f'{self.msg_prefix}{msg}')
+        self.msg_label.setText(f"{self.msg_prefix}{msg}")
 
     def start_recording_macro(self, reg_name):
         """Start recording macro."""
-        self.msg_prefix = f'recording @{reg_name}... '
+        self.msg_prefix = f"recording @{reg_name}... "
         self.manager_macro.start_record(reg_name)
 
         editor = self.get_editor()
         self.manager_macro.editor_connected = editor
-        editor.sig_key_pressed.connect(
-            self.add_key_from_editor_to_macro_manager)
+        editor.sig_key_pressed.connect(self.add_key_from_editor_to_macro_manager)
 
     def is_recording_macro(self):
         """Return is_recording."""
@@ -848,8 +847,7 @@ class VimStatus(QObject):
         # disconnect previous connection.
         editor = self.manager_macro.editor_connected
         if editor:
-            editor.sig_key_pressed.disconnect(
-                self.add_key_from_editor_to_macro_manager)
+            editor.sig_key_pressed.disconnect(self.add_key_from_editor_to_macro_manager)
         self.manager_macro.editor_connected = None
 
     def set_marker_for_easymotion(self, positions: List[int], motion_type):
@@ -861,8 +859,7 @@ class VimStatus(QObject):
         self.manager_marker_easymotion.set_positions(positions, motion_type)
         self.painter_easymotion.editor = editor
         self.painter_easymotion.positions = positions
-        self.painter_easymotion.names = \
-            self.manager_marker_easymotion.name_list
+        self.painter_easymotion.names = self.manager_marker_easymotion.name_list
         self.editor_connected_easymotion = editor
         editor.viewport().installEventFilter(self.painter_easymotion)
         editor.viewport().update()
@@ -872,10 +869,8 @@ class VimStatus(QObject):
         self.remove_marker_of_easymotion()
         editor = self.get_editor()
         self.painter_easymotion.editor = editor
-        self.painter_easymotion.positions = \
-            self.manager_marker_easymotion.position_list
-        self.painter_easymotion.names = \
-            self.manager_marker_easymotion.name_list
+        self.painter_easymotion.positions = self.manager_marker_easymotion.position_list
+        self.painter_easymotion.names = self.manager_marker_easymotion.name_list
         self.editor_connected_easymotion = editor
         editor.viewport().installEventFilter(self.painter_easymotion)
         editor.viewport().update()
@@ -887,4 +882,3 @@ class VimStatus(QObject):
         if editor:
             editor.viewport().removeEventFilter(self.painter_easymotion)
             editor.viewport().update()
-

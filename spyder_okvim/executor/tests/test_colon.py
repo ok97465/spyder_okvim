@@ -9,9 +9,9 @@ from qtpy.QtCore import Qt
 @pytest.mark.parametrize(
     "text, cmd_list, cmd_line_expected",
     [
-        ('', [":", "k", "k"], ':kk'),
-        ('', [":", "k", "k", Qt.Key_Escape], ''),
-    ]
+        ("", [":", "k", "k"], ":kk"),
+        ("", [":", "k", "k", Qt.Key_Escape], ""),
+    ],
 )
 def test_colon_cmd(vim_bot, text, cmd_list, cmd_line_expected):
     """Test colon command."""
@@ -31,9 +31,9 @@ def test_colon_cmd(vim_bot, text, cmd_list, cmd_line_expected):
 @pytest.mark.parametrize(
     "text, cmd_list",
     [
-        ('', [":", Qt.Key_Return]),
-        ('', [":", Qt.Key_Left, 'd', Qt.Key_Enter]),
-    ]
+        ("", [":", Qt.Key_Return]),
+        ("", [":", Qt.Key_Left, "d", Qt.Key_Enter]),
+    ],
 )
 def test_colon_corner_case_cmd(vim_bot, text, cmd_list):
     """Test colon command."""
@@ -47,7 +47,7 @@ def test_colon_corner_case_cmd(vim_bot, text, cmd_list):
         else:
             qtbot.keyPress(cmd_line, cmd)
 
-    assert cmd_line.text() == ''
+    assert cmd_line.text() == ""
     assert vim.vim_cmd.vim_status.sub_mode is None
 
 
@@ -55,8 +55,8 @@ def test_colon_w_command(vim_bot):
     """Test :w."""
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ':')
-    qtbot.keyClicks(cmd_line, 'w')
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "w")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.save_action.trigger.assert_called_once_with()
 
@@ -65,8 +65,8 @@ def test_colon_q_command(vim_bot):
     """Test :q."""
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ':')
-    qtbot.keyClicks(cmd_line, 'q')
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.close_action.trigger.assert_called_once_with()
 
@@ -75,9 +75,9 @@ def test_colon_qexclamation_command(vim_bot):
     """Test :q!."""
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ':')
-    qtbot.keyClicks(cmd_line, 'q')
-    qtbot.keyClicks(cmd_line, '!')
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "q")
+    qtbot.keyClicks(cmd_line, "!")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.close_action.trigger.assert_called_once_with()
 
@@ -86,9 +86,9 @@ def test_colon_wq_command(vim_bot):
     """Test :wq."""
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ':')
-    qtbot.keyClicks(cmd_line, 'w')
-    qtbot.keyClicks(cmd_line, 'q')
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "w")
+    qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.close_action.trigger.assert_called_once_with()
     main.editor.save_action.trigger.assert_called_once_with()
@@ -98,8 +98,8 @@ def test_colon_n_command(vim_bot):
     """Test :n."""
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ':')
-    qtbot.keyClicks(cmd_line, 'n')
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "n")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.new_action.trigger.assert_called_once_with()
 
@@ -108,8 +108,8 @@ def test_colon_backspace_command(vim_bot):
     """Test backspace in ex cmd."""
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ':')
-    qtbot.keyClicks(cmd_line, 'n')
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "n")
     qtbot.keyPress(cmd_line, Qt.Key_Backspace)
 
     assert cmd_line.text() == ":"

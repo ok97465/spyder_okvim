@@ -6,4 +6,3 @@ from .executor_normal import ExecutorNormalCmd
 from .executor_visual import ExecutorVisualCmd
 from .executor_vline import ExecutorVlineCmd
 from .executor_leader import ExecutorLeaderKey
-
