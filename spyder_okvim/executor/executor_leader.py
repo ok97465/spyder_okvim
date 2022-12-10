@@ -96,7 +96,6 @@ class ExecutorLeaderKey(ExecutorBase):
         editor = self.get_editor()
         pos = self.vim_status.get_cursor().position()
         editor.format_document_or_range()
-        self.retrieve_curosr_pos(pos, 1000)
 
     def open_switcher(self, num=1, num_str=""):
         """Open switcher for buffers."""
