@@ -222,7 +222,7 @@ class ExecutorNormalCmd(ExecutorBase):
     def K(self, num=1, num_str=""):
         """Show the help for the keyword under the cursor."""
         self.get_editorstack().inspect_current_object()
-        self.vim_status.set_focus_to_vim_after_delay(500)
+        # self.vim_status.set_focus_to_vim_after_delay(500)
 
     def u(self, num=1, num_str=""):
         """Undo changes."""
