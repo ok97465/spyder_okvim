@@ -264,6 +264,10 @@ class VimShortcut(QObject):
             self.main.open_file(path)
             self.vim_status.set_focus_to_vim()
 
+    def clear_tip_search(self):
+        """Clear tooltip, search highlight."""
+        self.get_editor().hide_tooltip()
+        self.vim_status.cursor.set_extra_selections("vim_search", [])
 
 class VimStateLabel(QLabel):
     """Display state of vim."""
@@ -320,6 +324,7 @@ class VimLineEdit(QLineEdit):
             Qt.Key_B: vim_shortcut.pg_up,
             Qt.Key_R: vim_shortcut.redo,
             Qt.Key_P: vim_shortcut.open_path_finder,
+            Qt.Key_C: vim_shortcut.clear_tip_search,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
 
