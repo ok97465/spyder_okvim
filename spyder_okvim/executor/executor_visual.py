@@ -29,7 +29,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUoiaydxscVhHjJklLMwWbBSepP^$gG~%fFtTnN/;,"r<> \b\r'
+        cmds = 'uUoiaydxscVhHjJklLMwWbBSepP^$gG~%fFtTnN/;,"r<> \b\r*#'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = vim_status.cursor.set_cursor_pos_in_visual
@@ -440,3 +440,13 @@ class ExecutorVisualCmd(ExecutorBase):
         )
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def asterisk(self, num=1, num_str=""):
+        """Search word under cursor forward."""
+        motion_info = self.helper_motion.asterisk(num)
+        self.apply_motion_info_in_visual(motion_info)
+
+    def sharp(self, num=1, num_str=""):
+        """Search word under cursor backward."""
+        motion_info = self.helper_motion.sharp(num)
+        self.apply_motion_info_in_visual(motion_info)

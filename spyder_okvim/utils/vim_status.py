@@ -5,8 +5,15 @@ from collections import defaultdict
 from typing import NamedTuple, List
 
 # Third party imports
-from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
-from qtpy.QtGui import QBrush, QColor, QKeyEvent, QTextCursor
+from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot, QRegularExpression
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QKeyEvent,
+    QTextCursor,
+    QValidator,
+    QRegularExpressionValidator,
+)
 from qtpy.QtWidgets import QApplication, QTextEdit
 from spyder.config.manager import CONF
 from spyder.plugins.editor.api.decoration import DRAW_ORDERS
@@ -164,13 +171,17 @@ class SearchInfo:
     def get_sel_start_list(self):
         """Get the start position of selection."""
         cursor = self.vim_cursor.get_cursor()
+        validator = QRegularExpressionValidator(
+            QRegularExpression(self.txt_searched), None
+        )
 
         tmp = []
         for sel in self.selection_list:
             cursor.setPosition(sel.cursor.selectionStart())
             cursor.setPosition(sel.cursor.selectionEnd(), QTextCursor.KeepAnchor)
             txt_sel = cursor.selectedText()
-            if (txt_sel == self.txt_searched) or (
+
+            if (validator.validate(txt_sel, 0)[0] == QValidator.Acceptable) or (
                 self.ignorecase is True and txt_sel.lower() == self.txt_searched.lower()
             ):
                 tmp.append(sel)

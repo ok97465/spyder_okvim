@@ -41,7 +41,7 @@ class ExecutorNormalCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = r'aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT";,.zZ/<> \b\rq@\[\]'
+        cmds = r'aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT";,.zZ/<> \b\rq@\[\]*#'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = (
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -708,3 +708,13 @@ class ExecutorNormalCmd(ExecutorBase):
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def asterisk(self, num=1, num_str=""):
+        """Search word under cursor forward."""
+        motion_info = self.helper_motion.asterisk(num)
+        self.apply_motion_info_in_normal(motion_info)
+
+    def sharp(self, num=1, num_str=""):
+        """Search word under cursor backward."""
+        motion_info = self.helper_motion.sharp(num)
+        self.apply_motion_info_in_normal(motion_info)

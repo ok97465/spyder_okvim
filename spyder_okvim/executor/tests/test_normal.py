@@ -1417,6 +1417,8 @@ def test_clipboard(vim_bot):
         ("(AAA)", ["y", "i", "("], 1, '"', "AAA"),
         ("(AAA)", ["y", "a", "("], 0, '"', "(AAA)"),
         ("(AAA)", ["%", "y", "a", ")"], 0, '"', "(AAA)"),
+        ("dhr dhr", ["y", "*"], 0, '"', "dhr "),
+        ("dhr dhr", ["w", "y", "#"], 0, '"', "dhr "),
     ],
 )
 def test_y_cmd_in_normal(
@@ -1913,7 +1915,6 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
 
-
 @pytest.mark.parametrize(
     "text, cmd_list",
     [
@@ -1936,6 +1937,35 @@ def test_search_corner_case_cmd(vim_bot, text, cmd_list):
     assert cmd_line.text() == ""
     assert vim.vim_cmd.vim_status.sub_mode is None
 
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ("", ["*"], 0),
+        ("", ["#"], 0),
+        ("dhr dhr", ["l", "*"], 4),
+        ("dhr dhr", ["l", "#"], 0),
+        ("dhr Dhr", ["l", "*"], 0),
+        ("dhr _dhr dhrw dhr", ["l", "*"], 14),
+        ("dhr _dhr dhrw _dhr", ["w", "#"], 14),
+        ("dhr dhr dhrw dhr", ["l", "2*"], 13),
+        ("dhr dhr dhrw dhr", ["w", "3#"], 4),
+    ],
+)
+def test_asterisk_sharp_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
+    """Test *, # command in normal."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
 
 def test_search_backspace_command(vim_bot):
     """Test backspace in search."""

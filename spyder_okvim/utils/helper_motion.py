@@ -7,7 +7,7 @@ from bisect import bisect_left, bisect_right
 from typing import Optional
 
 # Third party imports
-from qtpy.QtCore import QPoint, QRegularExpression
+from qtpy.QtCore import QPoint, QRegularExpression 
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
@@ -1066,8 +1066,8 @@ class HelperMotion:
                 motion_info.sel_end = None
 
         return motion_info
-
-    def search(self, txt):
+    
+    def search(self, txt: str):
         """Search regular expressions key inside document(from spyder_vim)."""
         editor = self.get_editor()
         cursor = QTextCursor(editor.document())
@@ -1077,8 +1077,8 @@ class HelperMotion:
         is_ignorecase = CONF.get(CONF_SECTION, "ignorecase")
         is_smartcase = CONF.get(CONF_SECTION, "smartcase")
 
+        option = None
         if is_ignorecase is True:
-            option = None
             self.vim_status.search.ignorecase = True
 
             if is_smartcase and txt.lower() != txt:
@@ -1088,27 +1088,27 @@ class HelperMotion:
             option = QTextDocument.FindCaseSensitively
             self.vim_status.search.ignorecase = False
 
-        # Find key in document forward
-        search_stack = []
-        if option:
-            cursor = editor.document().find(QRegularExpression(txt), options=option)
-        else:
-            cursor = editor.document().find(QRegularExpression(txt))
-
         back = self.vim_status.search.color_bg
         fore = self.vim_status.search.color_fg
-        while not cursor.isNull():
-            selection = QTextEdit.ExtraSelection()
-            selection.format.setBackground(back)
-            selection.format.setForeground(fore)
-            selection.cursor = cursor
-            search_stack.append(selection)
+        # Find key in document forward
+        search_stack = []
+        while True:
             if option:
                 cursor = editor.document().find(
                     QRegularExpression(txt), cursor, options=option
                 )
             else:
                 cursor = editor.document().find(QRegularExpression(txt), cursor)
+
+            if cursor.position() != -1:
+                selection = QTextEdit.ExtraSelection()
+                selection.format.setBackground(back)
+                selection.format.setForeground(fore)
+                selection.cursor = cursor
+                search_stack.append(selection)
+            else:
+                break
+
         self.vim_status.cursor.set_extra_selections(
             "vim_search", [i for i in search_stack]
         )
@@ -1153,6 +1153,28 @@ class HelperMotion:
         idx = idx % n_pos_list
 
         return self._set_motion_info(pos_list[idx - 1], motion_type=MotionType.CharWise)
+
+    def _get_word_under_cursor(self) -> str:
+        """Get word under cursor."""
+        editor = self.get_editor()
+        word = editor.get_current_word()
+        return word
+
+    def asterisk(self, num=1, num_str=""):
+        """Search word under cusor forward."""
+        word = self._get_word_under_cursor()
+        if word is None:
+            return self._set_motion_info(None)
+        self.search(f"\\b{word}\\b")
+        return self.n(num=num)
+
+    def sharp(self, num=1, num_str=""):
+        """Search word under cusor backward."""
+        word = self._get_word_under_cursor()
+        if word is None:
+            return self._set_motion_info(None)
+        self.search(f"\\b{word}\\b")
+        return self.N(num=num)
 
     def space(self, num=1, num_str=""):
         """Get the position on the right side of the cursor.

@@ -967,6 +967,35 @@ def test_search_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
     [
+        ("a", ["V", "*"], 0, [0, 1]),
+        ("a", ["V", "#"], 0, [0, 1]),
+        ("dhr\n  Dhr\n\n_dhr\n   dhr", ["V", "*"], 19, [0, 22]),
+        ("dhr\n  dhr\n\n_dhr\n   dhr", ["j2l", "V", "#"], 0, [0, 9]),
+    ],
+)
+def test_asterisk_sharp_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test *,# command in vline."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos == sel_pos_
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
         ("01 34", ["V", Qt.Key_Space], 1, [0, 5]),
     ],
 )

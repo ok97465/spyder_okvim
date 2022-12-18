@@ -92,7 +92,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;, \b\r"
+        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;, \b\r*#"
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
@@ -350,6 +350,18 @@ class ExecutorSubMotion(ExecutorSubBase):
         """Go to [num] lines downward linewise and execute."""
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.enter(num)
+        return self.execute_func_deferred(motion_info)
+
+    def asterisk(self, num=1, num_str=""):
+        """Search word under cursor forward and execute."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.asterisk(num)
+        return self.execute_func_deferred(motion_info)
+
+    def sharp(self, num=1, num_str=""):
+        """Search word under cursor backward and execute."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.sharp(num)
         return self.execute_func_deferred(motion_info)
 
     def run_easymotion(self, num=1, num_str=""):

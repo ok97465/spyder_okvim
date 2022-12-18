@@ -40,6 +40,8 @@ class ExecutorBase:
         ".": "dot",
         "[": "opensquarebracket",
         "]": "closesquarebracket",
+        "*": "asterisk",
+        "#": "sharp",
     }
 
     def __init__(self, vim_status):
