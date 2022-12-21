@@ -568,6 +568,40 @@ def test_F_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
 
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos, sel_pos",
+    [
+        ("", ["v", "s", "aa"], 0, [0, 0]),
+        ("", ["v", ";"], 0, [0, 0]),
+        ("", ["v", ","], 0, [0, 0]),
+        ("\n", ["v", "j", "s", "rr"], 1, [0, 1]),
+        ("d\ndhr Dhr dhr", ["v", "sdh"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "sdh", ";"], 10, [0, 11]),
+        ("d\ndhr Dhr dhr", ["v", "sdh", ";,"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "j$" "Sdh"], 10, [0, 11]),
+        ("d\ndhr Dhr dhr", ["v", "j$" "Sdh", ";"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "j$" "Sdh", ";,"], 10, [0, 11]),
+    ],
+)
+def test_sneak_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test sneak command in visual."""
+    CONF.set(CONF_SECTION, "use_sneak", True)
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    sel = editor.get_extra_selections("vim_selection")[0]
+    sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert sel_pos_ == sel_pos
 
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
@@ -1232,6 +1266,7 @@ def test_s_cmd_in_visual(
     vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked
 ):
     """Test s command in visual."""
+    CONF.set(CONF_SECTION, "use_sneak", False)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 

@@ -4,20 +4,25 @@
 # Standard library imports
 import re
 
+# Third party imports
+from spyder.config.manager import CONF
+
 # Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorBase,
 )
+from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
+    ExecutorSubCmdSneak,
 )
-from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
+from spyder_okvim.spyder.config import CONF_SECTION
 
 
 class ExecutorVlineCmd(ExecutorBase):
@@ -26,7 +31,7 @@ class ExecutorVlineCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUovhydcsxHjJklLMwWbBepP^$gG~%fFtTnN/;,"r<> \b\r*#'
+        cmds = 'uUovhydcsSxHjJklLMwWbBepP^$gG~%fFtTnN/;,"r<> \b\r*#'
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_vline = vim_status.cursor.set_cursor_pos_in_vline
@@ -39,6 +44,7 @@ class ExecutorVlineCmd(ExecutorBase):
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
+        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
 
     def zero(self, num=1, num_str=""):
         """Go to the start of the current line."""
@@ -316,7 +322,33 @@ class ExecutorVlineCmd(ExecutorBase):
 
     def s(self, num=1, num_str=""):
         """Delete text and start insert."""
-        self.c(num, num_str)
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
+
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred(
+                [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            )
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        else:
+            self.c(num, num_str)
+
+    def S(self, num=1, num_str=""):
+        """Delete text and start insert."""
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
+
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred(
+                [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            )
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def y(self, num=1, num_str=""):
         """Yank selected text."""

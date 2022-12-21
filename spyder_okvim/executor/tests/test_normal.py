@@ -795,6 +795,39 @@ def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
+        ("", ["s", "aa"], 0),
+        ("", [";"], 0),
+        ("", [","], 0),
+        ("\n", ["j", "s", "rr"], 1),
+        ("d\ndhr Dhr dhr", ["sdh"], 2),
+        ("d\ndhr Dhr dhr", ["sdh", ";"], 10),
+        ("d\ndhr Dhr dhr", ["sdh", ";,"], 2),
+        ("d\ndhr Dhr dhr", ["j$" "Sdh"], 10),
+        ("d\ndhr Dhr dhr", ["j$" "Sdh", ";"], 2),
+        ("d\ndhr Dhr dhr", ["j$" "Sdh", ";,"], 10),
+    ],
+)
+def test_sneak_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test sneak command."""
+    CONF.set(CONF_SECTION, "use_sneak", True)
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert vim.vim_cmd.vim_status.sub_mode is None
+
+
+@pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
         ("", ["F", "r"], 0),
         ("\n", ["j", "F", "r"], 1),
         ("\n r", ["j", "F", "r"], 1),
@@ -1419,6 +1452,7 @@ def test_clipboard(vim_bot):
         ("(AAA)", ["%", "y", "a", ")"], 0, '"', "(AAA)"),
         ("dhr dhr", ["y", "*"], 0, '"', "dhr "),
         ("dhr dhr", ["w", "y", "#"], 0, '"', "dhr "),
+        ("dhr dhr", ["yzdh"], 0, '"', "dhr "),
     ],
 )
 def test_y_cmd_in_normal(
@@ -1428,6 +1462,7 @@ def test_y_cmd_in_normal(
     _, _, editor, vim, qtbot = vim_bot
 
     CONF.set(CONF_SECTION, "leader_key", "F1")
+    CONF.set(CONF_SECTION, "use_sneak", True)
     vim.apply_plugin_settings("")
 
     editor.set_text(text)
@@ -1551,6 +1586,7 @@ def test_s_cmd_in_normal(
     vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked
 ):
     """Test s command in normal."""
+    CONF.set(CONF_SECTION, "use_sneak", False)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 
@@ -1577,6 +1613,7 @@ def test_S_cmd_in_normal(
     vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked
 ):
     """Test S command in normal."""
+    CONF.set(CONF_SECTION, "use_sneak", False)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
 

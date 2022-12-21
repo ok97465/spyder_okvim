@@ -4,23 +4,28 @@
 # Standard library imports
 import re
 
+# Third party imports
+from spyder.config.manager import CONF
+
 # Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorBase,
 )
+from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
+    ExecutorSubCmdSneak,
     ExecutorSubMotion_a,
     ExecutorSubMotion_i,
 )
-from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_surround import ExecutorAddSurround
+from spyder_okvim.spyder.config import CONF_SECTION
 
 
 class ExecutorVisualCmd(ExecutorBase):
@@ -47,6 +52,7 @@ class ExecutorVisualCmd(ExecutorBase):
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
+        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
         self.executor_sub_surround = ExecutorAddSurround(vim_status)
 
     def zero(self, num=1, num_str=""):
@@ -340,17 +346,42 @@ class ExecutorVisualCmd(ExecutorBase):
 
     def s(self, num=1, num_str=""):
         """Delete text and start insert."""
-        self.c(num, num_str)
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
+
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred(
+                [FUNC_INFO(self.apply_motion_info_in_visual, True)]
+            )
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        else:
+            self.c(num, num_str)
 
     def S(self, num=1, num_str=""):
         """Add surroundings: parentheses, brackets, quotes."""
-        self.vim_status.set_message("")
-        executor_sub = self.executor_sub_surround
 
-        executor_sub.pos_start = self.get_pos_start_in_selection()
-        executor_sub.pos_end = self.get_pos_end_in_selection()
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred(
+                [FUNC_INFO(self.apply_motion_info_in_visual, True)]
+            )
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        else:
+            self.vim_status.set_message("")
+            executor_sub = self.executor_sub_surround
+
+            executor_sub.pos_start = self.get_pos_start_in_selection()
+            executor_sub.pos_end = self.get_pos_end_in_selection()
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def y(self, num=1, num_str=""):
         """Yank selected text."""

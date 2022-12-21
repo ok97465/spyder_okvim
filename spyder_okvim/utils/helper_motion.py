@@ -7,7 +7,7 @@ from bisect import bisect_left, bisect_right
 from typing import Optional
 
 # Third party imports
-from qtpy.QtCore import QPoint, QRegularExpression 
+from qtpy.QtCore import QPoint, QRegularExpression
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
@@ -54,6 +54,10 @@ class HelperMotion:
             "F": self.rfind_ch,
             "t": self.t,
             "T": self.T,
+            "s": self.sneak,
+            "S": self.rsneak,
+            "z": self.sneak,
+            "Z": self.rsneak,
         }
 
     def _set_motion_info(
@@ -670,6 +674,73 @@ class HelperMotion:
             ch_pos + block.position(), motion_type=MotionType.CharWise
         )
 
+    def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
+        """Get the cursor position of viewport of editor."""
+        editor = self.vim_status.get_editor()
+        start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
+        bottom_right = QPoint(
+            editor.viewport().width() - 1, editor.viewport().height() - 1
+        )
+        end_pos = editor.cursorForPosition(bottom_right).position()
+
+        return start_pos, end_pos
+
+    def sneak(self, ch2, num=1, by_repeat_cmd=False):
+        """Get the position of the next occurrence of two characters."""
+        if by_repeat_cmd is False:
+            self.vim_status.find_info.set("s", ch2)
+
+        editor = self.get_editor()
+
+        cur_pos = editor.textCursor().position()
+        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        start_pos = min([view_end_pos, cur_pos]) + 1
+
+        idx_found = 0
+        ch_pos = None
+        while view_start_pos <= start_pos <= view_end_pos:
+            cursor = editor.document().find(
+                ch2, start_pos, QTextDocument.FindCaseSensitively
+            )
+            if cursor.isNull():
+                break
+            ch_pos = cursor.position() - 2
+            idx_found += 1
+            if idx_found == num:
+                break
+            start_pos = cursor.position()
+
+        return self._set_motion_info(ch_pos, motion_type=MotionType.CharWise)
+
+    def rsneak(self, ch2, num=1, by_repeat_cmd=False):
+        """Get the position of the previous occurrence of two characters."""
+        if by_repeat_cmd is False:
+            self.vim_status.find_info.set("S", ch2)
+
+        editor = self.get_editor()
+
+        cur_pos = editor.textCursor().position()
+        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        start_pos = min([view_end_pos, cur_pos])
+
+        idx_found = 0
+        ch_pos = None
+        while view_start_pos <= start_pos <= view_end_pos:
+            cursor = editor.document().find(
+                ch2,
+                start_pos,
+                QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
+            )
+            if cursor.isNull():
+                break
+            ch_pos = cursor.position() - 2
+            idx_found += 1
+            if idx_found == num:
+                break
+            start_pos = cursor.position() - 3
+
+        return self._set_motion_info(ch_pos, motion_type=MotionType.CharWise)
+
     def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, F or T."""
         name = self.vim_status.find_info.cmd_name
@@ -1066,7 +1137,7 @@ class HelperMotion:
                 motion_info.sel_end = None
 
         return motion_info
-    
+
     def search(self, txt: str):
         """Search regular expressions key inside document(from spyder_vim)."""
         editor = self.get_editor()

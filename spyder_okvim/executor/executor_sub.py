@@ -4,6 +4,9 @@
 # Standard library imports
 import re
 
+# Third party imports
+from spyder.config.manager import CONF
+
 # Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
@@ -16,6 +19,7 @@ from spyder_okvim.executor.executor_surround import (
     ExecutorChangeSurround,
     ExecutorDeleteSurround,
 )
+from spyder_okvim.spyder.config import CONF_SECTION
 
 
 class ExecutorSubMotion_i(ExecutorSubBase):
@@ -92,7 +96,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;, \b\r*#"
+        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;, \b\r*#z"
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
@@ -100,6 +104,7 @@ class ExecutorSubMotion(ExecutorSubBase):
         self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
+        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
 
     def __call__(self, txt):
         """Parse command and execute."""
@@ -375,6 +380,19 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
+    def z(self, num=1, num_str=""):
+        """Execute sneak."""
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
+
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+            executor_sub.set_func_list_deferred(
+                self.func_list_deferred, self.return_deferred
+            )
+
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
 
 class ExecutorSubMotion_d(ExecutorSubMotion):
     """Replace w, W for d command in normal."""
@@ -617,6 +635,35 @@ class ExecutorSubCmd_f_t(ExecutorSubBase):
             else:
                 num = self.parent_num[0] * self.parent_num[-1]
             motion_info = method(ch, num)
+            return self.process_return(self.execute_func_deferred(motion_info))
+
+        return True
+
+
+class ExecutorSubCmdSneak(ExecutorSubBase):
+    """Submode of sneak"""
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+    def __call__(self, ch2: str):
+        """Go to the occurrence of character and execute."""
+        if len(ch2) < 2:
+            return False
+        ch_previous = self.vim_status.input_cmd.cmd[-1]
+        method = self.helper_motion.find_cmd_map.get(ch_previous, None)
+
+        self.update_input_cmd_info(None, None, ch2)
+
+        self.vim_status.sub_mode = None
+
+        if method:
+            if len(self.parent_num) == 1:
+                num = self.parent_num[0]
+            else:
+                num = self.parent_num[0] * self.parent_num[-1]
+            motion_info = method(ch2, num)
             return self.process_return(self.execute_func_deferred(motion_info))
 
         return True

@@ -149,3 +149,12 @@ You can use EasyMotion commands as an argument for d, c, or any other command th
 | `<leader><leader> k`                | Start of line backwards                                                                                        |
 | `<leader><leader> f <char>`         | Find character forwards                                                                                        |
 | `<leader><leader> F <char>`         | Find character backwards                                                                                       |
+
+## Search 2ch(like vim-sneak)
+
+Jump to any location specified by two characters.
+
+It works with multiple lines, operators (including repeat .) motion-repeat (; and ,), visual mode.
+
+This search is invoked with s by exactly two characters.
+This search is invoked with operators via z (because s is taken by vim surround)

@@ -7,6 +7,8 @@ import re
 # Third party imports
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QTextCursor
+from spyder.config.manager import CONF
+from spyder_okvim.spyder.config import CONF_SECTION
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
@@ -15,10 +17,14 @@ from spyder_okvim.executor.executor_base import (
     ExecutorBase,
 )
 from spyder_okvim.executor.executor_colon import ExecutorColon
+from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
+    ExecutorSubCmd_alnum,
+    ExecutorSubCmd_closesquarebracket,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
+    ExecutorSubCmd_opensquarebracket,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
     ExecutorSubCmd_z,
@@ -27,11 +33,8 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubMotion_c,
     ExecutorSubMotion_d,
     ExecutorSubMotion_y,
-    ExecutorSubCmd_alnum,
-    ExecutorSubCmd_opensquarebracket,
-    ExecutorSubCmd_closesquarebracket,
+    ExecutorSubCmdSneak,
 )
-from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
@@ -64,6 +67,7 @@ class ExecutorNormalCmd(ExecutorBase):
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
+        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
         self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
             vim_status
         )
@@ -504,24 +508,46 @@ class ExecutorNormalCmd(ExecutorBase):
 
     def s(self, num=1, num_str=""):
         """Delete characters and start insert."""
-        motion_info = self.helper_motion.l(num, num_str)
-        self.helper_action.yank(motion_info)
-        self.helper_action.delete(motion_info, is_insert=True)
-        self.get_editor().setFocus()
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
+
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred(
+                [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+            )
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        else:
+            motion_info = self.helper_motion.l(num, num_str)
+            self.helper_action.yank(motion_info)
+            self.helper_action.delete(motion_info, is_insert=True)
+            self.get_editor().setFocus()
 
     def S(self, num=1, num_str=""):
         """Delete characters and start insert."""
-        cursor = self.get_cursor()
-        block = cursor.block()
-        txt = block.text()
-        n_space = len(txt) - len(txt.lstrip())
+        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
+        if use_sneak:
+            executor_sub = self.executor_sub_sneak
 
-        motion_info = self.helper_motion.j(num - 1, num_str)
-        self.helper_action.yank(motion_info)
-        self.helper_action.delete(
-            motion_info, is_insert=True, replace_txt=" " * n_space
-        )
-        self.get_editor().setFocus()
+            self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+            executor_sub.set_func_list_deferred(
+                [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+            )
+            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        else:
+            cursor = self.get_cursor()
+            block = cursor.block()
+            txt = block.text()
+            n_space = len(txt) - len(txt.lstrip())
+
+            motion_info = self.helper_motion.j(num - 1, num_str)
+            self.helper_action.yank(motion_info)
+            self.helper_action.delete(
+                motion_info, is_insert=True, replace_txt=" " * n_space
+            )
+            self.get_editor().setFocus()
 
     def x(self, num=1, num_str=""):
         """Delete characters and start insert."""
