@@ -41,6 +41,8 @@ def test_run_cell_and_advance(vim_bot):
     """Test run_cell_and_advance."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.to_normal()
 
     cmd_line = vim.vim_cmd.commandline
     with qtbot.waitSignal(editor.sig_run_cell_and_advance, timeout=1000) as blocker:
@@ -55,6 +57,8 @@ def test_run_selection(vim_bot):
     """Test run_selection."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.to_normal()
 
     cmd_line = vim.vim_cmd.commandline
     with qtbot.waitSignal(editor.sig_run_selection, timeout=1000) as blocker:
@@ -77,6 +81,8 @@ def test_formatting(vim_bot):
     """Test formatting."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.to_normal()
 
     editor.format_document_or_range = Mock()
 

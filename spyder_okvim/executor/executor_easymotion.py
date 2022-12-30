@@ -162,7 +162,6 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
             cursor = editor.document().find(
                 characters, start_pos, QTextDocument.FindBackward
             )
-            print(cursor.position())
             if cursor.isNull():
                 break
             positions.append(cursor.position() - len(characters))
