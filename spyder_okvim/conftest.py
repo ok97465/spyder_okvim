@@ -6,6 +6,8 @@ from unittest.mock import Mock
 
 # Third party imports
 import pytest
+import requests
+from pytestqt.plugin import QtBot
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QVBoxLayout, QWidget
 from spyder.config.manager import CONF
@@ -60,7 +62,7 @@ class StatusBarMock(QWidget):
 class MainMock(QWidget):
     """Spyder MainWindow mock."""
 
-    def __init__(self, editor_stack, qtbot):
+    def __init__(self, editor_stack, qtbot_module):
         """Main Window Mock constructor."""
         QWidget.__init__(self, None)
         self.main = QWidget()
@@ -82,16 +84,24 @@ class MainMock(QWidget):
                 CONF.set(name, key, val)
 
         self.add_dockwidget = Mock()
-        # qtbot.add_widget(self.main)
-        # qtbot.add_widget(self.editor)
-        # qtbot.add_widget(self.status_bar)
+
+        qtbot_module.add_widget(self.main)
+        qtbot_module.add_widget(self.editor)
+        qtbot_module.add_widget(self.status_bar)
 
     def get_plugin(self, dummy, error=True):
         return self.status_bar
 
 
-@pytest.fixture
-def editor_bot(qtbot):
+@pytest.fixture(scope="session")
+def qtbot_module(qapp, request):
+    """Module fixture for qtbot."""
+    result = QtBot(request)
+    return result
+
+
+@pytest.fixture(scope="session", autouse=True)
+def vim_bot(qtbot_module):
     """Editorstack pytest fixture."""
     text = (
         "   123\n" "line 1\n" "line 2\n" "line 3\n" "line 4"
@@ -107,30 +117,33 @@ def editor_bot(qtbot):
 
     editor_stack.set_find_widget(Mock())
     editor_stack.set_io_actions(Mock(), Mock(), Mock(), Mock())
-    finfo = editor_stack.new(osp.join(LOCATION, "foo.py"), "utf-8", text)
-    editor_stack.new(osp.join(LOCATION, "foo1.py"), "utf-8", text)
-    editor_stack.new(osp.join(LOCATION, "foo2.py"), "utf-8", text)
-    editor_stack.new(osp.join(LOCATION, "foo3.py"), "utf-8", text)
-    main = MainMock(editor_stack, qtbot)
+    finfo0 = editor_stack.new(osp.join(LOCATION, "foo.py"), "utf-8", text)
+    finfo1 = editor_stack.new(osp.join(LOCATION, "foo1.py"), "utf-8", text)
+    finfo2 = editor_stack.new(osp.join(LOCATION, "foo2.py"), "utf-8", text)
+    finfo3 = editor_stack.new(osp.join(LOCATION, "foo3.py"), "utf-8", text)
+    main = MainMock(editor_stack, qtbot_module)
 
-    # qtbot.add_widget(editor_stack)
-    # qtbot.add_widget(main)
+    vim = VimTesting(main, None)
+    vim.on_initialize()
 
-    # Hide GUI
-    # qtbot.addWidget(main)
-    # return main, editor_stack, finfo.editor, qtbot
+    qtbot_module.addWidget(editor_stack)
+    qtbot_module.addWidget(finfo0.editor)
+    qtbot_module.addWidget(finfo1.editor)
+    qtbot_module.addWidget(finfo2.editor)
+    qtbot_module.addWidget(finfo3.editor)
+    qtbot_module.addWidget(main)
 
     # Show GUI
     main.show()
-    yield main, editor_stack, finfo.editor, qtbot
-    # editor_stack.destroy()
-    main.destroy()
+    yield main, editor_stack, finfo0.editor, vim, qtbot_module
 
+    finfo0.editor.close()
+    finfo1.editor.close()
+    finfo2.editor.close()
+    finfo3.editor.close()
+    finfo0.deleteLater()
+    finfo1.deleteLater()
+    finfo2.deleteLater()
+    finfo3.deleteLater()
+    editor_stack.deleteLater()
 
-@pytest.fixture
-def vim_bot(editor_bot):
-    """Create an spyder-vim plugin instance."""
-    main, editor_stack, editor, qtbot = editor_bot
-    vim = VimTesting(main, None)
-    vim.on_initialize()
-    return main, editor_stack, editor, vim, qtbot

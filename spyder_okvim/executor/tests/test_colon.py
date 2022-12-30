@@ -17,6 +17,8 @@ def test_colon_cmd(vim_bot, text, cmd_list, cmd_line_expected):
     """Test colon command."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -39,6 +41,8 @@ def test_colon_corner_case_cmd(vim_bot, text, cmd_list):
     """Test colon command."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -59,6 +63,7 @@ def test_colon_w_command(vim_bot):
     qtbot.keyClicks(cmd_line, "w")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.save_action.trigger.assert_called_once_with()
+    main.editor.save_action.trigger.reset_mock()
 
 
 def test_colon_q_command(vim_bot):
@@ -69,6 +74,7 @@ def test_colon_q_command(vim_bot):
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.close_action.trigger.assert_called_once_with()
+    main.editor.close_action.trigger.reset_mock()
 
 
 def test_colon_qexclamation_command(vim_bot):
@@ -80,6 +86,7 @@ def test_colon_qexclamation_command(vim_bot):
     qtbot.keyClicks(cmd_line, "!")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.close_action.trigger.assert_called_once_with()
+    main.editor.close_action.trigger.reset_mock()
 
 
 def test_colon_wq_command(vim_bot):
@@ -92,6 +99,8 @@ def test_colon_wq_command(vim_bot):
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.close_action.trigger.assert_called_once_with()
     main.editor.save_action.trigger.assert_called_once_with()
+    main.editor.close_action.trigger.reset_mock()
+    main.editor.save_action.trigger.reset_mock()
 
 
 def test_colon_n_command(vim_bot):

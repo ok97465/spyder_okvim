@@ -679,6 +679,34 @@ class VimStatus(QObject):
             self.cursor.set_cursor_pos(pos - 1)
         self.change_label.emit(VimState.NORMAL)
 
+    def reset_for_test(self):
+        """Reset status for test."""
+        self.clear_state()
+
+        self.find_info = FindInfo()
+        self.input_cmd = InputCmdInfo("", "")
+        self.input_cmd_prev = InputCmdInfo("", "")
+        self.dot_cmd.clear_key_list()
+        self.running_dot_cmd = False
+
+        self.get_editor().clear_extra_selections("hl_yank")
+
+        # register
+        self.register_dict = defaultdict(RegisterInfo)
+
+        # config
+        self.indent = "    "
+
+        # search
+        self.search = SearchInfo(self.cursor)
+
+        # Macro
+        self.manager_macro = ManagerMacro()
+
+        self.msg_label.setText("")
+
+        self.to_normal()
+
     def to_insert(self):
         """Change vim state to insert mode."""
         self.is_visual_mode = False

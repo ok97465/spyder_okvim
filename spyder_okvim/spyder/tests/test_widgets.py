@@ -50,6 +50,8 @@ def test_apply_config(vim_bot):
     """Run apply_plugin_settings method."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("foo Foo foo Foo")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
 
     # test refresh the color of search result.
     cmd_line = vim.vim_cmd.commandline
@@ -63,6 +65,8 @@ def test_ctrl_u_b(vim_bot):
     """Test ^u ^b."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "j")
@@ -86,6 +90,8 @@ def test_ctrl_d_f(vim_bot):
     """Test ^d ^f."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
 
@@ -108,6 +114,8 @@ def test_message(vim_bot):
     """Test message."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\nd\ne")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "y2j")
