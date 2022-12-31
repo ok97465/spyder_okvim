@@ -2,26 +2,34 @@
 """Status of Vim."""
 # Standard library imports
 from collections import defaultdict
-from typing import NamedTuple, List
+from typing import List
 
 # Third party imports
-from qtpy.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot, QRegularExpression
+from qtpy.QtCore import (
+    QEvent,
+    QObject,
+    Qt,
+    QRegularExpression,
+    QTimer,
+    Signal,
+    Slot,
+)
 from qtpy.QtGui import (
     QBrush,
     QColor,
     QKeyEvent,
+    QRegularExpressionValidator,
     QTextCursor,
     QValidator,
-    QRegularExpressionValidator,
 )
-from qtpy.QtWidgets import QApplication, QTextEdit
+from qtpy.QtWidgets import QApplication, QLabel, QTextEdit
 from spyder.config.manager import CONF
 from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.easymotion import ManageMarkerEasymotion, PainterEasyMotion
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
-from spyder_okvim.utils.easymotion import PainterEasyMotion, ManageMarkerEasymotion
 
 
 class VimState:
@@ -244,6 +252,30 @@ class ManagerMacro:
         """Add keyevent from editor."""
         self.registers[self.reg_name_for_record].append(
             KeyInfo(event.key(), event.text(), event.modifiers(), 1)
+        )
+
+
+class LabelOnTxt(QLabel):
+    """Label on txt."""
+
+    def __init__(self, parent=None):
+        """."""
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+
+    def set_style(self, font_family: str, font_size_pt: int):
+        """Set stylesheet."""
+        self.setStyleSheet(
+            f"""QLabel {{ 
+            background-color : #222b35;
+            color : #cd4340;
+            border: 1px solid #cd4340;
+            padding : 0px;
+            text-indent : 1px; 
+            margin : 0px;
+            font-family: {font_family};
+            font-size: {font_size_pt}pt;
+            }}"""
         )
 
 
@@ -657,6 +689,13 @@ class VimStatus(QObject):
         self.manager_marker_easymotion = ManageMarkerEasymotion()
         self.editor_connected_easymotion = None
 
+        # Sneak
+        self.n_annotate_max = 50
+        self.labels_for_annotate = [
+            LabelOnTxt(self.main) for _ in range(self.n_annotate_max)
+        ]
+        self.hide_annotate_on_txt()
+
     def clear_state(self):
         """Clear."""
         self.is_visual_mode = False
@@ -921,3 +960,39 @@ class VimStatus(QObject):
         if editor:
             editor.viewport().removeEventFilter(self.painter_easymotion)
             editor.viewport().update()
+
+    @Slot()
+    def hide_annotate_on_txt(self):
+        """Hide Labels for annotate on txt."""
+        for idx in range(self.n_annotate_max):
+            self.labels_for_annotate[idx].hide()
+
+    def annotate_on_txt(self, info: dict[int, str], timeout: int = -1):
+        """Annotate on txt."""
+        editor = self.get_editor()
+        tc = editor.textCursor()
+        font = editor.viewport().font()
+        fm = editor.fontMetrics()
+        ch_width = fm.width("H")
+        ch_height = fm.height()
+
+        for idx, (pos, data) in enumerate(info.items()):
+            label = self.labels_for_annotate[idx]
+            label.set_style(font.family(), font.pointSize())
+            label.setFixedSize(ch_width * len(data), ch_height)
+            label.setText(data)
+
+            tc.setPosition(pos)
+            rect_in_local = editor.cursorRect(tc)
+            pos_in_parent = editor.viewport().mapTo(
+                label.parent(), rect_in_local.topLeft()
+            )
+            print(pos_in_parent)
+            label.move(pos_in_parent)
+            label.raise_()
+            label.show()
+
+            if idx > self.n_annotate_max - 1:
+                break
+
+        QTimer.singleShot(timeout, self.hide_annotate_on_txt)

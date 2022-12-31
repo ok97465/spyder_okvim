@@ -685,61 +685,91 @@ class HelperMotion:
 
         return start_pos, end_pos
 
-    def sneak(self, ch2, num=1, by_repeat_cmd=False):
-        """Get the position of the next occurrence of two characters."""
-        if by_repeat_cmd is False:
-            self.vim_status.find_info.set("s", ch2)
-
+    def search_forward_in_view(self, txt: str) -> list[int]:
+        """."""
         editor = self.get_editor()
 
         cur_pos = editor.textCursor().position()
         view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
         start_pos = min([view_end_pos, cur_pos]) + 1
 
-        idx_found = 0
-        ch_pos = None
+        pos_list = []
         while view_start_pos <= start_pos <= view_end_pos:
             cursor = editor.document().find(
-                ch2, start_pos, QTextDocument.FindCaseSensitively
+                txt, start_pos, QTextDocument.FindCaseSensitively
             )
-            if cursor.isNull():
+            if cursor.isNull() or cursor.position() > view_end_pos:
                 break
-            ch_pos = cursor.position() - 2
-            idx_found += 1
-            if idx_found == num:
-                break
+            pos_list.append(cursor.position() - len(txt))
             start_pos = cursor.position()
+
+        return pos_list
+
+    def sneak(self, ch2, num=1, by_repeat_cmd=False):
+        """Get the position of the next occurrence of two characters."""
+        if by_repeat_cmd is False:
+            self.vim_status.find_info.set("s", ch2)
+
+        ch_pos = None
+
+        pos_list = self.search_forward_in_view(ch2)
+        if pos_list:
+            n_pos = len(pos_list)
+            ch_pos = pos_list[(num - 1) % n_pos]
 
         return self._set_motion_info(ch_pos, motion_type=MotionType.CharWise)
 
-    def rsneak(self, ch2, num=1, by_repeat_cmd=False):
-        """Get the position of the previous occurrence of two characters."""
-        if by_repeat_cmd is False:
-            self.vim_status.find_info.set("S", ch2)
+    def display_another_group_after_sneak(self):
+        """Display group after sneak."""
+        pos_list = self.search_forward_in_view(self.vim_status.find_info.ch)
+        info_group = {}
+        for idx, pos in enumerate(pos_list, 1):
+            info_group[pos + 1] = f"{idx};" if idx != 1 else ";"
 
+        self.vim_status.annotate_on_txt(info_group, timeout=1500)
+
+    def search_backward_in_view(self, txt: str) -> list[int]:
+        """."""
         editor = self.get_editor()
 
         cur_pos = editor.textCursor().position()
         view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
         start_pos = min([view_end_pos, cur_pos])
 
-        idx_found = 0
-        ch_pos = None
+        pos_list = []
         while view_start_pos <= start_pos <= view_end_pos:
             cursor = editor.document().find(
-                ch2,
-                start_pos,
-                QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
+                txt, start_pos, QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
             )
-            if cursor.isNull():
+            if cursor.isNull() or cursor.position() < view_start_pos:
                 break
-            ch_pos = cursor.position() - 2
-            idx_found += 1
-            if idx_found == num:
-                break
-            start_pos = cursor.position() - 3
+            pos_list.append(cursor.position() - len(txt))
+            start_pos = cursor.position() - len(txt) - 1
+
+        return pos_list
+
+    def rsneak(self, ch2, num=1, by_repeat_cmd=False):
+        """Get the position of the previous occurrence of two characters."""
+        if by_repeat_cmd is False:
+            self.vim_status.find_info.set("S", ch2)
+
+        ch_pos = None
+
+        pos_list = self.search_backward_in_view(ch2)
+        if pos_list:
+            n_pos = len(pos_list)
+            ch_pos = pos_list[(num - 1) % n_pos]
 
         return self._set_motion_info(ch_pos, motion_type=MotionType.CharWise)
+
+    def display_another_group_after_rsneak(self):
+        """Display group after sneak."""
+        pos_list = self.search_backward_in_view(self.vim_status.find_info.ch)
+        info_group = {}
+        for idx, pos in enumerate(pos_list, 1):
+            info_group[pos + 1] = f"{idx};" if idx != 1 else ";"
+
+        self.vim_status.annotate_on_txt(info_group, timeout=1500)
 
     def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, F or T."""

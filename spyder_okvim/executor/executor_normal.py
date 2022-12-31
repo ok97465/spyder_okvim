@@ -515,7 +515,12 @@ class ExecutorNormalCmd(ExecutorBase):
             self.set_parent_info_to_submode(executor_sub, num, num_str)
 
             executor_sub.set_func_list_deferred(
-                [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+                [
+                    FUNC_INFO(self.apply_motion_info_in_normal, True),
+                    FUNC_INFO(
+                        self.helper_motion.display_another_group_after_sneak, False
+                    ),
+                ]
             )
             return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
         else:
@@ -533,7 +538,12 @@ class ExecutorNormalCmd(ExecutorBase):
             self.set_parent_info_to_submode(executor_sub, num, num_str)
 
             executor_sub.set_func_list_deferred(
-                [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+                [
+                    FUNC_INFO(self.apply_motion_info_in_normal, True),
+                    FUNC_INFO(
+                        self.helper_motion.display_another_group_after_rsneak, False
+                    ),
+                ]
             )
             return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
         else:

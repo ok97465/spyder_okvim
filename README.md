@@ -158,3 +158,6 @@ It works with multiple lines, operators (including repeat .) motion-repeat (; an
 
 This search is invoked with s by exactly two characters.
 This search is invoked with operators via z (because s is taken by vim surround)
+
+After searching for two characters, if there are the characters in another group, a comment is displayed around the group.
+![sneak](/doc/sneak.gif)
