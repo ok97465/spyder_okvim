@@ -602,6 +602,7 @@ def test_F_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
 
+
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
     [
@@ -612,9 +613,6 @@ def test_F_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         ("d\ndhr Dhr dhr", ["v", "sdh"], 2, [0, 3]),
         ("d\ndhr Dhr dhr", ["v", "sdh", ";"], 10, [0, 11]),
         ("d\ndhr Dhr dhr", ["v", "sdh", ";,"], 2, [0, 3]),
-        ("d\ndhr Dhr dhr", ["v", "j$" "Sdh"], 10, [0, 11]),
-        ("d\ndhr Dhr dhr", ["v", "j$" "Sdh", ";"], 2, [0, 3]),
-        ("d\ndhr Dhr dhr", ["v", "j$" "Sdh", ";,"], 10, [0, 11]),
     ],
 )
 def test_sneak_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
@@ -638,6 +636,7 @@ def test_sneak_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
+
 
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",

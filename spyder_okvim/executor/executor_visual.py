@@ -367,31 +367,13 @@ class ExecutorVisualCmd(ExecutorBase):
 
     def S(self, num=1, num_str=""):
         """Add surroundings: parentheses, brackets, quotes."""
+        self.vim_status.set_message("")
+        executor_sub = self.executor_sub_surround
 
-        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
-        if use_sneak:
-            executor_sub = self.executor_sub_sneak
+        executor_sub.pos_start = self.get_pos_start_in_selection()
+        executor_sub.pos_end = self.get_pos_end_in_selection()
 
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-            executor_sub.set_func_list_deferred(
-                [
-                    FUNC_INFO(self.apply_motion_info_in_visual, True),
-                    FUNC_INFO(
-                        self.helper_motion.display_another_group_after_rsneak, False
-                    ),
-                ]
-            )
-
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-        else:
-            self.vim_status.set_message("")
-            executor_sub = self.executor_sub_surround
-
-            executor_sub.pos_start = self.get_pos_start_in_selection()
-            executor_sub.pos_end = self.get_pos_end_in_selection()
-
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def y(self, num=1, num_str=""):
         """Yank selected text."""
