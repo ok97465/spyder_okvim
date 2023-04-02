@@ -21,7 +21,7 @@ setup(
     description="A plugin to enable vim keybindings to the spyder editor",
     license="MIT license",
     url="https://github.com/ok97465/spyder_okvim",
-    install_requires=["spyder>=5.3.3"],
+    install_requires=[],
     packages=find_packages(),
     entry_points={
         "spyder.plugins": ["spyder_okvim = spyder_okvim.spyder.plugin:OkVim"],
