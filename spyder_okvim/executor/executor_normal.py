@@ -7,7 +7,7 @@ import re
 # Third party imports
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QTextCursor
-from spyder.config.manager import CONF
+from spyder.plugins.config.manager import CONF
 from spyder_okvim.spyder.config import CONF_SECTION
 
 # Local imports

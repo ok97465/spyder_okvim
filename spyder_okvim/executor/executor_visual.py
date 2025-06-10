@@ -5,7 +5,7 @@
 import re
 
 # Third party imports
-from spyder.config.manager import CONF
+from spyder.plugins.config.manager import CONF
 
 # Local imports
 from spyder_okvim.executor.executor_base import (

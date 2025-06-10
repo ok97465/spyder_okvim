@@ -3,7 +3,7 @@
 # Third party imports
 import pytest
 from qtpy.QtCore import Qt
-from spyder.config.manager import CONF
+from spyder.plugins.config.manager import CONF
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION

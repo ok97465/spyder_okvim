@@ -17,9 +17,9 @@ from functools import wraps
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QKeySequence, QTextCursor
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
-from spyder.api.config.decorators import on_conf_change
-from spyder.api.widgets.main_widget import PluginMainWidget
-from spyder.config.manager import CONF
+from spyder.plugins.api.config.decorators import on_conf_change
+from spyder.plugins.api.widgets.main_widget import PluginMainWidget
+from spyder.plugins.config.manager import CONF
 
 # Local imports
 from spyder_okvim.executor import (

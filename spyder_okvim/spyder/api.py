@@ -9,7 +9,7 @@ Spyder Custom Layout API.
 """
 
 from spyder.api.plugins import Plugins
-from spyder.plugins.layout.api import BaseGridLayoutType
+from spyder.plugins.mainwindow.api import BaseGridLayoutType
 
 
 class SpyderCustomLayouts:

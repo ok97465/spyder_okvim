@@ -10,7 +10,7 @@ from typing import Optional
 from qtpy.QtCore import QPoint, QRegularExpression
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtWidgets import QTextEdit
-from spyder.config.manager import CONF
+from spyder.plugins.config.manager import CONF
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION

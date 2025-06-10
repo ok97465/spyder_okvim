@@ -8,7 +8,7 @@
 from qtpy.QtCore import QRegExp, Qt
 from qtpy.QtGui import QRegExpValidator, QKeySequence
 from qtpy.QtWidgets import QGridLayout, QGroupBox, QHBoxLayout, QVBoxLayout, QLineEdit
-from spyder.api.preferences import PluginConfigPage
+from spyder.plugins.api.preferences import PluginConfigPage
 
 
 class OkvimConfigPage(PluginConfigPage):

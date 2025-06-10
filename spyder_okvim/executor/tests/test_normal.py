@@ -8,7 +8,7 @@ import pytest
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QTextCursor, QKeyEvent
 from qtpy.QtWidgets import QApplication
-from spyder.config.manager import CONF
+from spyder.plugins.config.manager import CONF
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION
