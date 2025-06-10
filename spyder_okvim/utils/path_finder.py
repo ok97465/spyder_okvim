@@ -14,7 +14,7 @@ from qtpy.QtWidgets import (
     QListView,
     QVBoxLayout,
 )
-from spyder.config.gui import get_font
+from spyder.plugins.config.gui import get_font
 
 
 def fuzzyfinder(query, collection):

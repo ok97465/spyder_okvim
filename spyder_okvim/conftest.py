@@ -10,8 +10,8 @@ import requests
 from pytestqt.plugin import QtBot
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QVBoxLayout, QWidget
-from spyder.config.manager import CONF
-from spyder.plugins.editor.widgets.editor import EditorStack
+from spyder.plugins.config.manager import CONF
+from spyder.plugins.editor.widgets.main_widget import EditorStack
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION

@@ -23,8 +23,8 @@ from qtpy.QtGui import (
     QValidator,
 )
 from qtpy.QtWidgets import QApplication, QLabel, QTextEdit
-from spyder.config.manager import CONF
-from spyder.plugins.editor.api.decoration import DRAW_ORDERS
+from spyder.plugins.config.manager import CONF
+from spyder.plugins.editor.utils.decoration import DRAW_ORDERS
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION

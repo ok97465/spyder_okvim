@@ -11,10 +11,10 @@ import qtawesome as qta
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QHBoxLayout, QShortcut
-from spyder.api.plugin_registration.decorators import on_plugin_available
-from spyder.api.plugins import Plugins, SpyderDockablePlugin
-from spyder.api.widgets.status import StatusBarWidget
-from spyder.utils.icon_manager import MAIN_FG_COLOR
+from spyder.api.plugins import on_plugin_available
+from spyder.plugins.api import Plugins, SpyderDockablePlugin
+from spyder.plugins.api.widgets.status import StatusBarWidget
+from spyder.utils.icon_manager import get_icon_color as MAIN_FG_COLOR
 
 # Local imports
 from spyder_okvim.spyder.api import CustomLayout
