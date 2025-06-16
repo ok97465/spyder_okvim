@@ -113,11 +113,13 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Return name."""
         return CONF_SECTION
 
-    def get_description(self):
+    @staticmethod
+    def get_description():
         """Return description."""
         return "A plugin for Spyder to enable Vim keybindings"
 
-    def get_icon(self):
+    @classmethod
+    def get_icon(cls):
         """Return widget icon."""
         return qta.icon("mdi.vimeo", color=MAIN_FG_COLOR)
 
@@ -148,8 +150,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         preferences = self.get_plugin(Plugins.Preferences)
         preferences.register_plugin_preferences(self)
 
-    def check_compatibility(self):
-        """."""
+    @staticmethod
+    def check_compatibility():
+        """Check plugin compatibility."""
         valid = True
         message = ""  # Note: Remember to use _("") to localize the string
         return valid, message
