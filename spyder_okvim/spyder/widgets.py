@@ -284,19 +284,23 @@ class VimStateLabel(QLabel):
     @Slot(int)
     def change_state(self, state):
         """Display the state of vim."""
-        self.setStyleSheet("QLabel { color: white }")
-        if state == VimState.VISUAL:
-            self.setText("VISUAL")
-            self.setStyleSheet("QLabel { background-color: #ff8000 }")
-        elif state == VimState.NORMAL:
-            self.setText("NORMAL")
-            self.setStyleSheet("QLabel { background-color: #29a329 }")
-        elif state == VimState.VLINE:
-            self.setText("V-LINE")
-            self.setStyleSheet("QLabel { background-color: #ff8000 }")
-        elif state == VimState.INSERT:
-            self.setText("INSERT")
-            self.setStyleSheet("QLabel { background-color: #3366ff }")
+        try:
+            self.setStyleSheet("QLabel { color: white }")
+            if state == VimState.VISUAL:
+                self.setText("VISUAL")
+                self.setStyleSheet("QLabel { background-color: #ff8000 }")
+            elif state == VimState.NORMAL:
+                self.setText("NORMAL")
+                self.setStyleSheet("QLabel { background-color: #29a329 }")
+            elif state == VimState.VLINE:
+                self.setText("V-LINE")
+                self.setStyleSheet("QLabel { background-color: #ff8000 }")
+            elif state == VimState.INSERT:
+                self.setText("INSERT")
+                self.setStyleSheet("QLabel { background-color: #3366ff }")
+        except RuntimeError:
+            # Ignore updates to deleted widgets
+            pass
 
 
 class VimLineEdit(QLineEdit):
@@ -369,9 +373,13 @@ class VimLineEdit(QLineEdit):
 
     def focusOutEvent(self, event):
         """Override Qt method."""
-        super().focusInEvent(event)
+        super().focusOutEvent(event)
         self.clear()
-        self.vim_widget.vim_status.to_insert()
+        try:
+            self.vim_widget.vim_status.to_insert()
+        except RuntimeError:
+            # The status may already be deleted when closing widgets
+            pass
 
 
 class VimMsgLabel(QLabel):

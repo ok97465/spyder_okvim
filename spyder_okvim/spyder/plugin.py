@@ -26,33 +26,40 @@ from spyder_okvim.spyder.widgets import SpyderOkVimPane, VimWidget
 class StatusBarVimWidget(StatusBarWidget):
     """Status bar widget for okvim."""
 
-    CONF_SECTION = CONF_SECTION + "_status_bar"
-    ID = CONF_SECTION + "_status_bar"
+    ID = f"{CONF_SECTION}_status_bar"
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
         """Status bar widget base."""
-        super(StatusBarVimWidget, self).__init__(parent)
+        self.msg_label = msg_label
+        self.status_label = status_label
+        self.cmd_line = cmd_line
+        super().__init__(parent, show_icon=False, show_label=False)
 
-        width_msg = msg_label.width()
-        width_status = status_label.width()
-        width_cmd = cmd_line.width()
+    # ---- Private API -------------------------------------------------
+    def _set_layout(self):
+        """Set layout for the status bar widget."""
         spacing_post = 32
         spacing = 5
 
-        width_total = width_msg + width_status + width_cmd
+        width_msg = self.msg_label.sizeHint().width()
+        width_status = self.status_label.sizeHint().width()
+        width_cmd = self.cmd_line.sizeHint().width()
 
-        layout = QHBoxLayout()
+        width_total = width_msg + width_status + width_cmd
+        if width_total == 0:
+            width_total = 1
+
+        layout = QHBoxLayout(self)
         layout.setSpacing(spacing)
-        layout.addWidget(msg_label, int(width_msg / width_total * 100))
-        layout.addWidget(status_label, int(width_status / width_total * 100))
-        layout.addWidget(cmd_line, int(width_cmd / width_total * 100))
+        layout.addWidget(self.msg_label)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.cmd_line)
         layout.addSpacing(spacing_post)
         layout.setContentsMargins(0, 0, 0, 0)
 
         width_total += 2 * spacing + spacing_post
-
-        self.setLayout(layout)
         self.setFixedWidth(width_total)
+        self.setLayout(layout)
 
     def set_layout(self):
         """."""
@@ -73,7 +80,7 @@ class StatusBarVimWidget(StatusBarWidget):
 
     def mouseReleaseEvent(self, event):
         """Override Qt method to allow for click signal."""
-        super(StatusBarWidget, self).mousePressEvent(event)
+        super().mouseReleaseEvent(event)
 
     # ---- API to be defined by user
     def get_tooltip(self):
@@ -113,11 +120,13 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Return name."""
         return CONF_SECTION
 
-    def get_description(self):
+    @staticmethod
+    def get_description():
         """Return description."""
         return "A plugin for Spyder to enable Vim keybindings"
 
-    def get_icon(self):
+    @classmethod
+    def get_icon(cls):
         """Return widget icon."""
         return qta.icon("mdi.vimeo", color=MAIN_FG_COLOR)
 
@@ -135,9 +144,11 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
 
+        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+
         sc = QShortcut(
             QKeySequence("Esc"),
-            vim_cmd.editor_widget.editorsplitter,
+            editorsplitter,
             vim_cmd.commandline.setFocus,
         )
         sc.setContext(Qt.WidgetWithChildrenShortcut)
@@ -148,8 +159,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         preferences = self.get_plugin(Plugins.Preferences)
         preferences.register_plugin_preferences(self)
 
-    def check_compatibility(self):
-        """."""
+    @staticmethod
+    def check_compatibility():
+        """Check plugin compatibility."""
         valid = True
         message = ""  # Note: Remember to use _("") to localize the string
         return valid, message

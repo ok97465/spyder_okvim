@@ -11,7 +11,7 @@ from pytestqt.plugin import QtBot
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QVBoxLayout, QWidget
 from spyder.config.manager import CONF
-from spyder.plugins.editor.widgets.editor import EditorStack
+from spyder.plugins.editor.widgets.editorstack import EditorStack
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
@@ -41,6 +41,10 @@ class EditorMock(QWidget):
         layout = QVBoxLayout()
         layout.addWidget(self.editor_stack)
         self.setLayout(layout)
+
+    def get_widget(self):
+        """Return self, mimicking Spyder 6 API."""
+        return self
 
     def get_current_editorstack(self):
         """Return EditorStack instance."""

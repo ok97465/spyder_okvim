@@ -61,18 +61,18 @@ class ExecutorColon(ExecutorSubBase):
 
     def w(self, arg=""):
         """Save current file."""
-        self.editor_widget.save_action.trigger()
+        self.editor_widget.get_widget().save_action.trigger()
         self.vim_status.cursor.draw_vim_cursor()
 
     def q(self, arg=""):
         """Close current file."""
-        self.editor_widget.close_action.trigger()
+        self.editor_widget.get_widget().close_action.trigger()
         self.vim_status.set_focus_to_vim()
 
     def qexclamation(self, arg=""):
         """Close current file without saving."""
         # TODO :
-        self.editor_widget.close_action.trigger()
+        self.editor_widget.get_widget().close_action.trigger()
         self.vim_status.set_focus_to_vim()
 
     def wq(self, arg=""):
@@ -82,5 +82,5 @@ class ExecutorColon(ExecutorSubBase):
 
     def n(self, args=""):
         """Create new file."""
-        self.editor_widget.new_action.trigger()
+        self.editor_widget.get_widget().new_action.trigger()
         self.vim_status.set_focus_to_vim()

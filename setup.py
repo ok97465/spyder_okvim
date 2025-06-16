@@ -22,7 +22,7 @@ setup(
     url="https://github.com/ok97465/spyder_okvim",
     install_requires=[
 		"python>=3.9",
-		"spyder>=5.3.3, <6.0.0"
+		"spyder>6"
     ],
     packages=find_packages(),
     entry_points={
