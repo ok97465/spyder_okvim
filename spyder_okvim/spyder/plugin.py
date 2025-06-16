@@ -144,11 +144,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
 
-        try:
-            editorsplitter = vim_cmd.editor_widget.editorsplitter
-        except AttributeError:
-            # Spyder 6 moved editorsplitter to the plugin widget
-            editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
         sc = QShortcut(
             QKeySequence("Esc"),
