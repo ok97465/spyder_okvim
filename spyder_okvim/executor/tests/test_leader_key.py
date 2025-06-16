@@ -39,42 +39,45 @@ def test_toggle_breakpoint(vim_bot):
 
 def test_run_cell_and_advance(vim_bot):
     """Test run_cell_and_advance."""
-    _, _, editor, vim, qtbot = vim_bot
+    _, editor_stack, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.to_normal()
 
     cmd_line = vim.vim_cmd.commandline
-    with qtbot.waitSignal(editor.sig_run_cell_and_advance, timeout=1000) as blocker:
+    with qtbot.waitSignal(editor_stack.sig_trigger_run_action, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyPress(cmd_line, Qt.Key_Enter)
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
+    assert blocker.args == ["run cell and advance"]
 
 
 def test_run_selection(vim_bot):
     """Test run_selection."""
-    _, _, editor, vim, qtbot = vim_bot
+    _, editor_stack, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.to_normal()
 
     cmd_line = vim.vim_cmd.commandline
-    with qtbot.waitSignal(editor.sig_run_selection, timeout=1000) as blocker:
+    with qtbot.waitSignal(editor_stack.sig_trigger_run_action, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyClicks(cmd_line, "r")
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
+    assert blocker.args == ["run selection and advance"]
 
     qtbot.keyClicks(cmd_line, "Vj")
-    with qtbot.waitSignal(editor.sig_run_selection, timeout=1000) as blocker:
+    with qtbot.waitSignal(editor_stack.sig_trigger_run_action, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyClicks(cmd_line, "r")
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
+    assert blocker.args == ["run selection and advance"]
 
 
 def test_formatting(vim_bot):
