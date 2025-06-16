@@ -26,37 +26,40 @@ from spyder_okvim.spyder.widgets import SpyderOkVimPane, VimWidget
 class StatusBarVimWidget(StatusBarWidget):
     """Status bar widget for okvim."""
 
-    CONF_SECTION = CONF_SECTION + "_status_bar"
-    ID = CONF_SECTION + "_status_bar"
+    ID = f"{CONF_SECTION}_status_bar"
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
         """Status bar widget base."""
-        super(StatusBarVimWidget, self).__init__(parent, show_icon=False,
-                                                 show_label=False)
+        self.msg_label = msg_label
+        self.status_label = status_label
+        self.cmd_line = cmd_line
+        super().__init__(parent, show_icon=False, show_label=False)
 
-        # Use size hints because widgets may not have a valid width yet
-        width_msg = msg_label.sizeHint().width()
-        width_status = status_label.sizeHint().width()
-        width_cmd = cmd_line.sizeHint().width()
+    # ---- Private API -------------------------------------------------
+    def _set_layout(self):
+        """Set layout for the status bar widget."""
         spacing_post = 32
         spacing = 5
+
+        width_msg = self.msg_label.sizeHint().width()
+        width_status = self.status_label.sizeHint().width()
+        width_cmd = self.cmd_line.sizeHint().width()
 
         width_total = width_msg + width_status + width_cmd
         if width_total == 0:
             width_total = 1
 
-        layout = QHBoxLayout()
+        layout = QHBoxLayout(self)
         layout.setSpacing(spacing)
-        layout.addWidget(msg_label, int(width_msg / width_total * 100))
-        layout.addWidget(status_label, int(width_status / width_total * 100))
-        layout.addWidget(cmd_line, int(width_cmd / width_total * 100))
+        layout.addWidget(self.msg_label)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.cmd_line)
         layout.addSpacing(spacing_post)
         layout.setContentsMargins(0, 0, 0, 0)
 
         width_total += 2 * spacing + spacing_post
-
-        self.setLayout(layout)
         self.setFixedWidth(width_total)
+        self.setLayout(layout)
 
     def set_layout(self):
         """."""
