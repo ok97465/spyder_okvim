@@ -1,6 +1,7 @@
-pytest < 7
+pytest < 8
 pytest-cov
 pytest-mock
 pytest-qt
 codecov
 flaky
+py
