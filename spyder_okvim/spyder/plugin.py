@@ -31,15 +31,19 @@ class StatusBarVimWidget(StatusBarWidget):
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
         """Status bar widget base."""
-        super(StatusBarVimWidget, self).__init__(parent)
+        super(StatusBarVimWidget, self).__init__(parent, show_icon=False,
+                                                 show_label=False)
 
-        width_msg = msg_label.width()
-        width_status = status_label.width()
-        width_cmd = cmd_line.width()
+        # Use size hints because widgets may not have a valid width yet
+        width_msg = msg_label.sizeHint().width()
+        width_status = status_label.sizeHint().width()
+        width_cmd = cmd_line.sizeHint().width()
         spacing_post = 32
         spacing = 5
 
         width_total = width_msg + width_status + width_cmd
+        if width_total == 0:
+            width_total = 1
 
         layout = QHBoxLayout()
         layout.setSpacing(spacing)
@@ -73,7 +77,7 @@ class StatusBarVimWidget(StatusBarWidget):
 
     def mouseReleaseEvent(self, event):
         """Override Qt method to allow for click signal."""
-        super(StatusBarWidget, self).mousePressEvent(event)
+        super().mouseReleaseEvent(event)
 
     # ---- API to be defined by user
     def get_tooltip(self):
