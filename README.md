@@ -127,6 +127,10 @@ The following motions are supported:
 - gc{motion} : toggle comment (support visual mode)
   - gcc : toggle comment of current line
 
+## Bookmarks
+
+Use `m{mark}` to set a bookmark at the current cursor position and `'` or \` to jump back to it. Uppercase marks are saved in Spyder's configuration folder so they persist across sessions.
+
 ## Vim Surround
 
 - surroundings : '"()[]{}bB

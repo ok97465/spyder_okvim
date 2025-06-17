@@ -96,12 +96,13 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;, \b\r*#z"
+        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;,`' \b\r*#z"
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
         self.executor_sub_motion_i = ExecutorSubMotion_i(vim_status)
         self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
+        self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
         self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
@@ -292,6 +293,28 @@ class ExecutorSubMotion(ExecutorSubBase):
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.comma(num)
         return self.execute_func_deferred(motion_info)
+
+    def apostrophe(self, num=1, num_str=""):
+        """Motion to line of mark."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        def run(ch):
+            motion_info = self.helper_motion.apostrophe(ch)
+            return self.execute_func_deferred(motion_info)
+
+        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def backtick(self, num=1, num_str=""):
+        """Motion to position of mark."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        def run(ch):
+            motion_info = self.helper_motion.backtick(ch)
+            return self.execute_func_deferred(motion_info)
+
+        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def i(self, num=1, num_str=""):
         """Select block exclusively."""
