@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spyder-okvim"
+version = "0.9.3"
+description = "Spyder Vim plugin"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "ok97465", email = "ok97465@kakao.com" }]
+dependencies = [
+    "spyder>=6",
+    "qtpy",
+]
+classifiers = [
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering"
+]
+
+[project.urls]
+Homepage = "https://github.com/ok97465/spyder_okvim"
+Source = "https://github.com/ok97465/spyder_okvim"
+"Bug Tracker" = "https://github.com/ok97465/spyder_okvim/issues"
+
+[project.entry-points."spyder.plugins"]
+spyder_okvim = "spyder_okvim.spyder.plugin:OkVim"

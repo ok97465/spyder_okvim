@@ -33,17 +33,34 @@ This plugin support macro(experimental).
 
 | Movements | Combination | Spyder command |
 |------|-------------|----------------|
-|![movement gif](/doc/ex_movement.gif) | ![combination gif](/doc/ex_combination.gif)| ![spyder cmd gif](/doc/ex_spyder_cmd.gif) |
+|![movement gif](https://github.com/ok97465/spyder_okvim/raw/main/doc/ex_movement.gif) | ![combination gif](https://github.com/ok97465/spyder_okvim/raw/main/doc/ex_combination.gif) | ![spyder cmd gif](https://github.com/ok97465/spyder_okvim/raw/main/doc/ex_spyder_cmd.gif) |
+
 
 ## Installation
 
-To install this plugin, you can install the package locally using pip as it follows.
+You can install this plugin either directly from PyPI or locally.
 
-```text
+### Install from PyPI
+
+```bash
+pip install spyder-okvim
+```
+
+### Install from Locally
+
+If you want to install the package from your local source:
+
+```bash
 pip install -U .
 ```
 
-If spyder-vim is installed, you need to uninstall it.
+### Note
+
+If **spyder-vim** is installed, you need to uninstall it first to avoid conflicts:
+
+```bash
+pip uninstall spyder-vim
+```
 
 ## Modes
 
@@ -99,12 +116,12 @@ The following motions are supported:
 
 ## Special keys
 
-- \<leader\>f : autoformatting
-- \<leader\>b : Toggle break point
-- \<leader\>r : run selected text or current line in console.
-- \<leader\>enter :  run cell and advance
-- \<leader\>p : spyder switcher
-- \<leader\>s : spyder symbol switcher
+- <leader>f : autoformatting
+- <leader>b : Toggle break point
+- <leader>r : run selected text or current line in console.
+- <leader>enter :  run cell and advance
+- <leader>p : spyder switcher
+- <leader>s : spyder symbol switcher
 - [d : goto previous warning/error
 - ]d : goto next warning/error
 - gc{motion} : toggle comment (support visual mode)
@@ -126,15 +143,15 @@ The following action are supported:
 The shortcut to invoke the fuzzy path finder is Ctrl+p.
 You can use ^p, ^n, ^f, ^b, ^u, ^d to navigate the path list.
 
-![fuzzy path finder](/doc/path_finder.gif)
+![fuzzy path finder](https://github.com/ok97465/spyder_okvim/raw/main/doc/path_finder.gif)
 
 ## Config page
 
-![config page](/doc/config_page.png)
+![config page](https://github.com/ok97465/spyder_okvim/raw/main/doc/config_page.png)
 
 ## Easymotion
 
-![easymotion](/doc/easymotion.gif)
+![easymotion](https://github.com/ok97465/spyder_okvim/raw/main/doc/easymotion.gif)
 
 You can use EasyMotion commands as an argument for d, c, or any other command that takes motion as an argument.
 
@@ -157,4 +174,4 @@ This search is invoked with s by exactly two characters.
 This search is invoked with operators via z (because s is taken by vim surround)
 
 After searching for two characters, if there are the characters in another group, a comment is displayed around the group.
-![sneak](/doc/sneak.gif)
+![sneak](https://github.com/ok97465/spyder_okvim/raw/main/doc/sneak.gif)

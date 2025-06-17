@@ -39,4 +39,4 @@ CONF_DEFAULTS = [
     ("shortcuts", {f"_/switch to {CONF_SECTION}": "Ctrl+Shift+M"}),
 ]
 
-CONF_VERSION = "0.0.1"
+CONF_VERSION = "0.9"
