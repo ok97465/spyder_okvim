@@ -36,6 +36,7 @@ class ExecutorVisualCmd(ExecutorBase):
         super().__init__(vim_status)
 
         cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~%fFtTnN/;,\"`'mr<> \\b\\r*#"
+        cmds = ''.join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = vim_status.cursor.set_cursor_pos_in_visual
@@ -467,9 +468,11 @@ class ExecutorVisualCmd(ExecutorBase):
         """Jump to bookmark."""
         executor_sub = self.executor_sub_alnum
         self.set_parent_info_to_submode(executor_sub, num, num_str)
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.vim_status.jump_to_bookmark, True)]
-        )
+        def run(ch):
+            self.vim_status.jump_to_bookmark(ch)
+            self.vim_status.to_normal()
+
+        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def backtick(self, num=1, num_str=""):

@@ -44,7 +44,8 @@ class ExecutorNormalCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = r"aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<> \\b\\rq@\\[\\]*#"
+        cmds = "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<> \\b\\rq@[\\]*#"
+        cmds = ''.join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = (
             self.vim_status.cursor.apply_motion_info_in_normal

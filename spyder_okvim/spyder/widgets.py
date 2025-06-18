@@ -466,8 +466,6 @@ class VimWidget(QWidget):
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
 
-        self._bookmark_cmd = None
-
     @Slot(object)
     def send_key_event(self, key_info):
         event = key_info.to_event()
@@ -489,22 +487,6 @@ class VimWidget(QWidget):
     def on_text_changed(self, txt):
         """Send input command to executor."""
         if not txt:
-            return
-
-        # Bookmark handling
-        if self._bookmark_cmd:
-            ch = txt[-1]
-            if ch.isalnum():
-                if self._bookmark_cmd == "m":
-                    self.vim_status.set_bookmark(ch)
-                else:
-                    self.vim_status.jump_to_bookmark(ch)
-            self._bookmark_cmd = None
-            self.commandline.clear()
-            return
-
-        if txt in ("m", "'", "`") and self.vim_status.sub_mode is None:
-            self._bookmark_cmd = txt
             return
 
         executor = self.executors[self.vim_status.vim_state]

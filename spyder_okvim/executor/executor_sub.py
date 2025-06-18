@@ -97,7 +97,8 @@ class ExecutorSubMotion(ExecutorSubBase):
         self.has_zero_cmd = True
 
         self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;,`' \b\r*#z"
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
+        cmds = ''.join(re.escape(c) for c in self.cmds)
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
         self.executor_sub_motion_i = ExecutorSubMotion_i(vim_status)
