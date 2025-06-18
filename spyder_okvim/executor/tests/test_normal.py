@@ -6,7 +6,7 @@ from unittest.mock import Mock
 # Third party imports
 import pytest
 from qtpy.QtCore import QEvent, Qt
-from qtpy.QtGui import QTextCursor, QKeyEvent
+from qtpy.QtGui import QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 

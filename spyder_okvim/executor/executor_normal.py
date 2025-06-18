@@ -8,7 +8,6 @@ import re
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QTextCursor
 from spyder.config.manager import CONF
-from spyder_okvim.spyder.config import CONF_SECTION
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
@@ -29,12 +28,13 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubCmd_register,
     ExecutorSubCmd_z,
     ExecutorSubCmd_Z,
+    ExecutorSubCmdSneak,
     ExecutorSubMotion,
     ExecutorSubMotion_c,
     ExecutorSubMotion_d,
     ExecutorSubMotion_y,
-    ExecutorSubCmdSneak,
 )
+from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
@@ -44,7 +44,8 @@ class ExecutorNormalCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = r'aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT";,.zZ/<> \b\rq@\[\]*#'
+        cmds = "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<> \b\rq@\[\]*#"
+        cmds = ''.join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = (
             self.vim_status.cursor.apply_motion_info_in_normal
@@ -681,6 +682,28 @@ class ExecutorNormalCmd(ExecutorBase):
         motion_info = self.helper_motion.enter(num=num)
 
         self.set_cursor_pos(motion_info.cursor_pos)
+
+    def m(self, num=1, num_str=""):
+        """Set bookmark with given name."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.vim_status.set_bookmark, True)]
+        )
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def apostrophe(self, num=1, num_str=""):
+        """Jump to bookmark."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.vim_status.jump_to_bookmark, True)]
+        )
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def backtick(self, num=1, num_str=""):
+        """Jump to bookmark."""
+        return self.apostrophe(num, num_str)
 
     def q(self, num=1, num_str=""):
         """Record typed characters into register."""

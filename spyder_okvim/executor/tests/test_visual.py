@@ -1527,3 +1527,18 @@ def test_enter_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
+
+
+def test_jump_mark_in_visual(vim_bot):
+    """Jump to mark while in visual mode."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\nc\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(4)
+    qtbot.keyClicks(cmd_line, "v'a")
+    assert vim.vim_cmd.vim_status.vim_state == VimState.NORMAL
+    assert editor.textCursor().position() == 0
