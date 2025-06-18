@@ -791,6 +791,45 @@ class HelperMotion:
         motion_info = method(ch, num, True)
         return motion_info
 
+    def apostrophe(self, mark: str):
+        """Return linewise position of mark."""
+        info = self.vim_status.get_bookmark(mark)
+        if not info:
+            return self._set_motion_info(None)
+        current = self.vim_status.get_editorstack().get_current_filename()
+        if info.get("file") != current:
+            return self._set_motion_info(None)
+        editor = self.get_editor()
+        block = editor.document().findBlockByNumber(info["line"])
+        if not block.isValid():
+            if mark.isupper():
+                self.vim_status.bookmarks_global.pop(mark, None)
+                self.vim_status._save_persistent_bookmarks()
+            else:
+                self.vim_status.bookmarks[current].pop(mark, None)
+            return self._set_motion_info(None)
+        return self._set_motion_info(block.position(), motion_type=MotionType.LineWise)
+
+    def backtick(self, mark: str):
+        """Return charwise position of mark."""
+        info = self.vim_status.get_bookmark(mark)
+        if not info:
+            return self._set_motion_info(None)
+        current = self.vim_status.get_editorstack().get_current_filename()
+        if info.get("file") != current:
+            return self._set_motion_info(None)
+        editor = self.get_editor()
+        block = editor.document().findBlockByNumber(info["line"])
+        if not block.isValid():
+            if mark.isupper():
+                self.vim_status.bookmarks_global.pop(mark, None)
+                self.vim_status._save_persistent_bookmarks()
+            else:
+                self.vim_status.bookmarks[current].pop(mark, None)
+            return self._set_motion_info(None)
+        pos = block.position() + min(info["col"], block.length() - 1)
+        return self._set_motion_info(pos, motion_type=MotionType.CharWiseIncludingEnd)
+
     def i_quote(self, quote):
         """Find quoted block position excluding quotes."""
         sel_end = None

@@ -16,6 +16,7 @@ from spyder_okvim.executor.executor_base import (
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
+    ExecutorSubCmd_alnum,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
     ExecutorSubCmd_r,
@@ -31,7 +32,8 @@ class ExecutorVlineCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = 'uUovhydcsSxHjJklLMwWbBepP^$gG~%fFtTnN/;,"r<> \b\r*#'
+        cmds = "uUovhydcsSxHjJklLMwWbBepP^$gG~%fFtTnN/;,\"`'mr<> \b\r*#"
+        cmds = ''.join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_vline = vim_status.cursor.set_cursor_pos_in_vline
@@ -42,6 +44,7 @@ class ExecutorVlineCmd(ExecutorBase):
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
         self.executor_sub_r = ExecutorSubCmd_r(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
+        self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
         self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
@@ -436,6 +439,30 @@ class ExecutorVlineCmd(ExecutorBase):
         motion_info = self.helper_motion.enter(num=num)
 
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
+
+    def m(self, num=1, num_str=""):
+        """Set bookmark with given name."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.vim_status.set_bookmark, True)]
+        )
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def apostrophe(self, num=1, num_str=""):
+        """Jump to bookmark."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        def run(ch):
+            self.vim_status.jump_to_bookmark(ch)
+            self.vim_status.to_normal()
+
+        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def backtick(self, num=1, num_str=""):
+        """Jump to bookmark."""
+        return self.apostrophe(num, num_str)
 
     def run_easymotion(self, num=1, num_str=""):
         """Run easymotion."""

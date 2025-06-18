@@ -103,6 +103,10 @@ The following motions are supported:
 - Enter, Space, Backspace
 - easymotion
 
+## Mark
+
+Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump back to it. Uppercase marks are saved in Spyder's configuration folder so they persist across sessions.
+
 ## Vim keys
 
 - ^A : Add [count] to number

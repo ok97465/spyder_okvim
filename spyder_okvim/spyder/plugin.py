@@ -38,22 +38,22 @@ class StatusBarVimWidget(StatusBarWidget):
     # ---- Private API -------------------------------------------------
     def _set_layout(self):
         """Set layout for the status bar widget."""
-        spacing_post = 32
+        spacing_post = 12
         spacing = 5
 
+        self.msg_label.setMinimumWidth(90)
+        self.cmd_line.setMinimumWidth(80)
         width_msg = self.msg_label.sizeHint().width()
         width_status = self.status_label.sizeHint().width()
         width_cmd = self.cmd_line.sizeHint().width()
 
         width_total = width_msg + width_status + width_cmd
-        if width_total == 0:
-            width_total = 1
 
         layout = QHBoxLayout(self)
         layout.setSpacing(spacing)
-        layout.addWidget(self.msg_label)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.cmd_line)
+        layout.addWidget(self.msg_label, int(width_msg / width_total * 100))
+        layout.addWidget(self.status_label, int(width_status / width_total * 100))
+        layout.addWidget(self.cmd_line, int(width_cmd / width_total * 100))
         layout.addSpacing(spacing_post)
         layout.setContentsMargins(0, 0, 0, 0)
 

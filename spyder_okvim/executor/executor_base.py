@@ -31,6 +31,8 @@ class ExecutorBase:
         "0": "zero",
         "^": "caret",
         '"': "quote",
+        "'": "apostrophe",
+        "`": "backtick",
         "%": "percent",
         "~": "tilde",
         ":": "colon",
