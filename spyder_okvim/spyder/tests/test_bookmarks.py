@@ -155,7 +155,7 @@ def test_bookmark_removed_after_edit(vim_bot):
 @pytest.mark.parametrize(
     "cmd_list,text_expected,cursor_pos,reg_expected",
     [
-        (["y", "'", "a"], "a\nb\nc\n", 0, "a\nb\nc\n"),
+        ("y'a", "a\nb\nc\n", 0, "a\nb\nc\n"),
         ("y`a", "a\nb\nc\n", 0, "a\nb\nc"),
         ("d'a", "", 0, "a\nb\nc\n"),
         ("d`a", "\n", 0, "a\nb\nc"),
