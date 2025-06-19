@@ -677,6 +677,46 @@ def test_gg_cmd(vim_bot, text, cmd_list, cursor_pos):
 
 
 @pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ("0\n2\n4\n", ["4j", ":", "1", Qt.Key_Return], 0),
+        ("0\n2\n4\n", [":", "2", Qt.Key_Return], 2),
+        ("0\n     \n8\n", [":", "2", Qt.Key_Return], 6),
+        ("0\n2\n4\n", [":", "1", Qt.Key_Return], 0),
+        ("0\n2\n4\n     a", [":", "4", Qt.Key_Return], 11),
+        ("", [":", "1", Qt.Key_Return], 0),
+        ("", [":", "2", Qt.Key_Return], 0),
+        (
+            "aaa\nbbb\nccc\nddd\neee\n",
+            ["j", ":", "4", Qt.Key_Return],
+            12,
+        ),
+        (
+            "aaa\nbbb\nccc\nddd\neee\n",
+            ["j", "2l", ":", "5", Qt.Key_Return],
+            16,
+        ),
+    ],
+)
+def test_colon_num_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test :num command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+
+
+@pytest.mark.parametrize(
     "text, cmd_list, text_expected, cursor_pos",
     [
         ("abcde", ["~"], "Abcde", 1),

@@ -825,7 +825,7 @@ class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
 
 
 class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
-    """submode of ["""
+    """submode of ]"""
 
     def __init__(self, vim_status):
         """."""

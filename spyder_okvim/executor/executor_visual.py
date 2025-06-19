@@ -13,6 +13,7 @@ from spyder_okvim.executor.executor_base import (
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorBase,
 )
+from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
@@ -35,7 +36,7 @@ class ExecutorVisualCmd(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~%fFtTnN/;,\"`'mr<> \b\r*#"
+        cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<> \b\r*#"
         cmds = ''.join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
@@ -46,6 +47,7 @@ class ExecutorVisualCmd(ExecutorBase):
         self.set_block_selection_in_visual = (
             self.vim_status.cursor.set_block_selection_in_visual
         )
+        self.executor_colon = ExecutorColon(vim_status)
         self.executor_sub_g = ExecutorSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
         self.executor_sub_r = ExecutorSubCmd_r(vim_status)
@@ -57,6 +59,11 @@ class ExecutorVisualCmd(ExecutorBase):
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
         self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
         self.executor_sub_surround = ExecutorAddSurround(vim_status)
+
+    def colon(self, num=1, num_str=""):
+        """Start colon mode."""
+        self.vim_status.set_message("")
+        return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
 
     def zero(self, num=1, num_str=""):
         """Go to the start of the current line."""
