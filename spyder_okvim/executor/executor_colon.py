@@ -2,6 +2,7 @@
 """."""
 # Local imports
 from spyder_okvim.executor.executor_base import ExecutorSubBase
+from spyder_okvim.utils.vim_status import VimState
 
 
 class ExecutorColon(ExecutorSubBase):
@@ -45,15 +46,18 @@ class ExecutorColon(ExecutorSubBase):
         args = cmd[1] if len(cmd) > 1 else ""
         cmd = cmd[0]
 
-        for symbol, text in self.SYMBOLS_REPLACEMENT.items():
-            cmd = cmd.replace(symbol, text)
-
-        try:
-            method = self.__getattribute__(cmd)
-        except AttributeError:
-            print("unknown command", cmd)
+        if cmd.isdigit():
+            self.goto_line(int(cmd))
         else:
-            method(args)
+            for symbol, text in self.SYMBOLS_REPLACEMENT.items():
+                cmd = cmd.replace(symbol, text)
+
+            try:
+                method = self.__getattribute__(cmd)
+            except AttributeError:
+                print("unknown command", cmd)
+            else:
+                method(args)
 
         self.vim_status.sub_mode = None
 
@@ -84,3 +88,17 @@ class ExecutorColon(ExecutorSubBase):
         """Create new file."""
         self.editor_widget.get_widget().new_action.trigger()
         self.vim_status.set_focus_to_vim()
+
+    def goto_line(self, num):
+        """Move cursor according to :number command."""
+        vs = self.vim_status
+        if vs.vim_state == VimState.NORMAL:
+            motion_info = self.helper_motion.G(num, True)
+            vs.cursor.apply_motion_info_in_normal(motion_info)
+        elif vs.vim_state in (VimState.VISUAL, VimState.VLINE):
+            motion_info = self.helper_motion.j(num)
+            if vs.vim_state == VimState.VISUAL:
+                vs.cursor.apply_motion_info_in_visual(motion_info)
+            else:
+                vs.cursor.apply_motion_info_in_vline(motion_info)
+            vs.to_normal()

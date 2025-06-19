@@ -95,6 +95,7 @@ The following motions are supported:
 - w, W, b, e
 - iwW, i()[]{}bB, i'"
 - G, g
+- :{number}
 - ^D, ^U, ^F, ^B
 - HLM
 - %

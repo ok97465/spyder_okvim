@@ -782,7 +782,7 @@ class ExecutorNormalCmd(ExecutorBase):
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def closesquarebracket(self, num=1, num_str=""):
-        """Start [ submode."""
+        """Start ] submode."""
         executor_sub = self.executor_sub_closesquarebracekt
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)

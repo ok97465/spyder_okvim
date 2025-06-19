@@ -401,6 +401,43 @@ def test_gg_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 
 
 @pytest.mark.parametrize(
+    "text, cmd_list, cursor_pos",
+    [
+        ("0\n2\n4\n", ["V", ":", "2", Qt.Key_Return], 4),
+        ("0\n     \n8\n", ["V", ":", "2", Qt.Key_Return], 8),
+        ("0\n\n2\n4\n", ["V", ":", "3", Qt.Key_Return], 5),
+        (
+            "aaa\nbbb\nccc\nddd\neee\n",
+            ["j", "V", ":", "3", Qt.Key_Return],
+            16,
+        ),
+        (
+            "aaa\nbbb\nccc\nddd\neee\n",
+            ["j", "l", "V", ":", "3", Qt.Key_Return],
+            17,
+        ),
+    ],
+)
+def test_colon_num_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos):
+    """Test :num command in vline."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text(text)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        if isinstance(cmd, str):
+            qtbot.keyClicks(cmd_line, cmd)
+        else:
+            qtbot.keyPress(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == cursor_pos
+    assert not editor.get_extra_selections("vim_selection")
+
+
+@pytest.mark.parametrize(
     "text, cmd_list, text_expected, cursor_pos",
     [
         ("abcde", ["V", "~"], "ABCDE", 0),
