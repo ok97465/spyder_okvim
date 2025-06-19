@@ -24,7 +24,7 @@ def test_bookmark_set_and_jump(vim_bot):
 
 def test_global_bookmark_and_jump(vim_bot):
     _, stack, editor0, vim, qtbot = vim_bot
-    editor0.set_text("a\nb\nc\n")
+    editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -48,7 +48,7 @@ def test_global_bookmark_and_jump(vim_bot):
 def test_bookmark_visual_mode(vim_bot):
     """Set and jump to bookmark while in visual mode."""
     _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\nc\n")
+    editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -63,7 +63,7 @@ def test_bookmark_visual_mode(vim_bot):
 def test_bookmark_vline_mode(vim_bot):
     """Set and jump to bookmark while in vline mode."""
     _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\nc\n")
+    editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -78,7 +78,7 @@ def test_bookmark_vline_mode(vim_bot):
 def test_local_bookmark_not_cross_file(vim_bot):
     """Local marks should not work in other files."""
     _, stack, editor0, vim, qtbot = vim_bot
-    editor0.set_text("a\nb\nc\n")
+    editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -100,7 +100,7 @@ def test_local_bookmark_not_cross_file(vim_bot):
 def test_local_bookmark_not_cross_file_visual(vim_bot):
     """Local marks ignored in visual mode on other files."""
     _, stack, editor0, vim, qtbot = vim_bot
-    editor0.set_text("a\nb\nc\n")
+    editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -120,7 +120,7 @@ def test_local_bookmark_not_cross_file_visual(vim_bot):
 def test_local_bookmark_not_cross_file_vline(vim_bot):
     """Local marks ignored in vline mode on other files."""
     _, stack, editor0, vim, qtbot = vim_bot
-    editor0.set_text("a\nb\nc\n")
+    editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -140,7 +140,7 @@ def test_local_bookmark_not_cross_file_vline(vim_bot):
 def test_bookmark_removed_after_edit(vim_bot):
     """Jump should fail if mark line no longer exists."""
     _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\nc\n")
+    editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(2)
     vim.vim_cmd.vim_status.reset_for_test()
 
@@ -155,12 +155,12 @@ def test_bookmark_removed_after_edit(vim_bot):
 @pytest.mark.parametrize(
     "cmd_list,text_expected,cursor_pos,reg_expected",
     [
-        ("y'a", "a\nb\nc\n", 0, "a\nb\nc\n"),
-        ("y`a", "a\nb\nc\n", 0, "a\nb\nc"),
-        ("d'a", "", 0, "a\nb\nc\n"),
-        ("d`a", "\n", 0, "a\nb\nc"),
-        ("c'a", "\n", 0, "a\nb\nc\n"),
-        ("c`a", "\n", 0, "a\nb\nc"),
+        ("y'a", "abcd\nefgh\nijkl\n", 0, "abcd\nefgh\nijkl\n"),
+        ("y`a", "abcd\nefgh\nijkl\n", 2, "cd\nefgh\nijk"),
+        ("d'a", "", 0, "abcd\nefgh\nijkl\n"),
+        ("d`a", "abl\n", 2, "cd\nefgh\nijk"),
+        ("c'a", "\n", 0, "abcd\nefgh\nijkl\n"),
+        ("c`a", "abl\n", 2, "cd\nefgh\nijk"),
     ],
 )
 def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
@@ -170,12 +170,12 @@ def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expec
     # Ensure current file is the one associated with *editor*
     stack.set_current_filename(stack.get_filenames()[0])
     
-    editor.set_text("a\nb\nc\n")
+    editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, "ma")
+    qtbot.keyClicks(cmd_line, "2lma")
     qtbot.keyClicks(cmd_line, "2j")
     qtbot.keyClicks(cmd_line, cmd_list)
 
@@ -185,10 +185,151 @@ def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expec
     assert reg.content == reg_expected
 
 
+@pytest.mark.parametrize(
+    "cmd_list,text_expected,cursor_pos,reg_expected",
+    [
+        ("y'a", "abcd\nefgh\nijkl\n", 0, "abcd\nefgh\nijkl\n"),
+        ("y`a", "abcd\nefgh\nijkl\n", 0, "abcd\nefgh\nijk"),
+        ("d'a", "", 0, "abcd\nefgh\nijkl\n"),
+        ("d`a", "l\n", 0, "abcd\nefgh\nijk"),
+        ("c'a", "\n", 0, "abcd\nefgh\nijkl\n"),
+        ("c`a", "l\n", 0, "abcd\nefgh\nijk"),
+    ],
+)
+def test_mark_operations_after(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+    """Operations when mark is after the cursor."""
+    _, stack, editor, vim, qtbot = vim_bot
+
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(12)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    qtbot.keyClicks(cmd_line, cmd_list)
+
+    reg = vim.vim_cmd.vim_status.register_dict['"']
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == reg_expected
+
+
+@pytest.mark.parametrize(
+    "cmd_list,text_expected,cursor_pos,reg_expected",
+    [
+        ("y'A", "abcd\nefgh\nijkl\n", 0, "abcd\nefgh\nijkl\n"),
+        ("y`A", "abcd\nefgh\nijkl\n", 2, "cd\nefgh\nijk"),
+        ("d'A", "", 0, "abcd\nefgh\nijkl\n"),
+        ("d`A", "abl\n", 2, "cd\nefgh\nijk"),
+        ("c'A", "\n", 0, "abcd\nefgh\nijkl\n"),
+        ("c`A", "abl\n", 2, "cd\nefgh\nijk"),
+    ],
+)
+def test_global_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+    """Global mark operations when mark is before cursor."""
+    _, stack, editor, vim, qtbot = vim_bot
+
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "2lmA")
+    qtbot.keyClicks(cmd_line, "2j")
+    qtbot.keyClicks(cmd_line, cmd_list)
+
+    reg = vim.vim_cmd.vim_status.register_dict['"']
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == reg_expected
+
+
+@pytest.mark.parametrize(
+    "cmd_list,text_expected,cursor_pos,reg_expected",
+    [
+        ("y'A", "abcd\nefgh\nijkl\n", 0, "abcd\nefgh\nijkl\n"),
+        ("y`A", "abcd\nefgh\nijkl\n", 0, "abcd\nefgh\nijk"),
+        ("d'A", "", 0, "abcd\nefgh\nijkl\n"),
+        ("d`A", "l\n", 0, "abcd\nefgh\nijk"),
+        ("c'A", "\n", 0, "abcd\nefgh\nijkl\n"),
+        ("c`A", "l\n", 0, "abcd\nefgh\nijk"),
+    ],
+)
+def test_global_mark_operations_after(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+    """Global mark operations when mark is after the cursor."""
+    _, stack, editor, vim, qtbot = vim_bot
+
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(12)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "mA")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    qtbot.keyClicks(cmd_line, cmd_list)
+
+    reg = vim.vim_cmd.vim_status.register_dict['"']
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == reg_expected
+
+
+@pytest.mark.parametrize("cmd", ["y`A", "d`A", "c`A"])
+def test_global_mark_operations_removed(vim_bot, cmd):
+    """Global operations should do nothing if mark was removed."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(4)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "mA")
+    editor.set_text("b")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    reg_before = vim.vim_cmd.vim_status.register_dict['"'].content
+    qtbot.keyClicks(cmd_line, cmd)
+    reg_after = vim.vim_cmd.vim_status.register_dict['"'].content
+    assert editor.toPlainText() == "b"
+    assert editor.textCursor().position() == 0
+    assert reg_before == reg_after
+
+
+@pytest.mark.parametrize("cmd", ["y`A", "d`A", "c`A"])
+def test_global_mark_operations_cross_file(vim_bot, cmd):
+    """Global mark motions ignored in other files."""
+    _, stack, editor0, vim, qtbot = vim_bot
+
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor0.set_text("a\nb\nc\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "mA")
+    other = next(p for p in stack.get_filenames() if p != stack.get_current_filename())
+    stack.set_current_filename(other)
+    editor_other = stack.get_current_editor()
+    editor_other.set_text("x\ny\nz\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(2)
+    reg_before = vim.vim_cmd.vim_status.register_dict['"'].content
+    pos_before = editor_other.textCursor().position()
+    qtbot.keyClicks(cmd_line, cmd)
+    reg_after = vim.vim_cmd.vim_status.register_dict['"'].content
+    assert editor_other.textCursor().position() == pos_before
+    assert editor_other.toPlainText() == "x\ny\nz\n"
+    assert reg_before == reg_after
+    vim.vim_cmd.vim_status.reset_for_test()
+
+
 @pytest.mark.parametrize("cmd", ["y'a", "y`a", "d'a", "d`a", "c'a", "c`a"])
 def test_mark_operations_removed(vim_bot, cmd):
     """Operations should do nothing if mark was removed."""
-    _, _, editor, vim, qtbot = vim_bot
+    _, stack, editor, vim, qtbot = vim_bot
+    stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(4)
     vim.vim_cmd.vim_status.reset_for_test()
@@ -224,7 +365,7 @@ def test_global_bookmark_removed_after_edit(vim_bot):
 def test_global_bookmark_overwrite(vim_bot):
     """Setting mA in another file overwrites previous global mark."""
     _, stack, editor0, vim, qtbot = vim_bot
-    editor0.set_text("a\nb\nc\n")
+    editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
