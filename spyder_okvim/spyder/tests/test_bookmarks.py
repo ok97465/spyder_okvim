@@ -3,6 +3,7 @@
 # Third party imports
 import pytest
 from qtpy.QtCore import Qt
+from spyder_okvim.utils.vim_status import VimState
 
 
 def test_bookmark_set_and_jump(vim_bot):
@@ -366,6 +367,8 @@ def test_global_bookmark_removed_after_edit(vim_bot):
 def test_global_bookmark_overwrite(vim_bot):
     """Setting mA in another file overwrites previous global mark."""
     _, stack, editor0, vim, qtbot = vim_bot
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor0 = stack.get_current_editor()
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
@@ -380,4 +383,93 @@ def test_global_bookmark_overwrite(vim_bot):
     stack.set_current_filename(stack.get_filenames()[0])
     qtbot.keyClicks(cmd_line, "'A")
     assert stack.get_current_filename() == other
-    assert editor_other.textCursor().position() == 2
+    stack.set_current_filename(stack.get_filenames()[0])
+
+
+@pytest.mark.parametrize("cmd,pos_expected", [("'a", 0), ("`a", 2)])
+def test_jump_mark_visual_before_after(vim_bot, cmd, pos_expected):
+    """Jump to mark from visual mode with mark before and after cursor."""
+    _, stack, editor, vim, qtbot = vim_bot
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "2lma")
+    qtbot.keyClicks(cmd_line, "2j")
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, cmd)
+    assert vim.vim_cmd.vim_status.vim_state == VimState.NORMAL
+    assert editor.textCursor().position() == pos_expected
+
+
+@pytest.mark.parametrize("cmd", ["'a", "`a"])
+def test_jump_mark_visual_removed(vim_bot, cmd):
+    """Jump should do nothing if mark line was removed."""
+    _, stack, editor, vim, qtbot = vim_bot
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(10)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    editor.set_text("x")
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, cmd)
+    assert editor.textCursor().position() == 0
+
+
+@pytest.mark.parametrize("cmd,pos_expected", [("'A", 0), ("`A", 2)])
+def test_jump_global_mark_visual(vim_bot, cmd, pos_expected):
+    """Jump to global mark from visual mode."""
+    _, stack, editor, vim, qtbot = vim_bot
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "2lmA")
+    qtbot.keyClicks(cmd_line, "2j")
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, cmd)
+    assert stack.get_current_filename() == stack.get_filenames()[0]
+    assert editor.textCursor().position() == pos_expected
+
+
+@pytest.mark.parametrize("cmd,pos_expected", [("'A", 0), ("`A", 2)])
+def test_jump_global_mark_visual_cross_file(vim_bot, cmd, pos_expected):
+    """Global mark jump from another file in visual mode."""
+    _, stack, editor0, vim, qtbot = vim_bot
+    stack.set_current_filename(stack.get_filenames()[0])
+    editor0.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "2lmA")
+    other = next(p for p in stack.get_filenames() if p != stack.get_current_filename())
+    stack.set_current_filename(other)
+    editor_other = stack.get_current_editor()
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, cmd)
+    assert stack.get_current_filename() == stack.get_filenames()[0]
+    assert editor0.textCursor().position() == pos_expected
+
+
+@pytest.mark.parametrize("cmd", ["'A", "`A"])
+def test_jump_global_mark_visual_removed(vim_bot, cmd):
+    """Global mark jump does nothing if its line was removed."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("abcd\nefgh\nijkl\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(10)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "mA")
+    editor.set_text("x")
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, cmd)
+    assert editor.textCursor().position() == 0

@@ -465,19 +465,40 @@ class ExecutorVisualCmd(ExecutorBase):
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def apostrophe(self, num=1, num_str=""):
-        """Jump to bookmark."""
+        """Jump to bookmark linewise and exit visual."""
         executor_sub = self.executor_sub_alnum
         self.set_parent_info_to_submode(executor_sub, num, num_str)
+
         def run(ch):
-            self.vim_status.jump_to_bookmark(ch)
+            if ch.isupper():
+                self.vim_status.jump_to_bookmark(ch)
+                cursor = self.get_cursor()
+                self.set_cursor_pos(cursor.block().position())
+            else:
+                info = self.helper_motion.apostrophe(ch)
+                if info.cursor_pos is not None:
+                    self.set_cursor_pos(info.cursor_pos)
             self.vim_status.to_normal()
 
         executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def backtick(self, num=1, num_str=""):
-        """Jump to bookmark."""
-        return self.apostrophe(num, num_str)
+        """Jump to bookmark charwise and exit visual."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        def run(ch):
+            if ch.isupper():
+                self.vim_status.jump_to_bookmark(ch)
+            else:
+                info = self.helper_motion.backtick(ch)
+                if info.cursor_pos is not None:
+                    self.set_cursor_pos(info.cursor_pos)
+            self.vim_status.to_normal()
+
+        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def run_easymotion(self, num=1, num_str=""):
         """Run easymotion."""
