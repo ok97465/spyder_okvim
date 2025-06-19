@@ -4,6 +4,8 @@ import os
 import os.path as osp
 from unittest.mock import Mock
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 # Third party imports
 import pytest
 import requests

@@ -2506,3 +2506,33 @@ def test_squarebracket_d_cmd(vim_bot):
     assert cmd_line.text() == ""
     assert editor.go_to_next_warning.called
     assert editor.go_to_previous_warning.called
+
+
+@pytest.mark.parametrize(
+    "cmd_list,text_expected,cursor_pos,reg_expected",
+    [
+        ("y'a", "a\nb\nc\n", 0, "a\nb\nc\n"),
+        ("y`a", "a\nb\nc\n", 0, "a\nb\nc"),
+        ("d'a", "", 0, "a\nb\nc\n"),
+        ("d`a", "\n", 0, "a\nb\nc"),
+        ("c'a", "\n", 0, "a\nb\nc\n"),
+        ("c`a", "\n", 0, "a\nb\nc"),
+    ],
+)
+def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+    """Test y/d/c commands with mark motions."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    editor.set_text("a\nb\nc\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    qtbot.keyClicks(cmd_line, "2j")
+    qtbot.keyClicks(cmd_line, cmd_list)
+
+    reg = vim.vim_cmd.vim_status.register_dict['"']
+    assert editor.toPlainText() == text_expected
+    assert editor.textCursor().position() == cursor_pos
+    assert reg.content == reg_expected
