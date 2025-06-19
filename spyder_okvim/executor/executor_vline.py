@@ -450,19 +450,48 @@ class ExecutorVlineCmd(ExecutorBase):
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def apostrophe(self, num=1, num_str=""):
-        """Jump to bookmark."""
+        """Jump to bookmark linewise keeping vline mode."""
         executor_sub = self.executor_sub_alnum
         self.set_parent_info_to_submode(executor_sub, num, num_str)
         def run(ch):
-            self.vim_status.jump_to_bookmark(ch)
-            self.vim_status.to_normal()
+            if ch.isupper():
+                cur = self.vim_status.get_editorstack().get_current_filename()
+                self.vim_status.jump_to_bookmark(ch)
+                new = self.vim_status.get_editorstack().get_current_filename()
+                if cur == new:
+                    cursor = self.get_cursor()
+                    self.set_cursor_pos_in_vline(cursor.block().position())
+                else:
+                    cursor = self.get_cursor()
+                    self.set_cursor_pos(cursor.block().position())
+                    self.vim_status.to_normal()
+            else:
+                info = self.helper_motion.apostrophe(ch)
+                if info.cursor_pos is not None:
+                    self.set_cursor_pos_in_vline(info.cursor_pos)
 
         executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def backtick(self, num=1, num_str=""):
-        """Jump to bookmark."""
-        return self.apostrophe(num, num_str)
+        """Jump to bookmark charwise keeping vline mode."""
+        executor_sub = self.executor_sub_alnum
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        def run(ch):
+            if ch.isupper():
+                cur = self.vim_status.get_editorstack().get_current_filename()
+                self.vim_status.jump_to_bookmark(ch)
+                new = self.vim_status.get_editorstack().get_current_filename()
+                if cur != new:
+                    self.vim_status.to_normal()
+            else:
+                info = self.helper_motion.backtick(ch)
+                if info.cursor_pos is not None:
+                    self.set_cursor_pos_in_vline(info.cursor_pos)
+
+        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def run_easymotion(self, num=1, num_str=""):
         """Run easymotion."""

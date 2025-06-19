@@ -400,7 +400,7 @@ def test_jump_mark_visual_before_after(vim_bot, cmd, pos_expected):
     qtbot.keyClicks(cmd_line, "2j")
     qtbot.keyClicks(cmd_line, "v")
     qtbot.keyClicks(cmd_line, cmd)
-    assert vim.vim_cmd.vim_status.vim_state == VimState.NORMAL
+    assert vim.vim_cmd.vim_status.vim_state == VimState.VISUAL
     assert editor.textCursor().position() == pos_expected
 
 
@@ -419,6 +419,8 @@ def test_jump_mark_visual_removed(vim_bot, cmd):
     qtbot.keyClicks(cmd_line, "v")
     qtbot.keyClicks(cmd_line, cmd)
     assert editor.textCursor().position() == 0
+    assert vim.vim_cmd.vim_status.vim_state == VimState.VISUAL
+    assert vim.vim_cmd.vim_status.vim_state == VimState.VISUAL
 
 
 @pytest.mark.parametrize("cmd,pos_expected", [("'A", 0), ("`A", 2)])
@@ -437,6 +439,7 @@ def test_jump_global_mark_visual(vim_bot, cmd, pos_expected):
     qtbot.keyClicks(cmd_line, cmd)
     assert stack.get_current_filename() == stack.get_filenames()[0]
     assert editor.textCursor().position() == pos_expected
+    assert vim.vim_cmd.vim_status.vim_state == VimState.VISUAL
 
 
 @pytest.mark.parametrize("cmd,pos_expected", [("'A", 0), ("`A", 2)])
@@ -457,6 +460,7 @@ def test_jump_global_mark_visual_cross_file(vim_bot, cmd, pos_expected):
     qtbot.keyClicks(cmd_line, cmd)
     assert stack.get_current_filename() == stack.get_filenames()[0]
     assert editor0.textCursor().position() == pos_expected
+    assert vim.vim_cmd.vim_status.vim_state == VimState.NORMAL
 
 
 @pytest.mark.parametrize("cmd", ["'A", "`A"])
