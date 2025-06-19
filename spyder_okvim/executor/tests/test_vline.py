@@ -1201,5 +1201,5 @@ def test_jump_mark_in_vline(vim_bot):
     qtbot.keyClicks(cmd_line, "ma")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(4)
     qtbot.keyClicks(cmd_line, "V'a")
-    assert vim.vim_cmd.vim_status.vim_state == VimState.NORMAL
+    assert vim.vim_cmd.vim_status.vim_state == VimState.VLINE
     assert editor.textCursor().position() == 0
