@@ -3,33 +3,27 @@
 ![Window tests](https://github.com/ok97465/spyder_okvim/workflows/Windows%20tests/badge.svg)
 [![codecov](https://codecov.io/gh/ok97465/spyder_okvim/branch/main/graph/badge.svg?token=7JIIKTOZMO)](https://codecov.io/gh/ok97465/spyder_okvim)
 
-Spyder Plugin for executing Vim commands inside the code editor.
+Spyder plugin for running Vim commands in the code editor.
 
 ```text
-Don't make an issue to spyder github after install okvim.
+Please do not open issues on the Spyder GitHub after installing Okvim.
 ```
 
-If you have a problem after installing this, please retry after uninstalling okvim.
+If you run into problems, uninstall Okvim and try again.
 
 ## Known Issues
 
-- Okvim is not working when the spyder editor is undocked from mainwindow.
+- Okvim does not work when the Spyder editor is undocked from the main window.
 
 ## Overview
 
-This plugin supports movements.
+- Supported Vim motions include `hjkl`, `^u`, `%`, `iw`, `i(`, `/`, `n`, `N`, `;` and more.
 
-- hjkl, ^u, %, iw, i(, /, n, N, ;, ...
+- You can combine operators with motions. Examples: `diw`, `di(`, `c%`, `c/foo`, `cn`, `ygg`, `d2w`, `2d2W` and more.
   
-This plugin supports a combination of operators and motions
+- Spyder commands such as running a selection, formatting, and toggling comments are also available.
 
-- diw, di(, c%, c/foo, cn, ygg, d2w, 2d2W ...
-  
-This plugin supports spyder command.
-
-- run selection, formatting, toggle break, toggle comment, ...
-
-This plugin support macro(experimental).
+- Macro support is experimental.
 
 | Movements | Combination | Spyder command |
 |------|-------------|----------------|
@@ -46,9 +40,9 @@ You can install this plugin either directly from PyPI or locally.
 pip install spyder-okvim
 ```
 
-### Install from Locally
+### Install Locally
 
-If you want to install the package from your local source:
+To install from a local copy:
 
 ```bash
 pip install -U .
@@ -56,7 +50,7 @@ pip install -U .
 
 ### Note
 
-If **spyder-vim** is installed, you need to uninstall it first to avoid conflicts:
+If **spyder-vim** is installed, uninstall it first to avoid conflicts:
 
 ```bash
 pip uninstall spyder-vim
@@ -121,22 +115,22 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 
 ## Special keys
 
-- <leader>f : autoformatting
-- <leader>b : Toggle break point
-- <leader>r : run selected text or current line in console.
+- <leader>f : autoformat the curruent file
+- <leader>b : toggle a breakpoint
+- <leader>r : run the selection or current line in the console.
 - <leader>enter :  run cell and advance
-- <leader>p : spyder switcher
-- <leader>s : spyder symbol switcher
-- [d : goto previous warning/error
-- ]d : goto next warning/error
-- gc{motion} : toggle comment (support visual mode)
-  - gcc : toggle comment of current line
+- <leader>p : Spyder switcher
+- <leader>s : Spyder symbol switcher
+- [d : go to previous warning/error
+- ]d : go to next warning/error
+- gc{motion} : toggle comments (works in visual mode)
+  - gcc : toggle the comment for the current line
 
 ## Vim Surround
 
-- surroundings : '"()[]{}bB
+- Supported surroundings: '"()[]{}bB
 
-The following action are supported:
+The following actions are supported:
 
 - ys{motion}{surroundings} in normal mode: add surroundings in pairs.
 - ds{surroundings} in normal mode: delete surroundings in pairs.
@@ -145,8 +139,8 @@ The following action are supported:
 
 ## Fuzzy path finder
 
-The shortcut to invoke the fuzzy path finder is Ctrl+p.
-You can use ^p, ^n, ^f, ^b, ^u, ^d to navigate the path list.
+Press Ctrl+p to open the fuzzy path finder.
+Use ^p, ^n, ^f, ^b, ^u, and ^d to navigate the list.
 
 ![fuzzy path finder](https://github.com/ok97465/spyder_okvim/raw/main/doc/path_finder.gif)
 
@@ -158,7 +152,7 @@ You can use ^p, ^n, ^f, ^b, ^u, ^d to navigate the path list.
 
 ![easymotion](https://github.com/ok97465/spyder_okvim/raw/main/doc/easymotion.gif)
 
-You can use EasyMotion commands as an argument for d, c, or any other command that takes motion as an argument.
+EasyMotion commands work with any operator that accepts a motion.
 
 | Motion Command                      | Description                                                                                                    |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -169,14 +163,14 @@ You can use EasyMotion commands as an argument for d, c, or any other command th
 | `<leader><leader> f <char>`         | Find character forwards                                                                                        |
 | `<leader><leader> F <char>`         | Find character backwards                                                                                       |
 
-## Search 2ch(like vim-sneak)
+## Search two characters (like vim-sneak)
 
 Jump to any location specified by two characters.
 
-It works with multiple lines, operators (including repeat .) motion-repeat (; and ,), visual mode.
+Works across lines, with operators (including repeat `.`), motion-repeat (`;` and `,`), and visual mode.
 
-This search is invoked with s by exactly two characters.
-This search is invoked with operators via z (because s is taken by vim surround)
+Press `s` followed by two characters.
+For operators use `z` because `s` belongs to vim-surround.
 
-After searching for two characters, if there are the characters in another group, a comment is displayed around the group.
+When there are matches in another group, hints appear around the group.
 ![sneak](https://github.com/ok97465/spyder_okvim/raw/main/doc/sneak.gif)
