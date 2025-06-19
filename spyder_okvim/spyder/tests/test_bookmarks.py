@@ -278,12 +278,13 @@ def test_global_mark_operations_after(vim_bot, cmd_list, text_expected, cursor_p
     assert reg.content == reg_expected
 
 
-@pytest.mark.parametrize("cmd", ["y`A", "d`A", "c`A"])
+@pytest.mark.parametrize("cmd", ["y'A", "y`A", "d'A", "d`A", "c'A", "c`A"])
 def test_global_mark_operations_removed(vim_bot, cmd):
     """Global operations should do nothing if mark was removed."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("abcd\nefgh\nijkl\n")
-    vim.vim_cmd.vim_status.cursor.set_cursor_pos(4)
+    # Place mark on the last line so it disappears after editing
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(10)
     vim.vim_cmd.vim_status.reset_for_test()
 
     cmd_line = vim.vim_cmd.commandline
@@ -298,7 +299,7 @@ def test_global_mark_operations_removed(vim_bot, cmd):
     assert reg_before == reg_after
 
 
-@pytest.mark.parametrize("cmd", ["y`A", "d`A", "c`A"])
+@pytest.mark.parametrize("cmd", ["y'A", "y`A", "d'A", "d`A", "c'A", "c`A"])
 def test_global_mark_operations_cross_file(vim_bot, cmd):
     """Global mark motions ignored in other files."""
     _, stack, editor0, vim, qtbot = vim_bot
