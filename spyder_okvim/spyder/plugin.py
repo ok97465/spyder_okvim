@@ -62,7 +62,7 @@ class StatusBarVimWidget(StatusBarWidget):
         self.setLayout(layout)
 
     def set_layout(self):
-        """."""
+        """Create and apply the layout for the status bar widget."""
         pass
 
     # ---- Status bar widget API
@@ -131,7 +131,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         return qta.icon("mdi.vimeo", color=MAIN_FG_COLOR)
 
     def on_initialize(self):
-        """."""
+        """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
         status_bar_widget = StatusBarVimWidget(
@@ -167,7 +167,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         return valid, message
 
     def on_close(self, cancellable=True):
-        """."""
+        """Handle plugin shutdown."""
         return True
 
     def get_plugin_actions(self):

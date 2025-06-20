@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Collection of executor classes for various submodes."""
 # %% Import
 # Standard library imports
 import re
@@ -478,7 +478,7 @@ class ExecutorSubMotion_y(ExecutorSubMotion_d):
     """Add s for surround to normal y command."""
 
     def __init__(self, vim_status):
-        """."""
+        """Extend yank motions with surround support."""
         super().__init__(vim_status)
         self.cmds += "s"
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
@@ -791,7 +791,7 @@ class ExecutorSubCmd_alnum(ExecutorSubBase):
         self.allow_leaderkey = False
 
     def __call__(self, ch: str):
-        """."""
+        """Return deferred result when ``ch`` is alphanumeric."""
         self.update_input_cmd_info(None, None, ch)
 
         self.vim_status.sub_mode = None
@@ -806,7 +806,7 @@ class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
     """submode of ["""
 
     def __init__(self, vim_status):
-        """."""
+        """Initialize submode for ``[`` commands."""
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
@@ -828,7 +828,7 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
     """submode of ]"""
 
     def __init__(self, vim_status):
-        """."""
+        """Initialize submode for ``]`` commands."""
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
@@ -850,7 +850,7 @@ class ExecutorSubCmd_z(ExecutorSubBase):
     """Submode of z."""
 
     def __init__(self, vim_status):
-        """."""
+        """Initialize submode for ``z`` commands."""
         super().__init__(vim_status)
         self.allow_leaderkey = False
 

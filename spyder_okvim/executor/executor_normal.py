@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Executor for normal mode commands.
+
+This module implements :class:`ExecutorNormalCmd`, which interprets keystrokes
+when the editor is in *normal* mode.  Commands are dispatched to helper classes
+for motion and editing actions.  The executor can also switch into various
+submodes such as search or register selection.
+"""
 # %% Import
 # Standard library imports
 import re

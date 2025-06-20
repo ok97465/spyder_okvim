@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Status of Vim."""
+"""Container for the state shared by all executors."""
 # Standard library imports
 from collections import defaultdict
 import os
@@ -262,7 +262,7 @@ class LabelOnTxt(QLabel):
     """Label on txt."""
 
     def __init__(self, parent=None):
-        """."""
+        """Initialize the label used to display text annotations."""
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 

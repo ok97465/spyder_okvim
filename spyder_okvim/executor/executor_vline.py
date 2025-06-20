@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Vertical line selection helper."""
 # %% Import
 # Standard library imports
 import re

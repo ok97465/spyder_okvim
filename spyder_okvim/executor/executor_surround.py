@@ -1,4 +1,4 @@
-"""Surround."""
+"""Executors for manipulating surrounding characters."""
 # Local imports
 from spyder_okvim.executor.executor_base import ExecutorSubBase
 from spyder_okvim.utils.helper_motion import MotionType, MotionInfo
@@ -10,7 +10,7 @@ class ExecutorAddSurround(ExecutorSubBase):
     """Executor for adding surrounding."""
 
     def __init__(self, vim_status):
-        """."""
+        """Initialize submode for adding surroundings."""
         super().__init__(vim_status)
         self.allow_leaderkey = False
         self.has_zero_cmd = False
@@ -41,7 +41,7 @@ class ExecutorAddSurround(ExecutorSubBase):
         self.pos_end = sel_end
 
     def __call__(self, ch: str):
-        """."""
+        """Add ``ch`` around the motion range."""
         self.vim_status.sub_mode = None
 
         ch = ch.replace("b", ")")
@@ -61,13 +61,13 @@ class ExecutorDeleteSurround(ExecutorSubBase):
     """Executor for deleting surrounding."""
 
     def __init__(self, vim_status):
-        """."""
+        """Initialize submode for deleting surroundings."""
         super().__init__(vim_status)
         self.allow_leaderkey = False
         self.has_zero_cmd = False
 
     def __call__(self, ch: str):
-        """."""
+        """Delete the surrounding character ``ch``."""
         self.vim_status.sub_mode = None
 
         ch = ch.replace("b", ")")
@@ -87,13 +87,13 @@ class ExecutorChangeSurround(ExecutorSubBase):
     """Executor for chaging surrounding."""
 
     def __init__(self, vim_status):
-        """."""
+        """Initialize submode for changing surroundings."""
         super().__init__(vim_status)
         self.allow_leaderkey = False
         self.has_zero_cmd = False
 
     def __call__(self, txt: str):
-        """."""
+        """Replace the existing surrounding with ``txt``."""
         if len(txt) < 2:
             return False
 

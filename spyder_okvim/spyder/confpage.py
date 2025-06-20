@@ -12,7 +12,7 @@ from spyder.api.preferences import PluginConfigPage
 
 
 class OkvimConfigPage(PluginConfigPage):
-    """."""
+    """Preferences page for configuring OkVim."""
 
     def setup_page(self):
         """Create configuration page."""
@@ -94,7 +94,7 @@ class ShortcutLineEdit(QLineEdit):
     """QLineEdit that filters its key press and release events."""
 
     def __init__(self, parent, viewer):
-        """."""
+        """Create line edit used to record a leader key sequence."""
         super().__init__(parent)
         self.setPlaceholderText("Press leader key...")
         self.viewer = viewer

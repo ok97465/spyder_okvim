@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Base classes for OkVim command executors.
+
+This module provides :class:`ExecutorBase` and :class:`ExecutorSubBase`, which
+handle the parsing of command strings and delegation of actions to the
+``HelperMotion`` and ``HelperAction`` utilities.  Executors interpret user
+keystrokes, update the shared :class:`~spyder_okvim.utils.vim_status.VimStatus`
+object and decide whether submodes should be entered.
+"""
 # %% Import
 # Standard library imports
 from typing import NamedTuple, Any, List

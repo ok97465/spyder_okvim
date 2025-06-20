@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Path Finder."""
+"""Filesystem helper used by EasyMotion and search features."""
 # Standard library imports
 import os.path as osp
 import re

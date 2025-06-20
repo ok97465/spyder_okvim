@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Executor handling leader-key sequences."""
 # %% Import
 # Local imports
 from spyder_okvim.executor.executor_base import ExecutorBase

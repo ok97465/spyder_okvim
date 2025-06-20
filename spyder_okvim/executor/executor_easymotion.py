@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Support for EasyMotion-like navigation.
+
+EasyMotion highlights possible jump targets in the editor and lets the user
+select one with a short key sequence.  This executor provides helper methods
+used by the normal and visual mode executors to implement those jumps.
+"""
 # %% Import
 # Standard library imports
 from typing import Tuple

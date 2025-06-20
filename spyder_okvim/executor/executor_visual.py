@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Executor for visual mode commands.
+
+The :class:`ExecutorVisualCmd` interprets keystrokes while a text selection is
+active.  Many commands mirror those from :mod:`executor_normal`, but they act on
+the current selection.  The executor can also enter submodes to handle searches,
+character motions and other modal operations.
+"""
 # %% Import
 # Standard library imports
 import re

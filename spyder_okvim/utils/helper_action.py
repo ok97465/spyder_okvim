@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Module for action of vim."""
+"""Utility functions that implement Vim-style editing actions."""
 # %% Import
 # Standard library imports
 import re

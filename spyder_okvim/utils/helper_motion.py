@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Module for motion of vim."""
+"""Cursor movement helpers for Vim emulation."""
 # %% Import
 # Standard library imports
 import re
@@ -686,7 +686,7 @@ class HelperMotion:
         return start_pos, end_pos
 
     def search_forward_in_view(self, txt: str) -> list[int]:
-        """."""
+        """Return positions of ``txt`` within the visible editor viewport."""
         editor = self.get_editor()
 
         cur_pos = editor.textCursor().position()
@@ -729,7 +729,7 @@ class HelperMotion:
         self.vim_status.annotate_on_txt(info_group, timeout=1500)
 
     def search_backward_in_view(self, txt: str) -> list[int]:
-        """."""
+        """Return positions of ``txt`` when searching backward in the viewport."""
         editor = self.get_editor()
 
         cur_pos = editor.textCursor().position()
