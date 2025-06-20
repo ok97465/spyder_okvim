@@ -23,6 +23,7 @@ from spyder_okvim.executor.executor_base import (
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorBase,
 )
+from spyder_okvim.executor.mixins import MovementMixin
 from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
@@ -46,11 +47,15 @@ from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
 
-class ExecutorNormalCmd(ExecutorBase):
+class ExecutorNormalCmd(MovementMixin, ExecutorBase):
     """Executor for normal mode."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+
+        # MovementMixin hooks
+        self.move_cursor = self.vim_status.cursor.set_cursor_pos
+        self.move_cursor_no_end = self.vim_status.cursor.set_cursor_pos_without_end
 
         cmds = (
             "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<> \b\rq@\[\]*#"
@@ -86,16 +91,6 @@ class ExecutorNormalCmd(ExecutorBase):
             vim_status
         )
 
-    def colon(self, num=1, num_str=""):
-        """Enter ``:`` command-line mode."""
-        self.vim_status.set_message("")
-        return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
-
-    def zero(self, num=1, num_str=""):
-        """Go to the start of the current line."""
-        motion_info = self.helper_motion.zero()
-
-        self.set_cursor_pos(motion_info.cursor_pos)
 
     def a(self, num=1, num_str=""):
         """Append text after the cursor."""
@@ -141,47 +136,6 @@ class ExecutorNormalCmd(ExecutorBase):
         """Start visual mode per line."""
         self.vim_status.to_visual_line()
 
-    def l(self, num=1, num_str=""):
-        """Move cursor to right."""
-        motion_info = self.helper_motion.l(num=num)
-
-        self.vim_status.cursor.set_cursor_pos_without_end(motion_info.cursor_pos)
-
-    def h(self, num=1, num_str=""):
-        """Move cursor to left."""
-        motion_info = self.helper_motion.h(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def k(self, num=1, num_str=""):
-        """Move cursor to up."""
-        motion_info = self.helper_motion.k(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def j(self, num=1, num_str=""):
-        """Move cursor to down."""
-        motion_info = self.helper_motion.j(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def H(self, num=1, num_str=""):
-        """Move cursor to the top of the page."""
-        motion_info = self.helper_motion.H(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def M(self, num=1, num_str=""):
-        """Move cursor to the middle of the page."""
-        motion_info = self.helper_motion.M(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def L(self, num=1, num_str=""):
-        """Move cursor to the bottom of the page."""
-        motion_info = self.helper_motion.L(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
 
     def J(self, num=1, num_str=""):
         """Join lines, with a minimum of two lines."""
@@ -195,18 +149,6 @@ class ExecutorNormalCmd(ExecutorBase):
         cursor_pos_start = cursor.position()
 
         self.helper_action.join_lines(cursor_pos_start, block_no_start, block_no_end)
-
-    def caret(self, num=1, num_str=""):
-        """Move cursor to the first non-blank character of the line."""
-        motion_info = self.helper_motion.caret(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def dollar(self, num=1, num_str=""):
-        """Move cursor to the end of the line."""
-        motion_info = self.helper_motion.dollar(num=num)
-
-        self.vim_status.cursor.set_cursor_pos_without_end(motion_info.cursor_pos)
 
     def o(self, num=1, num_str=""):
         """Begin a new line below the cursor and insert text."""
@@ -263,35 +205,6 @@ class ExecutorNormalCmd(ExecutorBase):
 
         self.set_cursor_pos(pos)
 
-    def w(self, num=1, num_str=""):
-        """Move to the next word."""
-        motion_info = self.helper_motion.w(num=num)
-
-        self.vim_status.cursor.set_cursor_pos_without_end(motion_info.cursor_pos)
-
-    def W(self, num=1, num_str=""):
-        """Move to the next WORD."""
-        motion_info = self.helper_motion.W(num=num)
-
-        self.vim_status.cursor.set_cursor_pos_without_end(motion_info.cursor_pos)
-
-    def b(self, num=1, num_str=""):
-        """Move to the previous word."""
-        motion_info = self.helper_motion.b(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def B(self, num=1, num_str=""):
-        """Move to the previous WORD."""
-        motion_info = self.helper_motion.B(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def e(self, num=1, num_str=""):
-        """Move to the end of word."""
-        motion_info = self.helper_motion.e(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
 
     @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
     def g(self, num=1, num_str=""):
@@ -318,12 +231,6 @@ class ExecutorNormalCmd(ExecutorBase):
         if cursor.atBlockEnd() and not cursor.atBlockStart():
             self.h(1)
 
-    def percent(self, num=1, num_str=""):
-        """Go to matching bracket."""
-        motion_info = self.helper_motion.percent(num=num, num_str=num_str)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
-
     @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
     def f(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
@@ -344,17 +251,7 @@ class ExecutorNormalCmd(ExecutorBase):
         """Go to the next occurrence of a character."""
         return self.executor_sub_f_t
 
-    def semicolon(self, num=1, num_str=""):
-        """Repeat the last ``f``, ``t``, ``F`` or ``T`` search."""
-        motion_info = self.helper_motion.semicolon(num=num, num_str=num_str)
 
-        self.set_cursor_pos(motion_info.cursor_pos)
-
-    def comma(self, num=1, num_str=""):
-        """Repeat the last ``f``, ``t``, ``F`` or ``T`` in the opposite direction."""
-        motion_info = self.helper_motion.comma(num=num, num_str=num_str)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
 
     def r(self, num=1, num_str=""):
         """Replace the ch under the cursor with input."""
@@ -641,23 +538,6 @@ class ExecutorNormalCmd(ExecutorBase):
 
         self.set_cursor_pos(motion_info.cursor_pos)
 
-    def space(self, num=1, num_str=""):
-        """Move cursor to right."""
-        motion_info = self.helper_motion.space(num=num)
-
-        self.vim_status.cursor.set_cursor_pos_without_end(motion_info.cursor_pos)
-
-    def backspace(self, num=1, num_str=""):
-        """Move cursor to left."""
-        motion_info = self.helper_motion.backspace(num=num)
-
-        self.vim_status.cursor.set_cursor_pos_without_end(motion_info.cursor_pos)
-
-    def enter(self, num=1, num_str=""):
-        """Move cursor to downward."""
-        motion_info = self.helper_motion.enter(num=num)
-
-        self.set_cursor_pos(motion_info.cursor_pos)
 
     def m(self, num=1, num_str=""):
         """Set bookmark with given name."""
