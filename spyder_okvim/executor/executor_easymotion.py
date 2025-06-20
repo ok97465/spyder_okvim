@@ -6,9 +6,6 @@ select one with a short key sequence.  This executor provides helper methods
 used by the normal and visual mode executors to implement those jumps.
 """
 # %% Import
-# Standard library imports
-from typing import Tuple
-
 # Third party imports
 from qtpy.QtCore import QPoint
 from qtpy.QtGui import QTextCursor, QTextDocument
@@ -103,7 +100,7 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
             self.vim_status.sub_mode = None
             return True
 
-    def get_cursor_pos_of_viewport(self) -> Tuple[int, int]:
+    def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
         """Get the cursor position of viewport of editor."""
         editor = self.vim_status.get_editor()
         start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
@@ -216,7 +213,7 @@ class ExecutorEasymotion(ExecutorSubBase):
             self.vim_status.sub_mode = None
             return True
 
-    def get_cursor_pos_of_viewport(self) -> Tuple[int, int]:
+    def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
         """Get the cursor position of viewport of editor."""
         editor = self.vim_status.get_editor()
         start_pos = editor.cursorForPosition(QPoint(0, 0)).position()

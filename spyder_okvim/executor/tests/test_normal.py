@@ -2104,6 +2104,7 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
 
+
 @pytest.mark.parametrize(
     "text, cmd_list",
     [
@@ -2159,6 +2160,7 @@ def test_asterisk_sharp_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
+
 
 def test_search_backspace_command(vim_bot):
     """Test backspace in search."""

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Container for the state shared by all executors."""
+
 # Standard library imports
 import os.path as osp
 from collections import defaultdict
-from typing import List
 
 # Third party imports
 from qtpy.QtCore import QEvent, QObject, QRegularExpression, Qt, QTimer, Signal, Slot
@@ -265,6 +265,7 @@ class ManagerMacro:
                 # Already disconnected or editor deleted
                 pass
         self.editor_connected = None
+
 
 class LabelOnTxt(QLabel):
     """Label on txt."""
@@ -959,7 +960,7 @@ class VimStatus(QObject):
         """Add key event from editor to list to macro_manager."""
         self.manager_macro.add_editor_keyevent(event)
 
-    def set_marker_for_easymotion(self, positions: List[int], motion_type):
+    def set_marker_for_easymotion(self, positions: list[int], motion_type):
         """Set marker for easymotion."""
         if not positions:
             return

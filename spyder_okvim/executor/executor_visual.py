@@ -35,14 +35,19 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubMotion_i,
 )
 from spyder_okvim.executor.executor_surround import ExecutorAddSurround
+from spyder_okvim.executor.mixins import MovementMixin
 from spyder_okvim.spyder.config import CONF_SECTION
 
 
-class ExecutorVisualCmd(ExecutorBase):
+class ExecutorVisualCmd(MovementMixin, ExecutorBase):
     """Executor for visual mode."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
+
+        # MovementMixin hooks
+        self.move_cursor = vim_status.cursor.set_cursor_pos_in_visual
+        self.move_cursor_no_end = vim_status.cursor.set_cursor_pos_in_visual
 
         cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<> \b\r*#"
         cmds = "".join(re.escape(c) for c in cmds)
@@ -68,56 +73,9 @@ class ExecutorVisualCmd(ExecutorBase):
         self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
         self.executor_sub_surround = ExecutorAddSurround(vim_status)
 
-    def colon(self, num=1, num_str=""):
-        """Start colon mode."""
-        self.vim_status.set_message("")
-        return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
-
-    def zero(self, num=1, num_str=""):
-        """Go to the start of the current line."""
-        motion_info = self.helper_motion.zero()
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
     def V(self, num=1, num_str=""):
         """Start Visual mode per line."""
         self.vim_status.to_visual_line()
-
-    def h(self, num=1, num_str=""):
-        """Move cursor to left."""
-        motion_info = self.helper_motion.h(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def k(self, num=1, num_str=""):
-        """Move cursor to up."""
-        motion_info = self.helper_motion.k(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def H(self, num=1, num_str=""):
-        """Move cursor to the top of the page."""
-        motion_info = self.helper_motion.H(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def M(self, num=1, num_str=""):
-        """Move cursor to the middle of the page."""
-        motion_info = self.helper_motion.M(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def L(self, num=1, num_str=""):
-        """Move cursor to the bottom of the page."""
-        motion_info = self.helper_motion.L(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def j(self, num=1, num_str=""):
-        """Move cursor to down."""
-        motion_info = self.helper_motion.j(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
     def J(self, num=1, num_str=""):
         """Join lines, with a minimum of two lines."""
@@ -141,48 +99,6 @@ class ExecutorVisualCmd(ExecutorBase):
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
-    def caret(self, num=1, num_str=""):
-        """Move cursor to the first non-blank character of the line."""
-        motion_info = self.helper_motion.caret(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def dollar(self, num=1, num_str=""):
-        """Move cursor to the end of the line."""
-        motion_info = self.helper_motion.dollar(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def w(self, num=1, num_str=""):
-        """Move to the next word."""
-        motion_info = self.helper_motion.w(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def W(self, num=1, num_str=""):
-        """Move to the next WORD."""
-        motion_info = self.helper_motion.W(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def b(self, num=1, num_str=""):
-        """Move to the previous word."""
-        motion_info = self.helper_motion.b(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def B(self, num=1, num_str=""):
-        """Move to the previous WORD."""
-        motion_info = self.helper_motion.B(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def e(self, num=1, num_str=""):
-        """Move to the the end of word."""
-        motion_info = self.helper_motion.e(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
     @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def g(self, num=1, num_str=""):
         """Start g submode."""
@@ -200,12 +116,6 @@ class ExecutorVisualCmd(ExecutorBase):
         Move the cursor to the start of selection.
         """
         self.helper_action.handle_case(None, "swap")
-
-    def percent(self, num=1, num_str=""):
-        """Go to matching bracket."""
-        motion_info = self.helper_motion.percent(num=num, num_str=num_str)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
     @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def f(self, num=1, num_str=""):
@@ -226,18 +136,6 @@ class ExecutorVisualCmd(ExecutorBase):
     def T(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
         return self.executor_sub_f_t
-
-    def semicolon(self, num=1, num_str=""):
-        """Repeat the last ``f``, ``t``, ``F`` or ``T`` search."""
-        motion_info = self.helper_motion.semicolon(num=num, num_str=num_str)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def comma(self, num=1, num_str=""):
-        """Repeat the last ``f``, ``t``, ``F`` or ``T`` in the opposite direction."""
-        motion_info = self.helper_motion.comma(num=num, num_str=num_str)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
     def r(self, num=1, num_str=""):
         """Replace the selected text under the cursor with input."""
@@ -417,24 +315,6 @@ class ExecutorVisualCmd(ExecutorBase):
     def P(self, num=1, num_str=""):
         """Put the text from register."""
         self.helper_action.paste_in_visual(num)
-
-    def space(self, num=1, num_str=""):
-        """Move cursor to right."""
-        motion_info = self.helper_motion.space(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def backspace(self, num=1, num_str=""):
-        """Move cursor to left."""
-        motion_info = self.helper_motion.backspace(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
-
-    def enter(self, num=1, num_str=""):
-        """Move cursor to down."""
-        motion_info = self.helper_motion.enter(num=num)
-
-        self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
     def m(self, num=1, num_str=""):
         """Set bookmark with given name."""

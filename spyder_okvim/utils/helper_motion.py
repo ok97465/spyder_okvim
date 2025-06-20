@@ -4,7 +4,6 @@
 # Standard library imports
 import re
 from bisect import bisect_left, bisect_right
-from typing import Optional
 
 # Third party imports
 from qtpy.QtCore import QPoint, QRegularExpression
@@ -995,7 +994,7 @@ class HelperMotion:
 
     def get_pos_bracket(
         self, num: int, bracket: str, cursor_pos: int
-    ) -> tuple[Optional[int], Optional[int]]:
+    ) -> tuple[int | None, int | None]:
         """Get the position of the bracket block."""
         # Todo: apply num
         pair_bracket = {

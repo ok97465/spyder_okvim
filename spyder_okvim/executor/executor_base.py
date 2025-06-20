@@ -9,7 +9,7 @@ object and decide whether submodes should be entered.
 """
 # %% Import
 # Standard library imports
-from typing import Any, List, NamedTuple
+from typing import Any, NamedTuple
 
 from spyder_okvim.utils.helper_action import HelperAction
 
@@ -148,7 +148,7 @@ class ExecutorSubBase(ExecutorBase):
         self.has_zero_cmd = False
         self.parent_num = []
         self.parent_num_str = []
-        self.func_list_deferred: List[FUNC_INFO] = []
+        self.func_list_deferred: list[FUNC_INFO] = []
         self.return_deferred: Any = None
 
     def set_parent_info_to_submode(self, submode, num, num_str):
@@ -159,7 +159,7 @@ class ExecutorSubBase(ExecutorBase):
         submode.parent_num.append(num)
         submode.parent_num_str.append(num_str)
 
-    def set_func_list_deferred(self, f_list: List[FUNC_INFO], ret: Any = None):
+    def set_func_list_deferred(self, f_list: list[FUNC_INFO], ret: Any = None):
         """Set func list."""
         self.func_list_deferred = f_list
         self.return_deferred = ret

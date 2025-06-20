@@ -6,7 +6,7 @@ import json
 import os
 import os.path as osp
 from collections import defaultdict
-from typing import Callable, Dict
+from collections.abc import Callable
 
 
 class BookmarkManager:
@@ -26,8 +26,8 @@ class BookmarkManager:
         self.get_editor = get_editor_func
         self.set_cursor_pos = set_cursor_pos_func
 
-        self.bookmarks: Dict[str, Dict[str, Dict[str, int]]] = defaultdict(dict)
-        self.bookmarks_global: Dict[str, Dict[str, int]] = {}
+        self.bookmarks: dict[str, dict[str, dict[str, int]]] = defaultdict(dict)
+        self.bookmarks_global: dict[str, dict[str, int]] = {}
         self._load_persistent_bookmarks()
 
     # ------------------------------------------------------------------
