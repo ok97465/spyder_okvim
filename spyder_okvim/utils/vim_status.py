@@ -204,6 +204,7 @@ class ManagerMacro:
         self.registers = defaultdict(list)
         self.is_recording = False
         self.reg_name_for_record = ""
+        #: Editor currently connected to receive key events during recording
         self.editor_connected = None
         self.reg_name_for_execute = ""
         self.num_execute = 0
@@ -214,7 +215,7 @@ class ManagerMacro:
         self.num_execute = num
 
     def start_record(self, ch):
-        """Start recording."""
+        """Start recording to register ``ch``."""
         self.reg_name_for_record = ch
         self.is_recording = True
 
@@ -223,7 +224,7 @@ class ManagerMacro:
 
     def stop_record(self):
         """Stop recording."""
-        # remove the last key if the last key is q
+        # Remove the trailing ``q`` when finishing recording
         self.remove_last_key("q")
         self.reg_name_for_record = ""
         self.is_recording = False
@@ -249,6 +250,21 @@ class ManagerMacro:
             KeyInfo(event.key(), event.text(), event.modifiers(), 1)
         )
 
+    def connect_to_editor(self, editor, slot):
+        """Connect ``slot`` to ``editor`` for recording events."""
+        self.editor_connected = editor
+        editor.sig_key_pressed.connect(slot)
+
+    def disconnect_from_editor(self, slot):
+        """Disconnect previously connected editor from ``slot``."""
+        editor = self.editor_connected
+        if editor:
+            try:
+                editor.sig_key_pressed.disconnect(slot)
+            except (TypeError, RuntimeError):
+                # Already disconnected or editor deleted
+                pass
+        self.editor_connected = None
 
 class LabelOnTxt(QLabel):
     """Label on txt."""
@@ -919,11 +935,12 @@ class VimStatus(QObject):
     def start_recording_macro(self, reg_name):
         """Start recording macro."""
         self.msg_prefix = f"recording @{reg_name}... "
-        self.manager_macro.start_record(reg_name)
 
         editor = self.get_editor()
-        self.manager_macro.editor_connected = editor
-        editor.sig_key_pressed.connect(self.add_key_from_editor_to_macro_manager)
+        self.manager_macro.start_record(reg_name)
+        self.manager_macro.connect_to_editor(
+            editor, self.add_key_from_editor_to_macro_manager
+        )
 
     def is_recording_macro(self):
         """Return is_recording."""
@@ -933,20 +950,14 @@ class VimStatus(QObject):
         """Stop recording macro."""
         self.msg_prefix = ""
         self.manager_macro.stop_record()
-        self.disconnect_macro_manager_from_editor()
+        self.manager_macro.disconnect_from_editor(
+            self.add_key_from_editor_to_macro_manager
+        )
 
     @Slot(QKeyEvent)
     def add_key_from_editor_to_macro_manager(self, event):
         """Add key event from editor to list to macro_manager."""
         self.manager_macro.add_editor_keyevent(event)
-
-    def disconnect_macro_manager_from_editor(self):
-        """Disconnect macro manager from the editor."""
-        # disconnect previous connection.
-        editor = self.manager_macro.editor_connected
-        if editor:
-            editor.sig_key_pressed.disconnect(self.add_key_from_editor_to_macro_manager)
-        self.manager_macro.editor_connected = None
 
     def set_marker_for_easymotion(self, positions: List[int], motion_type):
         """Set marker for easymotion."""
