@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for :mod:`spyder_okvim.executor.executor_colon`."""
-# Third party imports
+
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 

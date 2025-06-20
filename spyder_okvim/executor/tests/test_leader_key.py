@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Tests for the executor_leader_key."""
-# Standard library imports
+
+# Standard Libraries
 from unittest.mock import Mock
 
-# Third party imports
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 

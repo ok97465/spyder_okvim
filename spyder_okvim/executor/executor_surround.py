@@ -1,8 +1,8 @@
 """Executors for manipulating surrounding characters."""
 
-# Local imports
+# Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
-from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
+from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
 
 SURROUNDINGS = "'\"{[()]}"
 

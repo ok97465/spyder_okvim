@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """Container for the state shared by all executors."""
 
-# Standard library imports
+# Standard Libraries
 import os.path as osp
 from collections import defaultdict
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QEvent, QObject, QRegularExpression, Qt, QTimer, Signal, Slot
 from qtpy.QtGui import (
     QBrush,
@@ -20,11 +20,11 @@ from qtpy.QtWidgets import QApplication, QLabel, QTextEdit
 from spyder.config.manager import CONF
 from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
-from spyder_okvim.utils.easymotion import ManageMarkerEasymotion, PainterEasyMotion
-from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
+from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
+from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
 
 
 class VimState:
@@ -696,8 +696,8 @@ class VimStatus(QObject):
         self.bookmarks_global = self.bookmark_manager.bookmarks_global
 
         # easymotion
-        self.painter_easymotion = PainterEasyMotion()
-        self.manager_marker_easymotion = ManageMarkerEasymotion()
+        self.painter_easymotion = EasyMotionPainter()
+        self.manager_marker_easymotion = EasyMotionMarkerManager()
         self.editor_connected_easymotion = None
 
         # Sneak

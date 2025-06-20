@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Filesystem helper used by EasyMotion and search features."""
+"""Dialog for locating files inside a project tree."""
 from __future__ import annotations
 
-# Standard library imports
+# Standard Libraries
 import os.path as osp
 import re
 import sys
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QDir, QDirIterator, QStringListModel, Qt, Signal
 from qtpy.QtGui import QKeyEvent
 from qtpy.QtWidgets import (
@@ -49,8 +49,8 @@ def fuzzyfinder(query: str, collection: list[str]) -> list[str]:
     return [z[-1] for z in sorted(suggestions)]
 
 
-class PathFinderEdit(QLineEdit):
-    """Line editor for input of path finder."""
+class FileSearchLineEdit(QLineEdit):
+    """Line editor used by :class:`FileSearchDialog`."""
 
     sig_up_key_pressed = Signal()
     sig_pg_up_key_pressed = Signal()
@@ -62,7 +62,12 @@ class PathFinderEdit(QLineEdit):
     sig_esc_key_pressed = Signal()
 
     def __init__(self, parent: QDialog | None, textChanged) -> None:
-        """Init."""
+        """Initialize the line edit.
+
+        Args:
+            parent: Owning dialog.
+            textChanged: Slot to invoke when text changes.
+        """
         super().__init__(parent, textChanged=textChanged)
         self.dispatcher_nomodifier = {
             Qt.Key_Up: self.sig_up_key_pressed.emit,
@@ -101,14 +106,19 @@ class PathFinderEdit(QLineEdit):
         super().keyPressEvent(e)
 
 
-class PathFinder(QDialog):
-    """Search path of files in the folder."""
+class FileSearchDialog(QDialog):
+    """Dialog used to select a file path from a project."""
 
     _MIN_WIDTH = 800
     _MAX_HEIGHT = 600
 
     def __init__(self, folder: str | None, parent: QWidget | None = None) -> None:
-        """Init."""
+        """Create the dialog and populate file information.
+
+        Args:
+            folder: Root directory to search.
+            parent: Parent widget for the dialog.
+        """
         super().__init__(parent)
         font = get_font()
 
@@ -133,7 +143,7 @@ class PathFinder(QDialog):
         self.list_viewer.setFont(font)
 
         # Set edit
-        self.edit = PathFinderEdit(self, textChanged=self.update_list)
+        self.edit = FileSearchLineEdit(self, textChanged=self.update_list)
         self.edit.setFont(font)
         self.edit.sig_esc_key_pressed.connect(self.close)
         self.edit.sig_enter_key_pressed.connect(self.enter)
@@ -152,13 +162,13 @@ class PathFinder(QDialog):
 
         self.setLayout(layout)
 
-        self.get_path_list()
+        self.collect_paths()
         self.update_list()
 
         self.edit.setFocus()
 
-    def get_path_selected(self) -> str:
-        """Get path selected."""
+    def get_selected_path(self) -> str:
+        """Return the file path chosen by the user."""
         return self.path_selected
 
     def get_number_of_visible_lines(self) -> int:
@@ -170,8 +180,8 @@ class PathFinder(QDialog):
             num_lines = lv.viewport().height() // height
         return num_lines
 
-    def get_path_list(self) -> None:
-        """Get path of files including subdirectories."""
+    def collect_paths(self) -> None:
+        """Populate the list of discoverable file paths."""
         if self.folder is None or not osp.isdir(self.folder):
             self.edit.setPlaceholderText("The project is not valid.")
         else:

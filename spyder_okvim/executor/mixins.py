@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 """Mixin classes used by command executors."""
 
+# Standard Libraries
 from typing import Callable
 
+# Third Party Libraries
 from spyder.config.manager import CONF
+
+# Project Libraries
 from spyder_okvim.executor.executor_base import FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO
 from spyder_okvim.spyder.config import CONF_SECTION
 
