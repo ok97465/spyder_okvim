@@ -1,11 +1,23 @@
+"""Decorators for managing submode execution in the Spyder OkVim executor framework.
+
+This module provides decorators to help with entering and managing submodes
+within the executor system. The main decorator, `submode`, wraps command methods
+to prepare submode executors, attach deferred callbacks, and ensure a clean
+context switch using RETURN_EXECUTOR_METHOD_INFO.
+
+Typical usage involves applying the `submode` decorator to executor methods
+that need to transition into a submode, optionally providing a function to
+retrieve a list of deferred functions for the submode.
+"""
+
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, List
 
 from .executor_base import FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO
 
 
 def submode(
-    func_list_getter: Callable[[object], List[FUNC_INFO]] | None = None,
+    func_list_getter: Callable[[object], list[FUNC_INFO]] | None = None,
     clear_command_line: bool = True,
 ):
     """Return a decorator that prepares and enters a submode.

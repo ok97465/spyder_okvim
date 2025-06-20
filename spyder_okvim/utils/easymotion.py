@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """Implementation of EasyMotion overlays."""
+
 # Standard library imports
-from typing import List
 from itertools import product
 
 # Third party imports
-from qtpy.QtCore import QObject, Qt, QEvent, QCoreApplication
-from qtpy.QtGui import QPen, QColor, QPainter
+from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt
+from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import QPlainTextEdit, QWidget
 
 
@@ -14,10 +14,10 @@ class ManageMarkerEasymotion:
     """Manage markers of easymotion."""
 
     def __init__(self):
-        self.position_list: List[int] = []
-        self.name_list: List[str] = []
+        self.position_list: list[int] = []
+        self.name_list: list[str] = []
 
-        self.marker_keys: List[str] = []
+        self.marker_keys: list[str] = []
         self.init_marker_keys()
         self.motion_type = None
 
@@ -29,7 +29,7 @@ class ManageMarkerEasymotion:
         self.marker_keys = list(keys1)
         self.marker_keys += ["".join(pro) for pro in product(keys2, keys1)]
 
-    def set_positions(self, position_list: List[int], motion_type):
+    def set_positions(self, position_list: list[int], motion_type):
         """Set positions."""
         self.name_list = []
         self.position_list = position_list
