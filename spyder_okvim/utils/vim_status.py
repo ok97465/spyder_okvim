@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """Container for the state shared by all executors."""
 # Standard library imports
-import json
-import os
 import os.path as osp
 from collections import defaultdict
 from typing import List
@@ -24,6 +22,7 @@ from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
 # Local imports
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.bookmark_manager import BookmarkManager
 from spyder_okvim.utils.easymotion import ManageMarkerEasymotion, PainterEasyMotion
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
@@ -665,12 +664,19 @@ class VimStatus(QObject):
         self.manager_macro = ManagerMacro()
 
         # bookmarks
-        self.bookmarks = defaultdict(dict)
-        self.bookmarks_global = {}
-        self.bookmarks_file = osp.join(
+        bookmarks_file = osp.join(
             CONF.get_plugin_config_path(CONF_SECTION), "bookmarks.json"
         )
-        self._load_persistent_bookmarks()
+        self.bookmark_manager = BookmarkManager(
+            bookmarks_file,
+            self.main.open_file,
+            self.get_editorstack,
+            self.get_editor,
+            self.cursor.set_cursor_pos,
+        )
+        # Expose dictionaries for backwards compatibility
+        self.bookmarks = self.bookmark_manager.bookmarks
+        self.bookmarks_global = self.bookmark_manager.bookmarks_global
 
         # easymotion
         self.painter_easymotion = PainterEasyMotion()
@@ -733,9 +739,9 @@ class VimStatus(QObject):
         self.msg_label.setText("")
 
         # bookmarks
-        self.bookmarks = defaultdict(dict)
-        self.bookmarks_global = {}
-        self._save_persistent_bookmarks()
+        self.bookmark_manager.clear()
+        self.bookmarks = self.bookmark_manager.bookmarks
+        self.bookmarks_global = self.bookmark_manager.bookmarks_global
 
         self.to_normal()
 
@@ -886,79 +892,25 @@ class VimStatus(QObject):
             return self.register_dict[name]
 
     # ---- Bookmarks ----------------------------------------------------
-    def _load_persistent_bookmarks(self):
+    def _load_persistent_bookmarks(self) -> None:
         """Load persistent bookmarks from disk."""
-        if osp.isfile(self.bookmarks_file):
-            try:
-                with open(self.bookmarks_file, "r", encoding="utf-8") as f:
-                    self.bookmarks_global = json.load(f)
-            except Exception:
-                self.bookmarks_global = {}
-        else:
-            self.bookmarks_global = {}
+        self.bookmark_manager._load_persistent_bookmarks()
 
-    def _save_persistent_bookmarks(self):
+    def _save_persistent_bookmarks(self) -> None:
         """Save persistent bookmarks to disk."""
-        folder = osp.dirname(self.bookmarks_file)
-        os.makedirs(folder, exist_ok=True)
-        with open(self.bookmarks_file, "w", encoding="utf-8") as f:
-            json.dump(self.bookmarks_global, f)
+        self.bookmark_manager._save_persistent_bookmarks()
 
-    def set_bookmark(self, name):
+    def set_bookmark(self, name: str) -> None:
         """Set bookmark at current cursor position."""
-        cursor = self.get_cursor()
-        line = cursor.blockNumber()
-        col = cursor.position() - cursor.block().position()
-        path = self.get_editorstack().get_current_filename()
-        info = {"file": path, "line": line, "col": col}
-        if name.isupper():
-            self.bookmarks_global[name] = info
-            self._save_persistent_bookmarks()
-        else:
-            self.bookmarks[path][name] = info
+        self.bookmark_manager.set_bookmark(name)
 
-    def get_bookmark(self, name):
+    def get_bookmark(self, name: str):
         """Return bookmark information for *name* or None."""
-        if name.isupper():
-            return self.bookmarks_global.get(name)
-        current = self.get_editorstack().get_current_filename()
-        return self.bookmarks.get(current, {}).get(name)
+        return self.bookmark_manager.get_bookmark(name)
 
-    def jump_to_bookmark(self, name):
+    def jump_to_bookmark(self, name: str) -> None:
         """Move cursor to bookmark *name* if it exists."""
-        if name.isupper():
-            info = self.bookmarks_global.get(name)
-            if not info:
-                return
-            file_path = info.get("file")
-            line = info.get("line")
-            col = info.get("col")
-            editor_stack = self.get_editorstack()
-            if editor_stack.is_file_opened(file_path) is None:
-                self.main.open_file(file_path)
-            editor_stack.set_current_filename(file_path)
-            editor = self.get_editor()
-            block = editor.document().findBlockByNumber(line)
-            if not block.isValid():
-                self.bookmarks_global.pop(name, None)
-                self._save_persistent_bookmarks()
-                return
-            pos = block.position() + min(col, block.length() - 1)
-            self.cursor.set_cursor_pos(pos)
-        else:
-            current = self.get_editorstack().get_current_filename()
-            info = self.bookmarks.get(current, {}).get(name)
-            if not info:
-                return
-            line = info.get("line")
-            col = info.get("col")
-            editor = self.get_editor()
-            block = editor.document().findBlockByNumber(line)
-            if not block.isValid():
-                self.bookmarks[current].pop(name, None)
-                return
-            pos = block.position() + min(col, block.length() - 1)
-            self.cursor.set_cursor_pos(pos)
+        self.bookmark_manager.jump_to_bookmark(name)
 
     def set_message(self, msg, duration_ms=-1):
         """Display the massage."""
