@@ -6,7 +6,7 @@ from spyder_okvim.utils.vim_status import VimState
 
 
 class ExecutorColon(ExecutorSubBase):
-    """Execute the method by enter."""
+    """Interpreter for ``:`` commands entered in the command line."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -15,13 +15,17 @@ class ExecutorColon(ExecutorSubBase):
         self.editor_widget = vim_status.editor_widget
 
     def __call__(self, txt):
-        """Parse txt and executor command.
+        """Parse ``txt`` and execute the corresponding ex command.
+
+        Parameters
+        ----------
+        txt : str
+            Command string typed by the user, including the trailing ``\r``.
 
         Returns
         -------
         bool
-            if return is True, Clear command line
-
+            ``True`` if the command line should be cleared.
         """
         if txt[-1] == "\b":
             cmd_line = self.vim_status.cmd_line

@@ -84,7 +84,7 @@ class ExecutorNormalCmd(ExecutorBase):
         )
 
     def colon(self, num=1, num_str=""):
-        """Execute submode for ;."""
+        """Enter ``:`` command-line mode."""
         self.vim_status.set_message("")
         return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
 
@@ -342,13 +342,13 @@ class ExecutorNormalCmd(ExecutorBase):
         return self.executor_sub_f_t
 
     def semicolon(self, num=1, num_str=""):
-        """Repeat latest f, t, f, T."""
+        """Repeat the last ``f``, ``t``, ``F`` or ``T`` search."""
         motion_info = self.helper_motion.semicolon(num=num, num_str=num_str)
 
         self.set_cursor_pos(motion_info.cursor_pos)
 
     def comma(self, num=1, num_str=""):
-        """Repeat latest f, t, f, T in opposite direction."""
+        """Repeat the last ``f``, ``t``, ``F`` or ``T`` in the opposite direction."""
         motion_info = self.helper_motion.comma(num=num, num_str=num_str)
 
         self.set_cursor_pos(motion_info.cursor_pos)

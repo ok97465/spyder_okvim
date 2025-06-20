@@ -32,14 +32,7 @@ class ExecutorLeaderKey(ExecutorBase):
         self.dispatcher[key] = self.execute_easymotion
 
     def __call__(self, txt):
-        """Parse txt and executor command.
-
-        Returns
-        -------
-        bool
-            if return is True, Clear command line
-
-        """
+        """Dispatch leader-key command ``txt`` and return execution info."""
         method = self.dispatcher.get(txt, None)
 
         ret = None

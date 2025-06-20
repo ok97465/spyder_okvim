@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Excecutor __init__."""
+"""Expose all available command executors.
+
+This package defines the main entry points used by OkVim to interpret
+keystrokes.  Normal, visual and vline executors emulate Vim behaviour in
+the Spyder editor, while ``ExecutorLeaderKey`` handles sequences that
+start with the configurable leader key.
+"""
 # %% Import
 # Local imports
 from .executor_normal import ExecutorNormalCmd

@@ -4,8 +4,17 @@ from typing import Callable, List
 from .executor_base import FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO
 
 
-def submode(func_list_getter: Callable[[object], List[FUNC_INFO]] | None = None, clear_command_line: bool = True):
-    """Decorator to handle common submode boilerplate."""
+def submode(
+    func_list_getter: Callable[[object], List[FUNC_INFO]] | None = None,
+    clear_command_line: bool = True,
+):
+    """Return a decorator that prepares and enters a submode.
+
+    The wrapped command should return the submode executor.  This helper
+    attaches any deferred callbacks defined by ``func_list_getter`` and
+    finally returns a :class:`RETURN_EXECUTOR_METHOD_INFO` instance so the
+    caller can switch context cleanly.
+    """
 
     def decorator(func: Callable):
         @wraps(func)
