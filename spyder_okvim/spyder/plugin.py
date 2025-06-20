@@ -116,12 +116,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     # --- SpyderDockablePlugin API
     # ------------------------------------------------------------------------
     @staticmethod
-    def get_name():
+    def get_name() -> str:
         """Return name."""
         return CONF_SECTION
 
     @staticmethod
-    def get_description():
+    def get_description() -> str:
         """Return description."""
         return "A plugin for Spyder to enable Vim keybindings"
 
@@ -130,7 +130,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Return widget icon."""
         return qta.icon("mdi.vimeo", color=MAIN_FG_COLOR)
 
-    def on_initialize(self):
+    def on_initialize(self) -> None:
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
@@ -154,7 +154,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         sc.setContext(Qt.WidgetWithChildrenShortcut)
 
     @on_plugin_available(plugin=Plugins.Preferences)
-    def on_preferences_available(self):
+    def on_preferences_available(self) -> None:
         """Connect when preferences available."""
         preferences = self.get_plugin(Plugins.Preferences)
         preferences.register_plugin_preferences(self)
@@ -166,7 +166,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         message = ""  # Note: Remember to use _("") to localize the string
         return valid, message
 
-    def on_close(self, cancellable=True):
+    def on_close(self, cancellable: bool = True) -> bool:
         """Handle plugin shutdown."""
         return True
 
@@ -175,6 +175,6 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         return []
 
     # ------ SpyderPluginMixin API
-    def apply_plugin_settings(self, options):
+    def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)

@@ -349,15 +349,12 @@ class HelperAction:
         self.vim_status.cursor.set_cursor_pos(block_start.position() + len_blank)
         editor.document_did_change()
 
-    def yank(self, motion_info: MotionInfo, is_explicit=False):
+    def yank(self, motion_info: MotionInfo, is_explicit: bool = False):
         """Yank text into register.
 
-        Parameters
-        ----------
-        motion_info: MotionInfo
-            motion_info
-        is_explicit: Bool
-            If this method is called explicitly, this arg is True.
+        Args:
+            motion_info: Motion information for the yank range.
+            is_explicit: When called explicitly, this argument is ``True``.
 
         """
         if self.vim_status.is_normal():

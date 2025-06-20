@@ -21,7 +21,7 @@ class CustomLayout(BaseGridLayoutType):
 
     ID = SpyderCustomLayouts.CustomLayout
 
-    def __init__(self, parent_plugin):
+    def __init__(self, parent_plugin: Plugins) -> None:
         super().__init__(parent_plugin)
 
         # Explorer/Files and OutlineExplorer tabbed
@@ -53,5 +53,5 @@ class CustomLayout(BaseGridLayoutType):
         self.add_area([Plugins.IPythonConsole], 1, 3)
 
     @staticmethod
-    def get_name():
+    def get_name() -> str:
         return "Spyder_okvim"

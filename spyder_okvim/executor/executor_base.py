@@ -57,10 +57,10 @@ class ExecutorBase:
     def __init__(self, vim_status):
         """Initialize the executor with the shared :class:`VimStatus`.
 
-        Parameters
-        ----------
-        vim_status : spyder_okvim.utils.vim_status.VimStatus
-            Object exposing editor and cursor helpers used by the executor.
+        Args:
+            vim_status: spyder_okvim.utils.vim_status.VimStatus
+                Object exposing editor and cursor helpers used by the executor.
+
         """
         self.vim_status = vim_status
         self.get_cursor = vim_status.get_cursor
