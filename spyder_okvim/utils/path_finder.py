@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Filesystem helper used by EasyMotion and search features."""
+from __future__ import annotations
+
 # Standard library imports
 import os.path as osp
 import re
@@ -7,23 +9,30 @@ import sys
 
 # Third party imports
 from qtpy.QtCore import QDir, QDirIterator, QStringListModel, Qt, Signal
-from qtpy.QtWidgets import QApplication, QDialog, QLineEdit, QListView, QVBoxLayout
+from qtpy.QtGui import QKeyEvent
+from qtpy.QtWidgets import (
+    QApplication,
+    QDialog,
+    QLineEdit,
+    QListView,
+    QVBoxLayout,
+    QWidget,
+)
 from spyder.config.gui import get_font
 
 
-def fuzzyfinder(query, collection):
+def fuzzyfinder(query: str, collection: list[str]) -> list[str]:
     """Fuzzy search.
 
     Ref: https://github.com/amjith/fuzzyfinder
 
     Args:
-        input (str): A partial string which is typically entered by a user.
-        collection (iterable): A collection of strings which will be filtered
-                               based on the `input`.
+        query: A partial string typically entered by a user.
+        collection: Collection of strings filtered by ``query``.
 
     Returns:
-        suggestions (generator): A generator object that produces a list of
-            suggestions narrowed down from `collection` using the `input`.
+        list: Suggestions narrowed down from ``collection`` using ``query``.
+
     """
     suggestions = []
     pat = ".*?".join(map(re.escape, query))
@@ -52,7 +61,7 @@ class PathFinderEdit(QLineEdit):
     sig_enter_key_pressed = Signal()
     sig_esc_key_pressed = Signal()
 
-    def __init__(self, parent, textChanged):
+    def __init__(self, parent: QDialog | None, textChanged) -> None:
         """Init."""
         super().__init__(parent, textChanged=textChanged)
         self.dispatcher_nomodifier = {
@@ -74,7 +83,7 @@ class PathFinderEdit(QLineEdit):
             Qt.Key_D: self.sig_pg_half_down_key_pressed.emit,
         }
 
-    def keyPressEvent(self, e):
+    def keyPressEvent(self, e: QKeyEvent) -> None:
         """Override Qt method."""
         key = e.key()
         modifier = e.modifiers()
@@ -98,7 +107,7 @@ class PathFinder(QDialog):
     _MIN_WIDTH = 800
     _MAX_HEIGHT = 600
 
-    def __init__(self, folder, parent=None):
+    def __init__(self, folder: str | None, parent: QWidget | None = None) -> None:
         """Init."""
         super().__init__(parent)
         font = get_font()
@@ -148,11 +157,11 @@ class PathFinder(QDialog):
 
         self.edit.setFocus()
 
-    def get_path_selected(self):
+    def get_path_selected(self) -> str:
         """Get path selected."""
         return self.path_selected
 
-    def get_number_of_visible_lines(self):
+    def get_number_of_visible_lines(self) -> int:
         """Get the number of visible lines in list."""
         num_lines = 0
         lv = self.list_viewer
@@ -161,8 +170,8 @@ class PathFinder(QDialog):
             num_lines = lv.viewport().height() // height
         return num_lines
 
-    def get_path_list(self):
-        """Get path of files including subdiretorys."""
+    def get_path_list(self) -> None:
+        """Get path of files including subdirectories."""
         if self.folder is None or not osp.isdir(self.folder):
             self.edit.setPlaceholderText("The project is not valid.")
         else:
@@ -178,7 +187,7 @@ class PathFinder(QDialog):
 
         self.results_old[""] = self.path_list
 
-    def update_list(self):
+    def update_list(self) -> None:
         """Update listview."""
         query = self.edit.text()
         query = query.replace(" ", "")
@@ -192,13 +201,13 @@ class PathFinder(QDialog):
             self.list_model.setStringList(paths)
             self.list_viewer.setCurrentIndex(self.list_model.index(0))
 
-    def prev_row(self, stride=1):
+    def prev_row(self, stride: int = 1) -> None:
         """Select prev row in list viewer."""
         prev_row = self.list_viewer.currentIndex().row() - stride
         prev_row = max([prev_row, 0])
         self.list_viewer.setCurrentIndex(self.list_model.index(prev_row))
 
-    def next_row(self, stride=1):
+    def next_row(self, stride: int = 1) -> None:
         """Select next row in list viewer."""
         n_row = self.list_model.rowCount()
         if n_row == 0:
@@ -207,27 +216,27 @@ class PathFinder(QDialog):
         next_row = min([next_row, n_row - 1])
         self.list_viewer.setCurrentIndex(self.list_model.index(next_row))
 
-    def pg_up(self):
+    def pg_up(self) -> None:
         """Scroll windows 1page backwards."""
         n_line = self.get_number_of_visible_lines()
         self.prev_row(n_line)
 
-    def pg_down(self):
+    def pg_down(self) -> None:
         """Scroll windows 1page forwards."""
         n_line = self.get_number_of_visible_lines()
         self.next_row(n_line)
 
-    def pg_half_up(self):
+    def pg_half_up(self) -> None:
         """Scroll windows half page backwards."""
         n_line = self.get_number_of_visible_lines()
         self.prev_row(n_line // 2)
 
-    def pg_half_down(self):
+    def pg_half_down(self) -> None:
         """Scroll windows half page forwards."""
         n_line = self.get_number_of_visible_lines()
         self.next_row(n_line // 2)
 
-    def enter(self):
+    def enter(self) -> None:
         """Select next row in list viewer."""
         idx = self.list_viewer.currentIndex()
         rel_path = idx.data(Qt.DisplayRole)

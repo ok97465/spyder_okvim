@@ -369,14 +369,7 @@ class VimCursor:
         self.draw_vim_cursor()
 
     def set_cursor_pos_in_visual(self, pos_new):
-        """Set cursor position and redraw selection in visual mode.
-
-        Parameters
-        ----------
-        pos_new : int
-            position of cursor
-
-        """
+        """Set cursor position and redraw selection in visual mode."""
         if pos_new is None:
             return
         editor = self.get_editor()
@@ -501,14 +494,7 @@ class VimCursor:
             return old_cursor
 
     def set_cursor_pos_in_vline(self, pos_new):
-        """Set cursor position and redraw selection in vline mode.
-
-        Parameters
-        ----------
-        pos_new : int
-            position of cursor
-
-        """
+        """Set cursor position and redraw selection in vline mode."""
         if pos_new is None:
             return
         editor = self.get_editor()
