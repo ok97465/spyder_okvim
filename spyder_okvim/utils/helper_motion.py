@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Module for motion of vim."""
+"""Cursor movement helpers for Vim emulation."""
 # %% Import
 # Standard library imports
 import re
@@ -61,24 +61,21 @@ class HelperMotion:
         }
 
     def _set_motion_info(
-        self, cur_pos, sel_start=None, sel_end=None, motion_type=MotionType.LineWise
+        self,
+        cur_pos: int | None,
+        sel_start: int | None = None,
+        sel_end: int | None = None,
+        motion_type: int = MotionType.LineWise,
     ):
         """Set motion info.
 
-        Parameters
-        ----------
-        cur_pos: int, optional
-            the position of cursor.
-        sel_start: int, optional
-            the start position of selection.
-        sel_end: int, optional
-            the end position of selection.
-        motion_type: int
-            motion type
+        Args:
+        cur_pos: the position of cursor.
+        sel_start: the start position of selection.
+        sel_end: the end position of selection.
+        motion_type: motion type
 
-        Returns
-        -------
-        MotionInfo
+        Returns:
             motion info
 
         """
@@ -106,27 +103,13 @@ class HelperMotion:
         return cursor.selectedText()
 
     def zero(self, num=1, num_str=""):
-        """Get the start position of the current line.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the start position of the current line."""
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.StartOfLine)
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def l(self, num=1, num_str=""):
-        """Get the position on the right side of the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position on the right side of the cursor."""
         cursor = self.get_cursor()
         pos_cur = cursor.position()
 
@@ -143,14 +126,7 @@ class HelperMotion:
         return self._set_motion_info(pos_new, motion_type=MotionType.CharWise)
 
     def h(self, num=1, num_str=""):
-        """Get the position on the left side of the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position on the left side of the cursor."""
         cursor = self.get_cursor()
         pos_cur = cursor.position()
 
@@ -167,14 +143,7 @@ class HelperMotion:
         return self._set_motion_info(pos_new, motion_type=MotionType.CharWise)
 
     def k(self, num=1, num_str=""):
-        """Get the position above the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position above the cursor."""
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.Up, n=num)
         pos_new = cursor.position()
@@ -184,14 +153,7 @@ class HelperMotion:
         return self._set_motion_info(pos_new)
 
     def j(self, num=1, num_str=""):
-        """Get the position below the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position below the cursor."""
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.Down, n=num)
         pos_new = cursor.position()
@@ -221,14 +183,7 @@ class HelperMotion:
         return self._set_motion_info(block.position())
 
     def dollar(self, num=1, num_str=""):
-        """Get the position of the end of the current line.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the end of the current line."""
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.EndOfLine, n=num)
         pos_new = cursor.position()
@@ -236,14 +191,7 @@ class HelperMotion:
         return self._set_motion_info(pos_new, motion_type=MotionType.CharWise)
 
     def caret(self, num=1, num_str=""):
-        """Get the position of the first non-blank character of the line.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the first non-blank character of the line."""
         cursor = self.get_cursor()
         block = cursor.block()
         text = block.text()
@@ -255,14 +203,7 @@ class HelperMotion:
         return self._set_motion_info(pos, motion_type=MotionType.CharWise)
 
     def w(self, num=1, num_str=""):
-        """Get the position of the next word.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the next word."""
         cursor = self.get_cursor()
         for _ in range(num):
             cursor.movePosition(QTextCursor.NextWord)
@@ -274,14 +215,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def w_for_d(self, num=1, num_str=""):
-        """Get the position of the next word in d command.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the next word in d command."""
         cursor = self.get_cursor()
         for _ in range(num):
             if cursor.atBlockEnd():
@@ -296,14 +230,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def w_for_c(self, num=1, num_str=""):
-        """Get the position of the next word for c command.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the next word for c command."""
         cursor = self.get_cursor()
         for _ in range(num - 1):
             cursor.movePosition(QTextCursor.NextWord)
@@ -320,14 +247,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def W(self, num=1, num_str=""):
-        """Get the position of the next WORD.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the next WORD."""
         cursor = self.get_cursor()
         for _ in range(num):
             if cursor.atBlockEnd():
@@ -347,14 +267,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def W_for_d(self, num=1, num_str=""):
-        """Get the position of the next WORD.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the next WORD."""
         cursor = self.get_cursor()
         for _ in range(num):
             if cursor.atBlockEnd():
@@ -371,14 +284,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def W_for_c(self, num=1, num_str=""):
-        """Get the position of the next WORD for c command.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the next WORD for c command."""
         cursor = self.get_cursor()
         for _ in range(num - 1):
             if cursor.atBlockEnd():
@@ -409,14 +315,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def b(self, num=1, num_str=""):
-        """Get the position of the previous word.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the previous word."""
         cursor = self.get_cursor()
 
         def move2previousword(_cursor):
@@ -439,14 +338,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def B(self, num=1, num_str=""):
-        """Get the position of the previous WORD.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position of the previous WORD."""
         cursor = self.get_cursor()
 
         def move2previousWORD(_cursor):
@@ -470,11 +362,6 @@ class HelperMotion:
         """Get the position of the end of word.
 
         Does not stop in an empty line.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
 
         """
         cursor = self.get_cursor()
@@ -510,11 +397,6 @@ class HelperMotion:
         """Get the position of the Line.
 
         if num_str is False, this function return the last line position.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
 
         """
         editor = self.get_editor()
@@ -686,7 +568,7 @@ class HelperMotion:
         return start_pos, end_pos
 
     def search_forward_in_view(self, txt: str) -> list[int]:
-        """."""
+        """Return positions of ``txt`` within the visible editor viewport."""
         editor = self.get_editor()
 
         cur_pos = editor.textCursor().position()
@@ -729,7 +611,7 @@ class HelperMotion:
         self.vim_status.annotate_on_txt(info_group, timeout=1500)
 
     def search_backward_in_view(self, txt: str) -> list[int]:
-        """."""
+        """Return positions of ``txt`` when searching backward in the viewport."""
         editor = self.get_editor()
 
         cur_pos = editor.textCursor().position()
@@ -739,7 +621,9 @@ class HelperMotion:
         pos_list = []
         while view_start_pos <= start_pos <= view_end_pos:
             cursor = editor.document().find(
-                txt, start_pos, QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
+                txt,
+                start_pos,
+                QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
             )
             if cursor.isNull() or cursor.position() < view_start_pos:
                 break
@@ -1317,14 +1201,7 @@ class HelperMotion:
         return self.N(num=num)
 
     def space(self, num=1, num_str=""):
-        """Get the position on the right side of the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position on the right side of the cursor."""
         cursor = self.get_cursor()
 
         for _ in range(num):
@@ -1335,14 +1212,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def backspace(self, num=1, num_str=""):
-        """Get the position on the right side of the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position on the right side of the cursor."""
         cursor = self.get_cursor()
 
         cursor.movePosition(QTextCursor.Left, n=num)
@@ -1350,14 +1220,7 @@ class HelperMotion:
         return self._set_motion_info(cursor.position(), motion_type=MotionType.CharWise)
 
     def enter(self, num=1, num_str=""):
-        """Get the position below the cursor.
-
-        Returns
-        -------
-        MotionInfo
-            motion info
-
-        """
+        """Get the position below the cursor."""
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.Down, n=num)
         block = cursor.block()

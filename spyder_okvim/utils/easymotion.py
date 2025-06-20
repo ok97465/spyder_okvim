@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Easy motion"""
+"""Implementation of EasyMotion overlays."""
 # Standard library imports
 from typing import List
 from itertools import product

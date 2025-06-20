@@ -1,4 +1,5 @@
 """Conftest."""
+
 # Standard library imports
 import os
 import os.path as osp
@@ -152,4 +153,3 @@ def vim_bot(qtbot_module):
     finfo2.deleteLater()
     finfo3.deleteLater()
     editor_stack.deleteLater()
-

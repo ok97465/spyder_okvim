@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""."""
-"""Tests for the executor_colon."""
+"""Tests for :mod:`spyder_okvim.executor.executor_colon`."""
 # Third party imports
 import pytest
 from qtpy.QtCore import Qt

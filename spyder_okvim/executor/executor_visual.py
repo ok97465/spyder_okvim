@@ -1,11 +1,19 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Executor for visual mode commands.
+
+The :class:`ExecutorVisualCmd` interprets keystrokes while a text selection is
+active.  Many commands mirror those from :mod:`executor_normal`, but they act on
+the current selection.  The executor can also enter submodes to handle searches,
+character motions and other modal operations.
+"""
 # %% Import
 # Standard library imports
 import re
 
 # Third party imports
 from spyder.config.manager import CONF
+
+from spyder_okvim.executor.decorators import submode
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
@@ -37,7 +45,7 @@ class ExecutorVisualCmd(ExecutorBase):
         super().__init__(vim_status)
 
         cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<> \b\r*#"
-        cmds = ''.join(re.escape(c) for c in cmds)
+        cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.set_cursor_pos_in_visual = vim_status.cursor.set_cursor_pos_in_visual
@@ -175,16 +183,10 @@ class ExecutorVisualCmd(ExecutorBase):
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def g(self, num=1, num_str=""):
         """Start g submode."""
-        executor_sub = self.executor_sub_g
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return self.executor_sub_g
 
     def G(self, num=1, num_str=""):
         """Move to the line."""
@@ -205,62 +207,34 @@ class ExecutorVisualCmd(ExecutorBase):
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def f(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        return self.executor_sub_f_t
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def F(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        return self.executor_sub_f_t
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def t(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        return self.executor_sub_f_t
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def T(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return self.executor_sub_f_t
 
     def semicolon(self, num=1, num_str=""):
-        """Repeat latest f, t, f, T."""
+        """Repeat the last ``f``, ``t``, ``F`` or ``T`` search."""
         motion_info = self.helper_motion.semicolon(num=num, num_str=num_str)
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
     def comma(self, num=1, num_str=""):
-        """Repeat latest f, t, f, T in opposite direction."""
+        """Repeat the last ``f``, ``t``, ``F`` or ``T`` in the opposite direction."""
         motion_info = self.helper_motion.comma(num=num, num_str=num_str)
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)

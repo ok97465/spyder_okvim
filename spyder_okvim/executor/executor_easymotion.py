@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Support for EasyMotion-like navigation.
+
+EasyMotion highlights possible jump targets in the editor and lets the user
+select one with a short key sequence.  This executor provides helper methods
+used by the normal and visual mode executors to implement those jumps.
+"""
 # %% Import
 # Standard library imports
 from typing import Tuple
@@ -10,8 +15,8 @@ from qtpy.QtGui import QTextCursor, QTextDocument
 
 # Local imports
 from spyder_okvim.executor.executor_base import (
-    ExecutorSubBase,
     RETURN_EXECUTOR_METHOD_INFO,
+    ExecutorSubBase,
 )
 from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
 
@@ -25,25 +30,22 @@ class ExecutorSelectMarkerEasymotion(ExecutorSubBase):
         self.motion_info = MotionInfo()
 
     def _set_motion_info(
-        self, cur_pos, sel_start=None, sel_end=None, motion_type=MotionType.LineWise
+        self,
+        cur_pos: int | None,
+        sel_start: int | None = None,
+        sel_end: int | None = None,
+        motion_type: int = MotionType.LineWise,
     ):
         """Set motion info.
 
-        Parameters
-        ----------
-        cur_pos: int, optional
-            the position of cursor.
-        sel_start: int, optional
-            the start position of selection.
-        sel_end: int, optional
-            the end position of selection.
-        motion_type: int
-            motion type
+        Args:
+            cur_pos: the position of cursor.
+            sel_start: the start position of selection.
+            sel_end: the end position of selection.
+            motion_type: motion type
 
-        Returns
-        -------
-        MotionInfo
-            motion info
+        Returns:
+            MotionInfo
 
         """
         self.motion_info.cursor_pos = cur_pos

@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Base classes for OkVim command executors.
+
+This module provides :class:`ExecutorBase` and :class:`ExecutorSubBase`, which
+handle the parsing of command strings and delegation of actions to the
+``HelperMotion`` and ``HelperAction`` utilities.  Executors interpret user
+keystrokes, update the shared :class:`~spyder_okvim.utils.vim_status.VimStatus`
+object and decide whether submodes should be entered.
+"""
 # %% Import
 # Standard library imports
-from typing import NamedTuple, Any, List
+from typing import Any, List, NamedTuple
+
+from spyder_okvim.utils.helper_action import HelperAction
 
 # Local imports
 from spyder_okvim.utils.helper_motion import HelperMotion
-from spyder_okvim.utils.helper_action import HelperAction
 
 FUNC_INFO = NamedTuple("FUNC_INFO", [("func", Any), ("has_arg", bool)])
 RETURN_EXECUTOR_METHOD_INFO = NamedTuple(
@@ -47,13 +55,12 @@ class ExecutorBase:
     }
 
     def __init__(self, vim_status):
-        """__init__.
+        """Initialize the executor with the shared :class:`VimStatus`.
 
         Parameters
         ----------
         vim_status : spyder_okvim.utils.vim_status.VimStatus
-            vim status
-
+            Object exposing editor and cursor helpers used by the executor.
         """
         self.vim_status = vim_status
         self.get_cursor = vim_status.get_cursor
@@ -85,13 +92,11 @@ class ExecutorBase:
         submode.parent_num = [num]
         submode.parent_num_str = [num_str]
 
-    def __call__(self, txt):
+    def __call__(self, txt: str) -> bool:
         """Parse txt and executor command.
 
-        Returns
-        -------
-        bool
-            if return is True, Clear command line
+        Returns:
+            if return is True, Clear command line.
 
         """
         if self.has_zero_cmd and txt == "0":

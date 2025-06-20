@@ -1,8 +1,10 @@
 """Tests for the Marks."""
+
 # %% Imports
 # Third party imports
 import pytest
 from qtpy.QtCore import Qt
+
 from spyder_okvim.utils.vim_status import VimState
 
 
@@ -170,7 +172,7 @@ def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expec
 
     # Ensure current file is the one associated with *editor*
     stack.set_current_filename(stack.get_filenames()[0])
-    
+
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
@@ -197,7 +199,9 @@ def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expec
         ("c`a", "l\n", 0, "abcd\nefgh\nijk"),
     ],
 )
-def test_mark_operations_after(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+def test_mark_operations_after(
+    vim_bot, cmd_list, text_expected, cursor_pos, reg_expected
+):
     """Operations when mark is after the cursor."""
     _, stack, editor, vim, qtbot = vim_bot
 
@@ -228,7 +232,9 @@ def test_mark_operations_after(vim_bot, cmd_list, text_expected, cursor_pos, reg
         ("c`A", "abl\n", 2, "cd\nefgh\nijk"),
     ],
 )
-def test_global_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+def test_global_mark_operations(
+    vim_bot, cmd_list, text_expected, cursor_pos, reg_expected
+):
     """Global mark operations when mark is before cursor."""
     _, stack, editor, vim, qtbot = vim_bot
 
@@ -259,7 +265,9 @@ def test_global_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, re
         ("c`A", "l\n", 0, "abcd\nefgh\nijk"),
     ],
 )
-def test_global_mark_operations_after(vim_bot, cmd_list, text_expected, cursor_pos, reg_expected):
+def test_global_mark_operations_after(
+    vim_bot, cmd_list, text_expected, cursor_pos, reg_expected
+):
     """Global mark operations when mark is after the cursor."""
     _, stack, editor, vim, qtbot = vim_bot
 
@@ -361,7 +369,7 @@ def test_global_bookmark_removed_after_edit(vim_bot):
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     qtbot.keyClicks(cmd_line, "'A")
     assert editor.textCursor().position() == 0
-    assert 'A' in vim.vim_cmd.vim_status.bookmarks_global
+    assert "A" in vim.vim_cmd.vim_status.bookmarks_global
 
 
 def test_global_bookmark_overwrite(vim_bot):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Path Finder."""
+"""Filesystem helper used by EasyMotion and search features."""
 # Standard library imports
 import os.path as osp
 import re
@@ -7,13 +7,7 @@ import sys
 
 # Third party imports
 from qtpy.QtCore import QDir, QDirIterator, QStringListModel, Qt, Signal
-from qtpy.QtWidgets import (
-    QApplication,
-    QDialog,
-    QLineEdit,
-    QListView,
-    QVBoxLayout,
-)
+from qtpy.QtWidgets import QApplication, QDialog, QLineEdit, QListView, QVBoxLayout
 from spyder.config.gui import get_font
 
 

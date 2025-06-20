@@ -1,27 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Status of Vim."""
+"""Container for the state shared by all executors."""
 # Standard library imports
-from collections import defaultdict
+import json
 import os
 import os.path as osp
-import json
+from collections import defaultdict
 from typing import List
 
 # Third party imports
-from qtpy.QtCore import (
-    QEvent,
-    QObject,
-    Qt,
-    QRegularExpression,
-    QTimer,
-    Signal,
-    Slot,
-)
+from qtpy.QtCore import QEvent, QObject, QRegularExpression, Qt, QTimer, Signal, Slot
 from qtpy.QtGui import (
     QBrush,
     QColor,
     QKeyEvent,
     QRegularExpressionValidator,
+    QTextBlock,
     QTextCursor,
     QValidator,
 )
@@ -262,7 +255,7 @@ class LabelOnTxt(QLabel):
     """Label on txt."""
 
     def __init__(self, parent=None):
-        """."""
+        """Initialize the label used to display text annotations."""
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
@@ -422,15 +415,13 @@ class VimCursor:
         self.set_extra_selections("vim_selection", [sel])
         self.set_cursor_pos(pos_new)
 
-    def get_block(self, pos):
+    def get_block(self, pos: int) -> tuple[QTextBlock, int]:
         """Get block number of cursor position.
 
-        Returns
-        -------
-        QTextBlock
-            The QTextBlock class provides a container for text fragments.
-        int
-            Block number.
+        Returns:
+            QTextBlock: The QTextBlock class provides a container for text fragments.
+            int: Block number.
+
         """
         cursor = self.get_cursor()
         cursor.setPosition(pos)

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Executor for ":" command-line input."""
 # Local imports
 from spyder_okvim.executor.executor_base import ExecutorSubBase
 from spyder_okvim.utils.vim_status import VimState
 
 
 class ExecutorColon(ExecutorSubBase):
-    """Execute the method by enter."""
+    """Interpreter for ``:`` commands entered in the command line."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -14,13 +14,14 @@ class ExecutorColon(ExecutorSubBase):
 
         self.editor_widget = vim_status.editor_widget
 
-    def __call__(self, txt):
-        """Parse txt and executor command.
+    def __call__(self, txt: str) -> bool:
+        """Parse ``txt`` and execute the corresponding ex command.
 
-        Returns
-        -------
-        bool
-            if return is True, Clear command line
+        Args:
+            txt: Command string typed by the user, including the trailing ``\r``.
+
+        Returns:
+            if return is True, Clear command line.
 
         """
         if txt[-1] == "\b":

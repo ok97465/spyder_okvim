@@ -48,10 +48,10 @@ def coverage_resolve_trace(fn):
 
 
 class SpyderOkVimPane(PluginMainWidget):
-    """."""
+    """Invisible pane used to host the Vim command widget."""
 
     def __init__(self, name=None, plugin=None, parent=None):
-        """."""
+        """Create the pane and its underlying Vim widget."""
         super().__init__(name, plugin, parent)
         layout = QHBoxLayout()
         layout.addWidget(QLabel("Please hide this pane."))
@@ -61,19 +61,19 @@ class SpyderOkVimPane(PluginMainWidget):
         self.vim_cmd = VimWidget(self.main.editor, self.main)
 
     def get_title(self):
-        """."""
+        """Return the localized title for the pane."""
         return "Okvim"
 
     def get_focus_widget(self):
-        """."""
+        """Return the widget that should receive focus."""
         return self.vim_cmd
 
     def setup(self):
-        """."""
+        """Perform initial setup after the plugin is created."""
         pass
 
     def update_actions(self):
-        """."""
+        """Update actions exposed by the plugin."""
         pass
 
     @on_conf_change
@@ -268,6 +268,7 @@ class VimShortcut(QObject):
         """Clear tooltip, search highlight."""
         self.get_editor().hide_tooltip()
         self.vim_status.cursor.set_extra_selections("vim_search", [])
+
 
 class VimStateLabel(QLabel):
     """Display state of vim."""

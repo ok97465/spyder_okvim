@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-"""."""
+"""Executor handling leader-key sequences."""
 # %% Import
 # Local imports
-from spyder_okvim.executor.executor_base import ExecutorBase
 from qtpy.QtCore import QTimer
+
+from spyder_okvim.executor.executor_base import ExecutorBase
 
 
 class ExecutorLeaderKey(ExecutorBase):
@@ -32,14 +33,7 @@ class ExecutorLeaderKey(ExecutorBase):
         self.dispatcher[key] = self.execute_easymotion
 
     def __call__(self, txt):
-        """Parse txt and executor command.
-
-        Returns
-        -------
-        bool
-            if return is True, Clear command line
-
-        """
+        """Dispatch leader-key command ``txt`` and return execution info."""
         method = self.dispatcher.get(txt, None)
 
         ret = None
@@ -68,9 +62,7 @@ class ExecutorLeaderKey(ExecutorBase):
 
     def run_cell_and_advance(self, num=1, num_str=""):
         """Run cell and advance."""
-        self.get_editorstack().sig_trigger_run_action.emit(
-            "run cell and advance"
-        )
+        self.get_editorstack().sig_trigger_run_action.emit("run cell and advance")
         self.vim_status.set_focus_to_vim()
 
     def run_selection(self, num=1, num_str=""):
