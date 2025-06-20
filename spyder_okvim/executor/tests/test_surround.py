@@ -1,8 +1,9 @@
 """Tests for the executor_surround."""
 
-# Third party imports
+# Third Party Libraries
 import pytest
 
+# Project Libraries
 from spyder_okvim.utils.vim_status import VimState
 
 

@@ -4,12 +4,13 @@
 # Licensed under the terms of the MIT License
 #
 """Tests for the plugin."""
-# Third party imports
+
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QFocusEvent, QKeyEvent
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.confpage import OkvimConfigPage
 
 

@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
 """Tests for the executor_normal."""
-# Standard library imports
+
+# Standard Libraries
 from unittest.mock import Mock
 
-# Third party imports
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.spyder.widgets import coverage_resolve_trace
+from spyder_okvim.spyder.vim_widgets import enable_coverage_tracing
 
 
 def test_unknown_cmd(vim_bot):
@@ -2530,7 +2531,7 @@ def test_q_cmd(vim_bot):
     qtbot.keyClicks(cmd_line, "@a")
 
     # to meet coverage
-    foo = coverage_resolve_trace(print)
+    foo = enable_coverage_tracing(print)
     foo()
 
 

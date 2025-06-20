@@ -6,14 +6,14 @@
 # (see LICENSE.txt for details)
 # -----------------------------------------------------------------------------
 """OkVim Widget."""
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 import os.path as osp
 import sys
 import threading
 from functools import wraps
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
@@ -21,7 +21,7 @@ from spyder.api.config.decorators import on_conf_change
 from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
 
-# Local imports
+# Project Libraries
 from spyder_okvim.executor import (
     ExecutorLeaderKey,
     ExecutorNormalCmd,
@@ -29,14 +29,14 @@ from spyder_okvim.executor import (
     ExecutorVlineCmd,
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
-from spyder_okvim.utils.path_finder import PathFinder
+from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.vim_status import InputCmdInfo, KeyInfo, VimState, VimStatus
 
 running_coverage = "coverage" in sys.modules
 
 
-def coverage_resolve_trace(fn):
-    """Fix missing coverage of qthread."""
+def enable_coverage_tracing(fn):
+    """Apply coverage tracing to a thread entry point."""
 
     @wraps(fn)
     def wrapped(*args, **kwargs):
@@ -47,7 +47,7 @@ def coverage_resolve_trace(fn):
     return wrapped
 
 
-class SpyderOkVimPane(PluginMainWidget):
+class VimPane(PluginMainWidget):
     """Invisible pane used to host the Vim command widget."""
 
     def __init__(self, name=None, plugin=None, parent=None):
@@ -252,13 +252,13 @@ class VimShortcut(QObject):
 
         self.cmd_line.esc_pressed()
 
-    def open_path_finder(self) -> None:
-        """Open path finder."""
+    def open_file_search(self) -> None:
+        """Open the file search dialog."""
         root_folder = self.main.projects.get_active_project_path()
 
-        dlg = PathFinder(root_folder, self.main)
+        dlg = FileSearchDialog(root_folder, self.main)
         dlg.exec_()
-        path = dlg.get_path_selected()
+        path = dlg.get_selected_path()
 
         if osp.isfile(path):
             self.main.open_file(path)
@@ -328,7 +328,7 @@ class VimLineEdit(QLineEdit):
             Qt.Key_U: vim_shortcut.pg_half_up,
             Qt.Key_B: vim_shortcut.pg_up,
             Qt.Key_R: vim_shortcut.redo,
-            Qt.Key_P: vim_shortcut.open_path_finder,
+            Qt.Key_P: vim_shortcut.open_file_search,
             Qt.Key_C: vim_shortcut.clear_tip_search,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
@@ -383,8 +383,8 @@ class VimLineEdit(QLineEdit):
             pass
 
 
-class VimMsgLabel(QLabel):
-    """Display message of vim."""
+class VimMessageLabel(QLabel):
+    """Display Vim status messages."""
 
     def __init__(self, txt, parent):
         super().__init__(txt, parent)
@@ -394,8 +394,8 @@ class VimMsgLabel(QLabel):
         self.setFixedWidth(tw + (2 * fw) + 4)
 
 
-class WorkerMacro(QThread):
-    """Send keyinfo from registers to main thread."""
+class MacroPlaybackWorker(QThread):
+    """Replay a recorded macro on the main thread."""
 
     sig_focus_vim = Signal()
     sig_send_key_info = Signal(object)
@@ -410,7 +410,7 @@ class WorkerMacro(QThread):
         self.key_info_list = key_infos.copy()
         self.num_iteration = num
 
-    @coverage_resolve_trace
+    @enable_coverage_tracing
     def run(self) -> None:
         """Send key info to main thread."""
         is_focus_vim = True
@@ -435,7 +435,7 @@ class VimWidget(QWidget):
         self.editor_widget = editor_widget
         self.main = main
         self.status_label = VimStateLabel(main)
-        self.msg_label = VimMsgLabel("", main)
+        self.msg_label = VimMessageLabel("", main)
 
         self.vim_status = VimStatus(editor_widget, main, self.msg_label)
         self.vim_status.change_label.connect(self.status_label.change_state)
@@ -463,7 +463,7 @@ class VimWidget(QWidget):
         self.set_leader_key()
 
         # macro
-        self.worker_macro = WorkerMacro(main)
+        self.worker_macro = MacroPlaybackWorker(main)
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
 

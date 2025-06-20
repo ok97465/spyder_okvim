@@ -4,10 +4,10 @@
 # Licensed under the terms of the MIT License
 """Spyder okvim configuration page."""
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QRegExp, Qt
-from qtpy.QtGui import QRegExpValidator, QKeySequence
-from qtpy.QtWidgets import QGridLayout, QGroupBox, QHBoxLayout, QVBoxLayout, QLineEdit
+from qtpy.QtGui import QKeySequence, QRegExpValidator
+from qtpy.QtWidgets import QGridLayout, QGroupBox, QHBoxLayout, QLineEdit, QVBoxLayout
 from spyder.api.preferences import PluginConfigPage
 
 

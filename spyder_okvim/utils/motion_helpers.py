@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """Cursor movement helpers for Vim emulation."""
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 import re
 from bisect import bisect_left, bisect_right
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QPoint, QRegularExpression
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.utils.misc import BRACKET_PAIR
+from spyder_okvim.utils.text_constants import BRACKET_PAIR
 
 WHITE_SPACE = " \t"
 
@@ -37,10 +37,15 @@ class MotionInfo:
         self.motion_type = MotionType.LineWise
 
 
-class HelperMotion:
-    """Helper for vim motion."""
+class MotionHelper:
+    """Utilities for computing cursor motions."""
 
     def __init__(self, vim_status):
+        """Create helper bound to the given Vim status object.
+
+        Args:
+            vim_status: Object providing editor utilities.
+        """
         self.vim_status = vim_status
         self.get_editor = vim_status.get_editor
         self.get_cursor = vim_status.get_cursor

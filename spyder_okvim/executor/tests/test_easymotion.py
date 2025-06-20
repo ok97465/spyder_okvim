@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the executor_easymotion."""
-# Third party imports
+
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 

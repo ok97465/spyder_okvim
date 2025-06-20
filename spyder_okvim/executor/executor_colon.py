@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Executor for ":" command-line input."""
-# Local imports
+
+# Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
 from spyder_okvim.utils.vim_status import VimState
 

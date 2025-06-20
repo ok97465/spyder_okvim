@@ -6,16 +6,15 @@ active.  Many commands mirror those from :mod:`executor_normal`, but they act on
 the current selection.  The executor can also enter submodes to handle searches,
 character motions and other modal operations.
 """
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 import re
 
-# Third party imports
+# Third Party Libraries
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.executor.decorators import submode
-
-# Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Executor handling leader-key sequences."""
-# %% Import
-# Local imports
+
+# Third Party Libraries
 from qtpy.QtCore import QTimer
 
+# Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorBase
 
 

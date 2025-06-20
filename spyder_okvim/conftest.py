@@ -1,13 +1,13 @@
 """Conftest."""
 
-# Standard library imports
+# Standard Libraries
 import os
 import os.path as osp
 from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# Third party imports
+# Third Party Libraries
 import pytest
 import requests
 from pytestqt.plugin import QtBot
@@ -16,7 +16,7 @@ from qtpy.QtWidgets import QVBoxLayout, QWidget
 from spyder.config.manager import CONF
 from spyder.plugins.editor.widgets.editorstack import EditorStack
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.plugin import OkVim
 

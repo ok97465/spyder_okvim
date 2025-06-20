@@ -4,10 +4,9 @@
 #
 # Licensed under the terms of the MIT license
 # ----------------------------------------------------------------------------
-"""
-Spyder Custom Layout API.
-"""
+"""Spyder Custom Layout API."""
 
+# Third Party Libraries
 from spyder.api.plugins import Plugins
 from spyder.plugins.layout.api import BaseGridLayoutType
 
