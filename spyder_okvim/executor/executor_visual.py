@@ -13,6 +13,7 @@ from spyder_okvim.executor.executor_base import (
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorBase,
 )
+from spyder_okvim.executor.decorators import submode
 from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
@@ -175,16 +176,10 @@ class ExecutorVisualCmd(ExecutorBase):
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def g(self, num=1, num_str=""):
         """Start g submode."""
-        executor_sub = self.executor_sub_g
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return self.executor_sub_g
 
     def G(self, num=1, num_str=""):
         """Move to the line."""
@@ -205,53 +200,25 @@ class ExecutorVisualCmd(ExecutorBase):
 
         self.set_cursor_pos_in_visual(motion_info.cursor_pos)
 
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def f(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        return self.executor_sub_f_t
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def F(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        return self.executor_sub_f_t
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def t(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        return self.executor_sub_f_t
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
     def T(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return self.executor_sub_f_t
 
     def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, f, T."""
