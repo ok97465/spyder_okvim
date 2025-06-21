@@ -49,7 +49,7 @@ class ExecutorAddSurround(ExecutorSubBase):
         ch = ch.replace("B", "}")
 
         if ch in SURROUNDINGS:
-            self.update_input_cmd_info(None, None, ch)
+            self.append_input_cmd_info(ch)
             self.helper_action.add_surrounding(self.pos_start, self.pos_end, ch)
 
         self.vim_status.to_normal()
@@ -75,7 +75,7 @@ class ExecutorDeleteSurround(ExecutorSubBase):
         ch = ch.replace("B", "}")
 
         if ch in SURROUNDINGS:
-            self.update_input_cmd_info(None, None, ch)
+            self.append_input_cmd_info(ch)
             motion_info = self.helper_action.delete_surrounding(ch)
             if isinstance(motion_info.sel_start, int):
                 self.vim_status.to_normal()
@@ -104,7 +104,7 @@ class ExecutorChangeSurround(ExecutorSubBase):
         txt = txt.replace("B", "}")
 
         if txt[0] in SURROUNDINGS and txt[1] in SURROUNDINGS:
-            self.update_input_cmd_info(None, None, txt)
+            self.append_input_cmd_info(txt)
             motion_info = self.helper_action.change_surrounding(txt[0], txt[1])
             if isinstance(motion_info.sel_start, int):
                 self.vim_status.to_normal()

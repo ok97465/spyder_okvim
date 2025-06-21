@@ -33,7 +33,7 @@ class ExecutorSubMotion_i(ExecutorSubBase):
 
     def __call__(self, txt):
         """Parse command and execute."""
-        self.update_input_cmd_info(None, None, txt)
+        self.append_input_cmd_info(txt)
         self.vim_status.sub_mode = None
 
         if txt in "wW{}[]()'\"bB":
@@ -67,7 +67,7 @@ class ExecutorSubMotion_a(ExecutorSubBase):
 
     def __call__(self, txt):
         """Parse command and execute."""
-        self.update_input_cmd_info(None, None, txt)
+        self.append_input_cmd_info(txt)
         self.vim_status.sub_mode = None
 
         if txt in "w{}[]()'\"bB":
@@ -119,7 +119,7 @@ class ExecutorSubMotion(ExecutorSubBase):
             else:
                 num_str = txt[:-1]
                 num = int(num_str)
-            self.update_input_cmd_info(num_str, cmd, txt)
+            self.append_input_cmd_info(txt)
 
             self.vim_status.sub_mode = None
 
@@ -632,7 +632,7 @@ class ExecutorSubCmd_register(ExecutorSubBase):
 
     def __call__(self, ch: str):
         """Update command to vim status."""
-        self.update_input_cmd_info(None, None, ch)
+        self.append_input_cmd_info(ch)
 
         self.vim_status.sub_mode = None
 
@@ -651,7 +651,7 @@ class ExecutorSubCmd_f_t(ExecutorSubBase):
         ch_previous = self.vim_status.input_cmd.cmd[-1]
         method = self.helper_motion.find_cmd_map.get(ch_previous, None)
 
-        self.update_input_cmd_info(None, None, ch)
+        self.append_input_cmd_info(ch)
 
         self.vim_status.sub_mode = None
 
@@ -680,7 +680,7 @@ class ExecutorSubCmdSneak(ExecutorSubBase):
         ch_previous = self.vim_status.input_cmd.cmd[-1]
         method = self.helper_motion.find_cmd_map.get(ch_previous, None)
 
-        self.update_input_cmd_info(None, None, ch2)
+        self.append_input_cmd_info(ch2)
 
         self.vim_status.sub_mode = None
 
@@ -707,7 +707,7 @@ class ExecutorSubCmd_r(ExecutorSubBase):
 
     def __call__(self, ch: str):
         """Replace the character under the cursor with ch."""
-        self.update_input_cmd_info(None, None, ch)
+        self.append_input_cmd_info(ch)
 
         self.helper_action.replace_txt_with_ch(self.pos_start, self.pos_end, ch)
 
@@ -772,7 +772,7 @@ class ExecutorSearch(ExecutorSubBase):
 
         # '/' is saved to input cmd_info at ExecutorBase.
         # So we need only txt[1:].
-        self.update_input_cmd_info(None, None, txt[1:])
+        self.append_input_cmd_info(txt[1:])
 
         txt = txt[1:-1]  # remove /, \r
 
@@ -792,7 +792,7 @@ class ExecutorSubCmd_alnum(ExecutorSubBase):
 
     def __call__(self, ch: str):
         """Return deferred result when ``ch`` is alphanumeric."""
-        self.update_input_cmd_info(None, None, ch)
+        self.append_input_cmd_info(ch)
 
         self.vim_status.sub_mode = None
 

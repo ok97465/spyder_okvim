@@ -80,11 +80,18 @@ class ExecutorBase:
         self.pattern_cmd = None
         self.allow_leaderkey = True
 
-    def update_input_cmd_info(self, num_str, cmd, input_txt):
-        """Update input cmd to vim_status."""
+    def set_input_cmd_info(self, num_str, cmd):
+        """Record a new command into :class:`VimStatus`."""
+
         self.vim_status.input_cmd_prev.set(self.vim_status.input_cmd)
         self.vim_status.input_cmd.num_str = num_str
         self.vim_status.input_cmd.cmd = cmd
+
+    def append_input_cmd_info(self, input_txt):
+        """Append raw text to the current command."""
+
+        self.vim_status.input_cmd_prev.set(self.vim_status.input_cmd)
+        self.vim_status.input_cmd.append(input_txt)
 
     def set_parent_info_to_submode(self, submode, num, num_str):
         """Set info to submode."""
@@ -114,7 +121,7 @@ class ExecutorBase:
             num_str, key = match.groups()
 
         num = int(num_str) if num_str else 1
-        self.update_input_cmd_info(num_str, key, txt)
+        self.set_input_cmd_info(num_str, key)
 
         key = self.SYMBOLS_REPLACEMENT.get(key, key)
 
@@ -172,6 +179,6 @@ class ExecutorSubBase(ExecutorBase):
                 func_info.func()
         return self.return_deferred
 
-    def update_input_cmd_info(self, num_str, cmd, input_txt):
-        """Add input cmd to vim_status."""
-        self.vim_status.input_cmd.cmd += input_txt
+    def append_input_cmd_info(self, input_txt):
+        """Append text to the stored command."""
+        self.vim_status.input_cmd.append(input_txt)

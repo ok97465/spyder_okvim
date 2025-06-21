@@ -67,6 +67,10 @@ class InputCmdInfo:
         self.num_str = input_cmd_info.num_str
         self.cmd = input_cmd_info.cmd
 
+    def append(self, txt):
+        """Append text to the current command string."""
+        self.cmd += txt
+
 
 class DotCmdInfo:
     """Dot command info."""

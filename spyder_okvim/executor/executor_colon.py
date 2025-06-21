@@ -41,7 +41,7 @@ class ExecutorColon(ExecutorSubBase):
 
         # ':' is saved to input cmd_info at ExecutorBase.
         # So we need only txt[1:].
-        self.update_input_cmd_info(None, None, txt[1:])
+        self.append_input_cmd_info(txt[1:])
 
         txt = txt[1:-1]  # remove :, \r
         cmd = txt.split(None, 1)
