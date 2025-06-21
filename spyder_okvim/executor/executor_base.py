@@ -175,3 +175,11 @@ class ExecutorSubBase(ExecutorBase):
     def update_input_cmd_info(self, num_str, cmd, input_txt):
         """Add input cmd to vim_status."""
         self.vim_status.input_cmd.cmd += input_txt
+
+    # ------------------------------------------------------------------
+    # Common editor actions
+    # ------------------------------------------------------------------
+    def close_current_file(self) -> None:
+        """Close the current file using Spyder's editor API."""
+        widget = self.vim_status.editor_widget.get_widget()
+        widget.close_file()

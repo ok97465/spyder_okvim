@@ -73,6 +73,18 @@ def test_colon_q_command(vim_bot):
     qtbot.keyClicks(cmd_line, ":")
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
+    main.editor.close_file.assert_called_once_with()
+    main.editor.close_file.reset_mock()
+
+
+def test_colon_q_command_without_close_file(vim_bot):
+    """Test :q when close_file API is missing."""
+    main, editor_stack, editor, vim, qtbot = vim_bot
+    orig_close_file = main.editor.close_file
+    delattr(main.editor, "close_file")
+    with pytest.raises(AttributeError):
+        vim.vim_cmd.executor_normal_cmd.executor_colon.q()
+    main.editor.close_file = orig_close_file
 
 
 def test_colon_qexclamation_command(vim_bot):
@@ -83,6 +95,8 @@ def test_colon_qexclamation_command(vim_bot):
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyClicks(cmd_line, "!")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
+    main.editor.close_file.assert_called_once_with()
+    main.editor.close_file.reset_mock()
 
 
 def test_colon_wq_command(vim_bot):
@@ -94,7 +108,9 @@ def test_colon_wq_command(vim_bot):
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
     main.editor.save_action.trigger.assert_called_once_with()
+    main.editor.close_file.assert_called_once_with()
     main.editor.save_action.trigger.reset_mock()
+    main.editor.close_file.reset_mock()
 
 
 def test_colon_n_command(vim_bot):
