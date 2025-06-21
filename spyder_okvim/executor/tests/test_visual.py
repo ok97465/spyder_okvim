@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """Tests for the executor_visual."""
-# Third party imports
+
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 from spyder.config.manager import CONF
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.vim_status import VimState
 

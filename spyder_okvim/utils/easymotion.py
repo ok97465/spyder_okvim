@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """Implementation of EasyMotion overlays."""
 
-# Standard library imports
+# Standard Libraries
 from itertools import product
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt
 from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import QPlainTextEdit, QWidget
 
 
-class ManageMarkerEasymotion:
-    """Manage markers of easymotion."""
+class EasyMotionMarkerManager:
+    """Manage overlay marker assignments."""
 
     def __init__(self):
+        """Initialize empty marker sets."""
         self.position_list: list[int] = []
         self.name_list: list[str] = []
 
@@ -53,14 +54,19 @@ class ManageMarkerEasymotion:
         self.name_list = names
 
 
-class PainterEasyMotion(QObject):
-    """Draw symbols for easymotion to QPlainTextEdit.
+class EasyMotionPainter(QObject):
+    """Draw overlay markers for EasyMotion in a text editor.
 
     Ref: github.com/serpheroth/QtCreator-EasyMotion
 
     """
 
     def __init__(self, editor: QPlainTextEdit = None):
+        """Create painter.
+
+        Args:
+            editor: Widget receiving overlay rendering.
+        """
         super().__init__()
         self.editor = editor
         self.positions = []

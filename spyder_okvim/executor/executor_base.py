@@ -3,18 +3,17 @@
 
 This module provides :class:`ExecutorBase` and :class:`ExecutorSubBase`, which
 handle the parsing of command strings and delegation of actions to the
-``HelperMotion`` and ``HelperAction`` utilities.  Executors interpret user
+``MotionHelper`` and ``ActionHelper`` utilities. Executors interpret user
 keystrokes, update the shared :class:`~spyder_okvim.utils.vim_status.VimStatus`
 object and decide whether submodes should be entered.
 """
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 from typing import Any, NamedTuple
 
-from spyder_okvim.utils.helper_action import HelperAction
-
-# Local imports
-from spyder_okvim.utils.helper_motion import HelperMotion
+# Project Libraries
+from spyder_okvim.utils.action_helpers import ActionHelper
+from spyder_okvim.utils.motion_helpers import MotionHelper
 
 FUNC_INFO = NamedTuple("FUNC_INFO", [("func", Any), ("has_arg", bool)])
 RETURN_EXECUTOR_METHOD_INFO = NamedTuple(
@@ -74,8 +73,8 @@ class ExecutorBase:
         self.get_pos_start_in_selection = vim_status.get_pos_start_in_selection
         self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
-        self.helper_motion = HelperMotion(vim_status)
-        self.helper_action = HelperAction(vim_status)
+        self.helper_motion = MotionHelper(vim_status)
+        self.helper_action = ActionHelper(vim_status)
 
         self.has_zero_cmd = True
         self.pattern_cmd = None

@@ -6,18 +6,17 @@ when the editor is in *normal* mode.  Commands are dispatched to helper classes
 for motion and editing actions.  The executor can also switch into various
 submodes such as search or register selection.
 """
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 import re
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QTextCursor
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.executor.decorators import submode
-
-# Local imports
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,
@@ -44,7 +43,7 @@ from spyder_okvim.executor.executor_sub import (
 )
 from spyder_okvim.executor.mixins import MovementMixin
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
+from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
 
 
 class ExecutorNormalCmd(MovementMixin, ExecutorBase):

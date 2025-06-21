@@ -4,7 +4,8 @@
 # Licensed under the terms of the MIT License
 
 """Spyder okvim default configuration."""
-# Third party imports
+
+# Third Party Libraries
 from qtpy.QtCore import Qt
 
 CONF_SECTION = "spyder_okvim"

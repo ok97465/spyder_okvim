@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """Collection of executor classes for various submodes."""
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 import re
 
-# Third party imports
+# Third Party Libraries
 from spyder.config.manager import CONF
 
-# Local imports
+# Project Libraries
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,

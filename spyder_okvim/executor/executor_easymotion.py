@@ -5,17 +5,17 @@ EasyMotion highlights possible jump targets in the editor and lets the user
 select one with a short key sequence.  This executor provides helper methods
 used by the normal and visual mode executors to implement those jumps.
 """
-# %% Import
-# Third party imports
+
+# Third Party Libraries
 from qtpy.QtCore import QPoint
 from qtpy.QtGui import QTextCursor, QTextDocument
 
-# Local imports
+# Project Libraries
 from spyder_okvim.executor.executor_base import (
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorSubBase,
 )
-from spyder_okvim.utils.helper_motion import MotionInfo, MotionType
+from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
 
 
 class ExecutorSelectMarkerEasymotion(ExecutorSubBase):

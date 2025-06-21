@@ -1,21 +1,26 @@
 # -*- coding: utf-8 -*-
 """Utility functions that implement Vim-style editing actions."""
-# %% Import
-# Standard library imports
+
+# Standard Libraries
 import re
 
-# Third party imports
+# Third Party Libraries
 from qtpy.QtGui import QTextCursor
 
-# Local imports
-from spyder_okvim.utils.helper_motion import HelperMotion, MotionInfo, MotionType
+# Project Libraries
+from spyder_okvim.utils.motion_helpers import MotionHelper, MotionInfo, MotionType
 from spyder_okvim.utils.vim_status import VimState
 
 
-class HelperAction:
-    """Helper for vim action."""
+class ActionHelper:
+    """Perform editing actions driven by Vim commands."""
 
     def __init__(self, vim_status):
+        """Initialize helper with the shared Vim status.
+
+        Args:
+            vim_status: Object managing editor and cursor state.
+        """
         self.vim_status = vim_status
         self.get_editor = vim_status.get_editor
         self.get_cursor = vim_status.get_cursor
@@ -28,7 +33,7 @@ class HelperAction:
         self.get_block_no_end_in_selection = vim_status.get_block_no_end_in_selection
         self.get_pos_start_in_selection = vim_status.get_pos_start_in_selection
         self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
-        self.helper_motion = HelperMotion(vim_status)
+        self.helper_motion = MotionHelper(vim_status)
 
     def join_lines(self, cursor_pos_start: int, block_no_start: int, block_no_end: int):
         """Join lines."""

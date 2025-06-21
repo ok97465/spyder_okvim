@@ -1,29 +1,30 @@
 # -*- coding: utf-8 -*-
-"""Tests for path finder."""
-# Third party imports
+"""Tests for the file search dialog."""
+
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent
 
-# Local imports
-from spyder_okvim.utils.path_finder import PathFinder
+# Project Libraries
+from spyder_okvim.utils.file_search import FileSearchDialog
 
 
-def test_open_path_finder(vim_bot, monkeypatch, tmpdir):
-    """Test open path finder."""
+def test_open_file_search(vim_bot, monkeypatch, tmpdir):
+    """Test opening the file search dialog."""
     _, _, _, vim, qtbot = vim_bot
 
     fn = tmpdir.join("tmp.txt")
     fn.write("content")
-    monkeypatch.setattr(PathFinder, "exec_", lambda x: x)
-    monkeypatch.setattr(PathFinder, "get_path_selected", lambda x: str(fn))
+    monkeypatch.setattr(FileSearchDialog, "exec_", lambda x: x)
+    monkeypatch.setattr(FileSearchDialog, "get_selected_path", lambda x: str(fn))
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_P, Qt.ControlModifier)
     vim.vim_cmd.commandline.keyPressEvent(event)
 
 
-def test_invaild_folder(qtbot):
-    """Test if input of path finder is invalid."""
-    pf = PathFinder(None)
+def test_invalid_folder(qtbot):
+    """Test dialog behavior with an invalid folder."""
+    pf = FileSearchDialog(None)
     qtbot.addWidget(pf)
     pf.show()
 
@@ -61,12 +62,12 @@ def test_invaild_folder(qtbot):
 
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_Enter, Qt.NoModifier)
     edit.keyPressEvent(event)
-    assert pf.get_path_selected() == ""
+    assert pf.get_selected_path() == ""
 
     pf.show()
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier)
     edit.keyPressEvent(event)
-    assert pf.get_path_selected() == ""
+    assert pf.get_selected_path() == ""
 
 
 def test_valid_folder(qtbot, tmpdir):
@@ -81,7 +82,7 @@ def test_valid_folder(qtbot, tmpdir):
         tmp = folder_sub.join(name)
         tmp.write("contents")
 
-    pf = PathFinder(str(folder))
+    pf = FileSearchDialog(str(folder))
 
     qtbot.addWidget(pf)
     pf.show()
@@ -132,4 +133,4 @@ def test_valid_folder(qtbot, tmpdir):
 
     qtbot.keyClicks(edit, "ok9")
     qtbot.keyPress(edit, Qt.Key_Enter)
-    assert pf.get_path_selected() != ""
+    assert pf.get_selected_path() != ""

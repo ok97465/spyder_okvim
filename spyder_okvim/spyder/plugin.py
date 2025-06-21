@@ -6,7 +6,8 @@
 # (see LICENSE.txt for details)
 # -----------------------------------------------------------------------------
 """OkVim Plugin."""
-# Third party imports
+
+# Third Party Libraries
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QKeySequence
@@ -16,11 +17,11 @@ from spyder.api.plugins import Plugins, SpyderDockablePlugin
 from spyder.api.widgets.status import StatusBarWidget
 from spyder.utils.icon_manager import MAIN_FG_COLOR
 
-# Local imports
+# Project Libraries
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.widgets import SpyderOkVimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -99,7 +100,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     NAME = CONF_SECTION
     REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
     OPTIONAL = []
-    WIDGET_CLASS = SpyderOkVimPane
+    WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
     CONF_DEFAULTS = CONF_DEFAULTS

@@ -1,3 +1,3 @@
-"""Miscellaneous constants and helpers."""
+"""Constants used for text processing."""
 
 BRACKET_PAIR = {"(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{"}

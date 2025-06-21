@@ -12,6 +12,6 @@ Each executor class (`ExecutorNormalCmd`, `ExecutorVisualCmd`, etc.) interprets 
 
 ## Strategy Pattern
 
-Movement and action logic is delegated to helper classes (`HelperMotion`, `HelperAction`). Executors choose which helper method to call depending on the command, enabling different strategies for cursor movement or text manipulation.
+Movement and action logic is delegated to helper classes (`MotionHelper`, `ActionHelper`). Executors choose which helper method to call depending on the command, enabling different strategies for cursor movement or text manipulation.
 
 By separating concerns across these components, the codebase remains modular and adheres to the SOLID principles of single responsibility and open/closed design.

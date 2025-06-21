@@ -33,3 +33,10 @@ Source = "https://github.com/ok97465/spyder_okvim"
 
 [project.entry-points."spyder.plugins"]
 spyder_okvim = "spyder_okvim.spyder.plugin:OkVim"
+
+[tool.isort]
+profile = "black"
+line_length = 88
+import_heading_stdlib = "Standard Libraries"
+import_heading_thirdparty = "Third Party Libraries"
+import_heading_firstparty = "Project Libraries"

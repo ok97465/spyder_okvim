@@ -1,10 +1,10 @@
 """Tests for the Marks."""
 
-# %% Imports
-# Third party imports
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 
+# Project Libraries
 from spyder_okvim.utils.vim_status import VimState
 
 
