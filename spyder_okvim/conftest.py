@@ -40,6 +40,7 @@ class EditorMock(QWidget):
         self.new_action = Mock()
         self.save_action = Mock()
         self.close_action = Mock()
+        self.close_file = Mock()
 
         layout = QVBoxLayout()
         layout.addWidget(self.editor_stack)

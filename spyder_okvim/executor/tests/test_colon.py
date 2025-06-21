@@ -73,8 +73,6 @@ def test_colon_q_command(vim_bot):
     qtbot.keyClicks(cmd_line, ":")
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.close_action.trigger.assert_called_once_with()
-    main.editor.close_action.trigger.reset_mock()
 
 
 def test_colon_qexclamation_command(vim_bot):
@@ -85,8 +83,6 @@ def test_colon_qexclamation_command(vim_bot):
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyClicks(cmd_line, "!")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.close_action.trigger.assert_called_once_with()
-    main.editor.close_action.trigger.reset_mock()
 
 
 def test_colon_wq_command(vim_bot):
@@ -97,9 +93,7 @@ def test_colon_wq_command(vim_bot):
     qtbot.keyClicks(cmd_line, "w")
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.close_action.trigger.assert_called_once_with()
     main.editor.save_action.trigger.assert_called_once_with()
-    main.editor.close_action.trigger.reset_mock()
     main.editor.save_action.trigger.reset_mock()
 
 

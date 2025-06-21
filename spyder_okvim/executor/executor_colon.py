@@ -72,13 +72,13 @@ class ExecutorColon(ExecutorSubBase):
 
     def q(self, arg=""):
         """Close current file."""
-        self.editor_widget.get_widget().close_action.trigger()
+        self.editor_widget.get_widget().close_file()
         self.vim_status.set_focus_to_vim()
 
     def qexclamation(self, arg=""):
         """Close current file without saving."""
         # TODO :
-        self.editor_widget.get_widget().close_action.trigger()
+        self.editor_widget.get_widget().close_file()
         self.vim_status.set_focus_to_vim()
 
     def wq(self, arg=""):
