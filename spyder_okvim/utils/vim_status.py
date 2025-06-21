@@ -764,10 +764,13 @@ class VimStatus(QObject):
 
     def to_insert(self):
         """Change vim state to insert mode."""
+        editor = self.get_editor()
+        if editor is None:
+            return
         self.is_visual_mode = False
         self.remove_marker_of_easymotion()
-        self.get_editor().clear_extra_selections("vim_selection")
-        self.get_editor().clear_extra_selections("vim_cursor")
+        editor.clear_extra_selections("vim_selection")
+        editor.clear_extra_selections("vim_cursor")
         self.change_label.emit(VimState.INSERT)
 
     def to_visual_char(self):

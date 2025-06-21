@@ -35,8 +35,7 @@ CONF_DEFAULTS = [
             "yank_bg_color": "#5cacee",
             "leader_key": "Space",
         },
-    ),
-    ("shortcuts", {f"_/switch to {CONF_SECTION}": "Ctrl+Shift+M"}),
+    )
 ]
 
 CONF_VERSION = "0.9"
