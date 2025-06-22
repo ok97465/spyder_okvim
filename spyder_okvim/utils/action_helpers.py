@@ -13,6 +13,15 @@ from spyder_okvim.utils.motion_helpers import MotionHelper
 from spyder_okvim.vim import VimState
 
 
+def _get_block_texts(editor, start_block: int, end_block: int) -> list[str]:
+    """Return the text of blocks between two numbers inclusive."""
+
+    return [
+        editor.document().findBlockByNumber(no).text()
+        for no in range(start_block, end_block + 1)
+    ]
+
+
 class ActionHelper:
     """Perform editing actions driven by Vim commands."""
 
@@ -36,8 +45,63 @@ class ActionHelper:
         self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
         self.helper_motion = MotionHelper(vim_status)
 
-    def join_lines(self, cursor_pos_start: int, block_no_start: int, block_no_end: int):
-        """Join lines."""
+    def _get_block_range(
+        self, pos_start: int, pos_end: int
+    ) -> tuple[int, int, int, int]:
+        """Return block numbers and adjusted positions for a range."""
+
+        get_block = self.vim_status.cursor.get_block
+        block_start, block_no_start = get_block(pos_start)
+        block_end, block_no_end = get_block(pos_end)
+        pos_start = block_start.position()
+        pos_end = block_end.position() + block_end.length() - 1
+        return block_no_start, block_no_end, pos_start, pos_end
+
+    def _get_selection_range(
+        self, motion_info: MotionInfo | None
+    ) -> tuple[int | None, int | None, bool]:
+        """Return selection start, end and linewise flag for an action."""
+
+        if not self.vim_status.is_normal():
+            start = self.get_pos_start_in_selection()
+            end = self.get_pos_end_in_selection()
+            is_linewise = self.vim_status.vim_state == VimState.VLINE
+            return start, end, is_linewise
+
+        if motion_info is None:
+            return None, None, False
+
+        if motion_info.motion_type == MotionType.BlockWise:
+            return motion_info.sel_start, motion_info.sel_end, False
+
+        cursor = self.get_cursor()
+        cur_pos = cursor.position()
+        new_pos = motion_info.cursor_pos
+        if new_pos is None:
+            return None, None, False
+
+        start, end = sorted([cur_pos, new_pos])
+        if motion_info.motion_type == MotionType.CharWiseIncludingEnd:
+            end += 1
+        elif motion_info.motion_type == MotionType.LineWise:
+            block_start, _ = self.vim_status.cursor.get_block(start)
+            block_end, _ = self.vim_status.cursor.get_block(end)
+            start = block_start.position()
+            end = block_end.position() + block_end.length() - 1
+            return start, end, True
+
+        return start, end, False
+
+    def join_lines(
+        self, cursor_pos_start: int, block_no_start: int, block_no_end: int
+    ) -> None:
+        """Join lines between two blocks.
+
+        Args:
+            cursor_pos_start: Cursor position at the start of the first line.
+            block_no_start: Number of the first block to join.
+            block_no_end: Number of the last block to join.
+        """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         editor = self.get_editor()
@@ -75,8 +139,14 @@ class ActionHelper:
 
         editor.document_did_change()
 
-    def replace_txt_with_ch(self, pos_start: int, pos_end: int, ch: str):
-        """Replace selected text with character of argument."""
+    def replace_txt_with_ch(self, pos_start: int, pos_end: int, ch: str) -> None:
+        """Replace selected text with a given character.
+
+        Args:
+            pos_start: Start position of the range to replace.
+            pos_end: End position of the range to replace.
+            ch: Character used for replacement.
+        """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         if self.vim_status.is_normal() and pos_start == pos_end:
@@ -97,7 +167,7 @@ class ActionHelper:
         editor.document_did_change()
 
     def _add_surrounding(self, ch: str, text: str) -> str:
-        """Add surroundings."""
+        """Return *text* wrapped by the given character."""
         prefix_dict = {
             "'": "'",
             '"': '"',
@@ -122,8 +192,14 @@ class ActionHelper:
 
         return prefix_dict[ch] + text + suffix_dict[ch]
 
-    def add_surrounding(self, pos_start: int, pos_end: int, ch: str):
-        """Add surrouding."""
+    def add_surrounding(self, pos_start: int, pos_end: int, ch: str) -> None:
+        """Insert a surrounding character around the given range.
+
+        Args:
+            pos_start: Start position of the text to wrap.
+            pos_end: End position of the text to wrap.
+            ch: Surrounding character to add.
+        """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         if self.vim_status.is_normal() and pos_start == pos_end:
@@ -141,7 +217,7 @@ class ActionHelper:
         editor.document_did_change()
 
     def _delete_surrounding(self, ch: str, text: str) -> str:
-        """Delete surroundings."""
+        """Return ``text`` without its surrounding character."""
         open_brackets = "([{"
         text_sub = text[1:-1]
         if ch in open_brackets:
@@ -149,7 +225,14 @@ class ActionHelper:
         return text_sub
 
     def delete_surrounding(self, ch: str) -> MotionInfo:
-        """Delete surrouding."""
+        """Remove surrounding characters around the current selection.
+
+        Args:
+            ch: Character used to locate the surroundings.
+
+        Returns:
+            Information about the motion that located the text.
+        """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         if ch in "'\"":
@@ -176,7 +259,15 @@ class ActionHelper:
         return motion_info
 
     def change_surrounding(self, ch_delete: str, ch_insert: str) -> MotionInfo:
-        """Change surrouding."""
+        """Replace one surrounding character with another.
+
+        Args:
+            ch_delete: Character defining the surrounding to remove.
+            ch_insert: Character to wrap around the text.
+
+        Returns:
+            Information about the motion that located the text.
+        """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         if ch_delete in "'\"":
@@ -203,8 +294,13 @@ class ActionHelper:
 
         return motion_info
 
-    def handle_case(self, motion_info: MotionInfo, method):
-        """Swap case."""
+    def handle_case(self, motion_info: MotionInfo, method) -> None:
+        """Apply case transformation to text determined by ``motion_info``.
+
+        Args:
+            motion_info: Motion describing the range to transform.
+            method: One of ``"swap"``, ``"lower"`` or ``"upper"``.
+        """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         if not self.vim_status.is_normal():
@@ -240,8 +336,8 @@ class ActionHelper:
                     pos_start = sel_start
             self.vim_status.cursor.set_cursor_pos(pos_start)
 
-    def _handle_case(self, pos_start: int, pos_end: int, method):
-        """Swap case."""
+    def _handle_case(self, pos_start: int, pos_end: int, method) -> None:
+        """Perform case transformation on the given range."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         cursor = self.get_cursor()
@@ -259,34 +355,25 @@ class ActionHelper:
         editor = self.get_editor()
         editor.document_did_change()
 
-    def indent(self, motion_info: MotionInfo):
-        """Shift lines rightwards."""
-        cursor = self.get_cursor()
-        cursor_pos_cur = cursor.position()
-        cursor_pos_new = motion_info.cursor_pos
-        if cursor_pos_new is None:
+    def indent(self, motion_info: MotionInfo) -> None:
+        """Shift the given lines to the right."""
+        pos_start, pos_end, _ = self._get_selection_range(motion_info)
+        if pos_start is None or pos_end is None:
             return
-        pos_start, pos_end = sorted([cursor_pos_cur, cursor_pos_new])
         self._indent(pos_start, pos_end)
 
-    def _indent(self, pos_start: int, pos_end: int):
-        """Shift lines rightwards."""
+    def _indent(self, pos_start: int, pos_end: int) -> None:
+        """Indent lines between ``pos_start`` and ``pos_end``."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         editor = self.get_editor()
         cursor = self.get_cursor()
 
-        get_block = self.vim_status.cursor.get_block
-        block_start, block_no_start = get_block(pos_start)
-        block_end, block_no_end = get_block(pos_end)
+        block_no_start, block_no_end, pos_start, pos_end = self._get_block_range(
+            pos_start, pos_end
+        )
 
-        pos_start = block_start.position()
-        pos_end = block_end.position() + block_end.length() - 1
-
-        text_list = []
-        for no in range(block_no_start, block_no_end + 1):
-            block = editor.document().findBlockByNumber(no)
-            text_list.append(block.text())
+        text_list = _get_block_texts(editor, block_no_start, block_no_end)
 
         indent = self.vim_status.indent
         text_list_indent = []
@@ -307,34 +394,25 @@ class ActionHelper:
         self.vim_status.cursor.set_cursor_pos(block_start.position() + len_blank)
         editor.document_did_change()
 
-    def unindent(self, motion_info: MotionInfo):
-        """Shift lines leftwards."""
-        cursor = self.get_cursor()
-        cursor_pos_cur = cursor.position()
-        cursor_pos_new = motion_info.cursor_pos
-        if cursor_pos_new is None:
+    def unindent(self, motion_info: MotionInfo) -> None:
+        """Shift the given lines to the left."""
+        pos_start, pos_end, _ = self._get_selection_range(motion_info)
+        if pos_start is None or pos_end is None:
             return
-        pos_start, pos_end = sorted([cursor_pos_cur, cursor_pos_new])
         self._unindent(pos_start, pos_end)
 
-    def _unindent(self, pos_start: int, pos_end: int):
-        """Shift lines leftwards."""
+    def _unindent(self, pos_start: int, pos_end: int) -> None:
+        """Remove one level of indentation from the given range."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         editor = self.get_editor()
         cursor = self.get_cursor()
 
-        get_block = self.vim_status.cursor.get_block
-        block_start, block_no_start = get_block(pos_start)
-        block_end, block_no_end = get_block(pos_end)
+        block_no_start, block_no_end, pos_start, pos_end = self._get_block_range(
+            pos_start, pos_end
+        )
 
-        pos_start = block_start.position()
-        pos_end = block_end.position() + block_end.length() - 1
-
-        text_list = []
-        for no in range(block_no_start, block_no_end + 1):
-            block = editor.document().findBlockByNumber(no)
-            text_list.append(block.text())
+        text_list = _get_block_texts(editor, block_no_start, block_no_end)
 
         indent = self.vim_status.indent
         len_indent = len(indent)
@@ -356,11 +434,11 @@ class ActionHelper:
         editor.document_did_change()
 
     def yank(self, motion_info: MotionInfo, is_explicit: bool = False):
-        """Yank text into register.
+        """Copy text into the active register.
 
         Args:
             motion_info: Motion information for the yank range.
-            is_explicit: When called explicitly, this argument is ``True``.
+            is_explicit: When ``True`` the yank was explicitly requested.
 
         """
         if self.vim_status.is_normal():
@@ -371,30 +449,11 @@ class ActionHelper:
                 return None, None
 
         register_name = self.vim_status.get_register_name()
-        register_type = VimState.NORMAL
+        sel_start, sel_end, is_linewise = self._get_selection_range(motion_info)
+        if sel_start is None or sel_end is None:
+            return None, None
 
-        if not self.vim_status.is_normal():
-            sel_start = self.get_pos_start_in_selection()
-            sel_end = self.get_pos_end_in_selection()
-            if self.vim_status.vim_state == VimState.VLINE:
-                register_type = VimState.VLINE
-        elif motion_info.motion_type == MotionType.BlockWise:
-            sel_start = motion_info.sel_start
-            sel_end = motion_info.sel_end
-        else:
-            cursor = self.get_cursor()
-            cursor_pos_cur = cursor.position()
-            cursor_pos_new = motion_info.cursor_pos
-            sel_start, sel_end = sorted([cursor_pos_cur, cursor_pos_new])
-
-            if motion_info.motion_type == MotionType.CharWiseIncludingEnd:
-                sel_end += 1
-            elif motion_info.motion_type == MotionType.LineWise:
-                block_start, _ = self.vim_status.cursor.get_block(sel_start)
-                block_end, _ = self.vim_status.cursor.get_block(sel_end)
-                sel_start = block_start.position()
-                sel_end = block_end.position() + block_end.length() - 1
-                register_type = VimState.VLINE
+        register_type = VimState.VLINE if is_linewise else VimState.NORMAL
 
         cursor = self.get_cursor()
         cursor.setPosition(sel_start)
@@ -422,7 +481,7 @@ class ActionHelper:
         return sel_start, sel_end
 
     def _move_cursor_after_space(self, cursor):
-        """Move cursor after white space."""
+        """Return ``cursor`` positioned after leading spaces."""
         txt = cursor.block().text()
         n_space = len(txt) - len(txt.lstrip())
         cursor.movePosition(QTextCursor.StartOfLine)
@@ -430,7 +489,7 @@ class ActionHelper:
         return cursor
 
     def paste_in_normal(self, num, is_lower):
-        """Put the text before the cursor."""
+        """Paste register content in normal mode."""
         reg = self.vim_status.get_register()
         self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
 
@@ -479,7 +538,7 @@ class ActionHelper:
         editor.document_did_change()
 
     def paste_in_visual(self, num):
-        """Put the text before the cursor."""
+        """Paste over the current visual selection."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
         self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
@@ -522,7 +581,7 @@ class ActionHelper:
         self.vim_status.cursor.set_cursor_pos(cursor_pos_new)
 
     def paste_in_vline(self, num):
-        """Put the text before the cursor."""
+        """Paste register content in visual line mode."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
         self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
@@ -560,7 +619,13 @@ class ActionHelper:
         self.vim_status.cursor.set_cursor_pos(sel_start)
 
     def delete(self, motion_info: MotionInfo, is_insert, replace_txt=""):
-        """Delete selected text."""
+        """Delete text defined by ``motion_info``.
+
+        Args:
+            motion_info: Motion describing the range to delete.
+            is_insert: If ``True`` delete while in insert mode.
+            replace_txt: Optional replacement text.
+        """
         reg = self.vim_status.get_register()
         if is_insert:
             self.vim_status.update_dot_cmd(connect_editor=True, register_name=reg.name)
@@ -577,26 +642,9 @@ class ActionHelper:
         cursor = self.get_cursor()
         editor = self.get_editor()
         n_block_old = editor.blockCount()
-        is_linewise = False
-
-        if not self.vim_status.is_normal():
-            sel_start = self.get_pos_start_in_selection()
-            sel_end = self.get_pos_end_in_selection()
-            if self.vim_status.vim_state == VimState.VLINE:
-                is_linewise = True
-        elif motion_info.motion_type == MotionType.BlockWise:
-            sel_start = motion_info.sel_start
-            sel_end = motion_info.sel_end
-        else:
-            cursor = self.get_cursor()
-            cursor_pos_cur = cursor.position()
-            cursor_pos_new = motion_info.cursor_pos
-            sel_start, sel_end = sorted([cursor_pos_cur, cursor_pos_new])
-
-            if motion_info.motion_type == MotionType.CharWiseIncludingEnd:
-                sel_end += 1
-            elif motion_info.motion_type == MotionType.LineWise:
-                is_linewise = True
+        sel_start, sel_end, is_linewise = self._get_selection_range(motion_info)
+        if sel_start is None or sel_end is None:
+            return
 
         if is_linewise:
             n_block = editor.blockCount()
@@ -645,29 +693,16 @@ class ActionHelper:
         editor.document_did_change()
 
     def toggle_comment(self, motion_info: MotionInfo):
-        """Toggle comment."""
+        """Toggle comments for the selected lines."""
         self.vim_status.update_dot_cmd(connect_editor=False)
         editor = self.get_editor()
-        if not self.vim_status.is_normal():
-            pos_start = self.get_pos_start_in_selection()
-            pos_end = self.get_pos_end_in_selection()
-        elif motion_info.motion_type == MotionType.BlockWise:
-            pos_start = motion_info.sel_start
-            pos_end = motion_info.sel_end
-            if not pos_start or not pos_end:
-                return
-        else:
-            cursor = editor.textCursor()
-            cursor_pos_cur = cursor.position()
-            cursor_pos_new = motion_info.cursor_pos
-            if cursor_pos_new is None:
-                return
-            pos_start, pos_end = sorted([cursor_pos_cur, cursor_pos_new])
+        pos_start, pos_end, _ = self._get_selection_range(motion_info)
+        if pos_start is None or pos_end is None:
+            return
 
-        block_start, block_no_start = self.vim_status.cursor.get_block(pos_start)
-        block_end, _ = self.vim_status.cursor.get_block(pos_end)
-        pos_start = block_start.position()
-        pos_end = block_end.position() + block_end.length() - 1
+        block_no_start, _, pos_start, pos_end = self._get_block_range(
+            pos_start, pos_end
+        )
 
         new_cursor = editor.textCursor()
         new_cursor.setPosition(pos_start, QTextCursor.MoveAnchor)

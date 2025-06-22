@@ -336,7 +336,9 @@ class VimCursor:
         """Apply motion info in visual mode."""
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
-    def set_extra_selections(self, key: str, sels: list[QTextEdit.ExtraSelection]) -> None:
+    def set_extra_selections(
+        self, key: str, sels: list[QTextEdit.ExtraSelection]
+    ) -> None:
         """Set extra selections on the editor.
 
         Args:
@@ -368,8 +370,10 @@ class VimCursor:
         sel.cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
         self.set_extra_selections("hl_yank", [sel])
 
-        QTimer.singleShot(
-            self.hl_yank_dur, lambda: editor.clear_extra_selections("hl_yank")
-        )
+        def clear():
+            try:
+                editor.clear_extra_selections("hl_yank")
+            except RuntimeError:
+                pass
 
-
+        QTimer.singleShot(self.hl_yank_dur, clear)

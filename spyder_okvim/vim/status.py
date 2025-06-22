@@ -132,7 +132,10 @@ class VimStatus(QObject):
         if cursor.atBlockEnd() and not cursor.atBlockStart():
             pos = cursor.position()
             self.cursor.set_cursor_pos(pos - 1)
-        self.change_label.emit(VimState.NORMAL)
+        try:
+            self.change_label.emit(VimState.NORMAL)
+        except RuntimeError:
+            pass
 
     def reset_for_test(self):
         """Reset status for test."""
