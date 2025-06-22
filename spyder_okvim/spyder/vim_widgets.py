@@ -96,44 +96,46 @@ class VimShortcut(QObject):
         self.get_editor = self.vim_status.get_editor
         self.cmd_line = None
 
-    def pg_half_up(self):
-        """Scroll window upward."""
-        scroll_lines = self.vim_status.get_number_of_visible_lines() // 2
-        if scroll_lines < 1:
-            scroll_lines = 1
+    def _scroll(self, half: bool, up: bool) -> None:
+        """Scroll the editor window.
 
-        self.signal_cmd.emit(f"{scroll_lines}k")
+        Args:
+            half: If ``True`` scroll half the visible lines.
+            up: Scroll up when ``True`` otherwise scroll down.
+        """
+        lines = self.vim_status.get_number_of_visible_lines()
+        if half:
+            lines //= 2
+        if lines < 1:
+            lines = 1
+
+        command = "k" if up else "j"
+        self.signal_cmd.emit(f"{lines}{command}")
         self.signal_cmd.emit("^")
+
+    def pg_half_up(self):
+        """Scroll half page up."""
+        self._scroll(True, True)
 
     def pg_up(self):
-        """Scroll window upward."""
-        scroll_lines = self.vim_status.get_number_of_visible_lines()
-        if scroll_lines < 1:
-            scroll_lines = 1
-
-        self.signal_cmd.emit(f"{scroll_lines}k")
-        self.signal_cmd.emit("^")
+        """Scroll one page up."""
+        self._scroll(False, True)
 
     def pg_half_down(self):
-        """Scroll window downward."""
-        scroll_lines = self.vim_status.get_number_of_visible_lines() // 2
-        if scroll_lines < 1:
-            scroll_lines = 1
-
-        self.signal_cmd.emit(f"{scroll_lines}j")
-        self.signal_cmd.emit("^")
+        """Scroll half page down."""
+        self._scroll(True, False)
 
     def pg_down(self):
-        """Scroll window downward."""
-        scroll_lines = self.vim_status.get_number_of_visible_lines()
-        if scroll_lines < 1:
-            scroll_lines = 1
-
-        self.signal_cmd.emit(f"{scroll_lines}j")
-        self.signal_cmd.emit("^")
+        """Scroll one page down."""
+        self._scroll(False, False)
 
     def _extract_number(self) -> tuple[int | None, int, int]:
-        """Extract the number of current cursor position."""
+        """Return the number under the cursor.
+
+        Returns:
+            tuple[int | None, int, int]: Extracted number and its start and end
+            positions.
+        """
         cursor = self.get_editor().textCursor()
 
         val = None
@@ -142,9 +144,9 @@ class VimShortcut(QObject):
         pos_start = cursor.position()
         pos_end = pos_start
 
-        for _pos_end in range(pos_start + 1, block_end):
+        for index_end in range(pos_start + 1, block_end):
             cursor.setPosition(pos_start)
-            cursor.setPosition(_pos_end, QTextCursor.KeepAnchor)
+            cursor.setPosition(index_end, QTextCursor.KeepAnchor)
             try:
                 text_selected = cursor.selectedText()
                 if text_selected == "-":
@@ -152,21 +154,21 @@ class VimShortcut(QObject):
                 val_ = int(text_selected)
                 if text_selected.isdigit() or text_selected[0] == "-":
                     val = val_
-                    pos_end = _pos_end
+                    pos_end = index_end
                 else:
                     break
             except ValueError:
                 break
 
-        for _pos_start in range(pos_start, block_start - 1, -1):
-            cursor.setPosition(_pos_start)
+        for index_start in range(pos_start, block_start - 1, -1):
+            cursor.setPosition(index_start)
             cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
             try:
                 val_ = int(cursor.selectedText())
                 text_selected = cursor.selectedText()
                 if text_selected.isdigit() or text_selected[0] == "-":
                     val = val_
-                    pos_start = _pos_start
+                    pos_start = index_start
                 else:
                     break
             except ValueError:
@@ -174,53 +176,41 @@ class VimShortcut(QObject):
 
         return val, pos_start, pos_end
 
+    def _change_number(self, delta: int, key: int) -> None:
+        """Change the number at the cursor.
+
+        Args:
+            delta: Increment or decrement value.
+            key: Qt key code used for dot command updates.
+        """
+        val, start, end = self._extract_number()
+        if val is None:
+            return
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+
+        count_text = self.cmd_line.text()
+        count = 1 if not count_text else int(count_text)
+
+        cursor = self.get_editor().textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.KeepAnchor)
+        cursor.insertText(str(val + delta * count))
+        self.signal_cmd.emit("h")
+
+        cmd_info = InputCmdInfo(str(count), "")
+        self.vim_status.input_cmd.set(cmd_info)
+        key_info = KeyInfo(key, "", Qt.ControlModifier, 0)
+        self.vim_status.update_dot_cmd(False, key_list_to_cmd_line=[key_info])
+
     def add_num(self) -> None:
         """Add to the number at the cursor."""
-        val, pos_start, pos_end = self._extract_number()
-
-        if val is not None:
-            if self.vim_status.sub_mode:
-                self.cmd_line.esc_pressed()
-                return
-
-            txt = self.cmd_line.text()
-            num = 1 if not txt else int(txt)
-
-            cursor = self.get_editor().textCursor()
-            cursor.setPosition(pos_start)
-            cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-            cursor.insertText(str(val + num))
-            self.signal_cmd.emit("h")
-
-            # Update dot cmd
-            cmd_info = InputCmdInfo(str(num), "")
-            self.vim_status.input_cmd.set(cmd_info)
-            key_info = KeyInfo(Qt.Key_A, "", Qt.ControlModifier, 0)
-            self.vim_status.update_dot_cmd(False, key_list_to_cmd_line=[key_info])
+        self._change_number(1, Qt.Key_A)
 
     def subtract_num(self) -> None:
-        """Subtract to the number at the cursor."""
-        val, pos_start, pos_end = self._extract_number()
-
-        if val is not None:
-            if self.vim_status.sub_mode:
-                self.cmd_line.esc_pressed()
-                return
-
-            txt = self.cmd_line.text()
-            num = 1 if not txt else int(txt)
-
-            cursor = self.get_editor().textCursor()
-            cursor.setPosition(pos_start)
-            cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-            cursor.insertText(str(val - num))
-            self.signal_cmd.emit("h")
-
-            # Update dot cmd
-            cmd_info = InputCmdInfo(str(num), "")
-            self.vim_status.input_cmd.set(cmd_info)
-            key_info = KeyInfo(Qt.Key_X, "", Qt.ControlModifier, 0)
-            self.vim_status.update_dot_cmd(False, key_list_to_cmd_line=[key_info])
+        """Subtract from the number at the cursor."""
+        self._change_number(-1, Qt.Key_X)
 
     def redo(self) -> None:
         """Redo [count] changes which were undone."""
