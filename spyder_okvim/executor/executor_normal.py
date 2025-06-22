@@ -43,7 +43,7 @@ from spyder_okvim.executor.executor_sub import (
 )
 from spyder_okvim.executor.mixins import MovementMixin
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
+from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
 class ExecutorNormalCmd(MovementMixin, ExecutorBase):

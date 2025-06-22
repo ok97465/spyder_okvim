@@ -2,7 +2,7 @@
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
-from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
+from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 SURROUNDINGS = "'\"{[()]}"
 

@@ -8,7 +8,7 @@ from spyder.config.manager import CONF
 from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
+from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
 class VimCursor:
