@@ -4,7 +4,7 @@
 import pytest
 
 # Project Libraries
-from spyder_okvim.utils.vim_status import VimState
+from spyder_okvim.vim import VimState
 
 
 @pytest.mark.parametrize(

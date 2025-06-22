@@ -30,7 +30,7 @@ from spyder_okvim.executor import (
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.utils.file_search import FileSearchDialog
-from spyder_okvim.utils.vim_status import InputCmdInfo, KeyInfo, VimState, VimStatus
+from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 
 running_coverage = "coverage" in sys.modules
 

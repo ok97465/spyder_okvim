@@ -8,7 +8,7 @@ from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.utils.vim_status import VimState
+from spyder_okvim.vim import VimState
 
 
 @pytest.mark.parametrize(

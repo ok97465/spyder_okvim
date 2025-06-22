@@ -270,7 +270,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         """Run previous change."""
         # avoid to execute . command twice.
         self.vim_status.manager_macro.remove_last_key(".")
-        cmd_str = self.vim_status.dot_cmd.cmd2string(num, num_str)
+        cmd_str = self.vim_status.dot_cmd.to_cmd_string(num, num_str)
 
         if not cmd_str:
             return
@@ -578,7 +578,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
     def q(self, num=1, num_str=""):
         """Record typed characters into register."""
         if self.vim_status.is_recording_macro():
-            self.vim_status.stop_recoding_macro()
+            self.vim_status.stop_recording_macro()
             self.vim_status.set_message("")
         else:
             executor_sub = self.executor_sub_alnum
@@ -647,3 +647,5 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         """Search word under cursor backward."""
         motion_info = self.helper_motion.sharp(num)
         self.apply_motion_info_in_normal(motion_info)
+
+

@@ -3,7 +3,7 @@
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
-from spyder_okvim.utils.vim_status import VimState
+from spyder_okvim.vim import VimState
 
 
 class ExecutorColon(ExecutorSubBase):
