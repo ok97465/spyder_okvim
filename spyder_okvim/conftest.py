@@ -91,6 +91,9 @@ class MainMock(QWidget):
             for key, val in dict_info.items():
                 CONF.set(name, key, val)
 
+        # Disable highlight yank delay to avoid timer side effects
+        CONF.set(CONF_SECTION, "highlight_yank_duration", 0)
+
         self.add_dockwidget = Mock()
 
         qtbot_module.add_widget(self.main)
