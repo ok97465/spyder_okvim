@@ -578,7 +578,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
     def q(self, num=1, num_str=""):
         """Record typed characters into register."""
         if self.vim_status.is_recording_macro():
-            self.vim_status.stop_recoding_macro()
+            self.vim_status.stop_recording_macro()
             self.vim_status.set_message("")
         else:
             executor_sub = self.executor_sub_alnum
