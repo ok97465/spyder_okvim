@@ -15,7 +15,7 @@ from spyder_okvim.executor.executor_base import (
     RETURN_EXECUTOR_METHOD_INFO,
     ExecutorSubBase,
 )
-from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
+from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
 class ExecutorSelectMarkerEasymotion(ExecutorSubBase):

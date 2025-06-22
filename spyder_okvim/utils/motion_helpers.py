@@ -13,28 +13,11 @@ from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.utils.search_helpers import SearchHelper
 from spyder_okvim.utils.text_constants import BRACKET_PAIR
 
 WHITE_SPACE = " \t"
-
-
-class MotionType:
-    """Constant for motion type."""
-
-    BlockWise = 0
-    LineWise = 1
-    CharWise = 2
-    CharWiseIncludingEnd = 3
-
-
-class MotionInfo:
-    """Motion Info."""
-
-    def __init__(self):
-        self.cursor_pos = None
-        self.sel_start = None
-        self.sel_end = None
-        self.motion_type = MotionType.LineWise
 
 
 class MotionHelper:
@@ -51,17 +34,18 @@ class MotionHelper:
         self.get_cursor = vim_status.get_cursor
         self.set_cursor = vim_status.set_cursor
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
-        self.motion_info = MotionInfo()
+
+        self.search_helper = SearchHelper(vim_status, self._set_motion_info)
 
         self.find_cmd_map = {
             "f": self.find_ch,
             "F": self.rfind_ch,
             "t": self.t,
             "T": self.T,
-            "s": self.sneak,
-            "S": self.rsneak,
-            "z": self.sneak,
-            "Z": self.rsneak,
+            "s": self.search_helper.sneak,
+            "S": self.search_helper.rsneak,
+            "z": self.search_helper.sneak,
+            "Z": self.search_helper.rsneak,
         }
 
     def _set_motion_info(
@@ -71,24 +55,23 @@ class MotionHelper:
         sel_end: int | None = None,
         motion_type: int = MotionType.LineWise,
     ):
-        """Set motion info.
+        """Build a :class:`MotionInfo` object.
 
         Args:
-        cur_pos: the position of cursor.
-        sel_start: the start position of selection.
-        sel_end: the end position of selection.
-        motion_type: motion type
+            cur_pos: The resulting cursor position.
+            sel_start: Selection start position.
+            sel_end: Selection end position.
+            motion_type: Type of the motion.
 
         Returns:
-            motion info
-
+            MotionInfo: Computed motion information.
         """
-        self.motion_info.cursor_pos = cur_pos
-        self.motion_info.sel_start = sel_start
-        self.motion_info.sel_end = sel_end
-        self.motion_info.motion_type = motion_type
-
-        return self.motion_info
+        return MotionInfo(
+            cursor_pos=cur_pos,
+            sel_start=sel_start,
+            sel_end=sel_end,
+            motion_type=motion_type,
+        )
 
     def _get_ch(self, pos):
         """Get character of position."""
@@ -561,103 +544,32 @@ class MotionHelper:
         )
 
     def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
-        """Get the cursor position of viewport of editor."""
-        editor = self.vim_status.get_editor()
-        start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
-        bottom_right = QPoint(
-            editor.viewport().width() - 1, editor.viewport().height() - 1
-        )
-        end_pos = editor.cursorForPosition(bottom_right).position()
-
-        return start_pos, end_pos
+        """Return start and end positions of the visible viewport."""
+        return self.search_helper.get_viewport_positions()
 
     def search_forward_in_view(self, txt: str) -> list[int]:
-        """Return positions of ``txt`` within the visible editor viewport."""
-        editor = self.get_editor()
-
-        cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
-        start_pos = min([view_end_pos, cur_pos]) + 1
-
-        pos_list = []
-        while view_start_pos <= start_pos <= view_end_pos:
-            cursor = editor.document().find(
-                txt, start_pos, QTextDocument.FindCaseSensitively
-            )
-            if cursor.isNull() or cursor.position() > view_end_pos:
-                break
-            pos_list.append(cursor.position() - len(txt))
-            start_pos = cursor.position()
-
-        return pos_list
+        """Return positions of ``txt`` within the visible viewport."""
+        return self.search_helper.search_forward_in_view(txt)
 
     def sneak(self, ch2, num=1, by_repeat_cmd=False):
-        """Get the position of the next occurrence of two characters."""
-        if by_repeat_cmd is False:
-            self.vim_status.find_info.set("s", ch2)
-
-        ch_pos = None
-
-        pos_list = self.search_forward_in_view(ch2)
-        if pos_list:
-            n_pos = len(pos_list)
-            ch_pos = pos_list[(num - 1) % n_pos]
-
-        return self._set_motion_info(ch_pos, motion_type=MotionType.CharWise)
+        """Delegate to :class:`SearchHelper`."""
+        return self.search_helper.sneak(ch2, num, by_repeat_cmd)
 
     def display_another_group_after_sneak(self):
-        """Display group after sneak."""
-        pos_list = self.search_forward_in_view(self.vim_status.find_info.ch)
-        info_group = {}
-        for idx, pos in enumerate(pos_list, 1):
-            info_group[pos + 1] = f"{idx};" if idx != 1 else ";"
-
-        self.vim_status.annotate_on_txt(info_group, timeout=1500)
+        """Show annotations for additional sneak targets."""
+        self.search_helper.display_another_group_after_sneak()
 
     def search_backward_in_view(self, txt: str) -> list[int]:
         """Return positions of ``txt`` when searching backward in the viewport."""
-        editor = self.get_editor()
-
-        cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
-        start_pos = min([view_end_pos, cur_pos])
-
-        pos_list = []
-        while view_start_pos <= start_pos <= view_end_pos:
-            cursor = editor.document().find(
-                txt,
-                start_pos,
-                QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
-            )
-            if cursor.isNull() or cursor.position() < view_start_pos:
-                break
-            pos_list.append(cursor.position() - len(txt))
-            start_pos = cursor.position() - len(txt) - 1
-
-        return pos_list
+        return self.search_helper.search_backward_in_view(txt)
 
     def rsneak(self, ch2, num=1, by_repeat_cmd=False):
-        """Get the position of the previous occurrence of two characters."""
-        if by_repeat_cmd is False:
-            self.vim_status.find_info.set("S", ch2)
-
-        ch_pos = None
-
-        pos_list = self.search_backward_in_view(ch2)
-        if pos_list:
-            n_pos = len(pos_list)
-            ch_pos = pos_list[(num - 1) % n_pos]
-
-        return self._set_motion_info(ch_pos, motion_type=MotionType.CharWise)
+        """Delegate to :class:`SearchHelper`."""
+        return self.search_helper.rsneak(ch2, num, by_repeat_cmd)
 
     def display_another_group_after_rsneak(self):
-        """Display group after sneak."""
-        pos_list = self.search_backward_in_view(self.vim_status.find_info.ch)
-        info_group = {}
-        for idx, pos in enumerate(pos_list, 1):
-            info_group[pos + 1] = f"{idx};" if idx != 1 else ";"
-
-        self.vim_status.annotate_on_txt(info_group, timeout=1500)
+        """Show annotations for additional reverse sneak targets."""
+        self.search_helper.display_another_group_after_rsneak()
 
     def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, F or T."""
@@ -1096,113 +1008,29 @@ class MotionHelper:
         return motion_info
 
     def search(self, txt: str):
-        """Search regular expressions key inside document(from spyder_vim)."""
-        editor = self.get_editor()
-        cursor = QTextCursor(editor.document())
-        cursor.movePosition(QTextCursor.Start)
-
-        # Apply the option for search
-        is_ignorecase = CONF.get(CONF_SECTION, "ignorecase")
-        is_smartcase = CONF.get(CONF_SECTION, "smartcase")
-
-        option = None
-        if is_ignorecase is True:
-            self.vim_status.search.ignorecase = True
-
-            if is_smartcase and txt.lower() != txt:
-                option = QTextDocument.FindCaseSensitively
-                self.vim_status.search.ignorecase = False
-        else:
-            option = QTextDocument.FindCaseSensitively
-            self.vim_status.search.ignorecase = False
-
-        back = self.vim_status.search.color_bg
-        fore = self.vim_status.search.color_fg
-        # Find key in document forward
-        search_stack = []
-        while True:
-            if option:
-                cursor = editor.document().find(
-                    QRegularExpression(txt), cursor, options=option
-                )
-            else:
-                cursor = editor.document().find(QRegularExpression(txt), cursor)
-
-            if cursor.position() != -1:
-                selection = QTextEdit.ExtraSelection()
-                selection.format.setBackground(back)
-                selection.format.setForeground(fore)
-                selection.cursor = cursor
-                search_stack.append(selection)
-            else:
-                break
-
-        self.vim_status.cursor.set_extra_selections(
-            "vim_search", [i for i in search_stack]
-        )
-
-        self.vim_status.search.selection_list = search_stack
-        self.vim_status.search.txt_searched = txt
+        """Delegate search to :class:`SearchHelper`."""
+        self.search_helper.search(txt)
 
     def n(self, num=1, num_str=""):
-        """Get position to the next searched text(from spyder-vim)."""
-        pos_list = self.vim_status.search.get_sel_start_list()
-        if not pos_list:
-            return self._set_motion_info(None)
-
-        txt = self.vim_status.search.txt_searched
-        self.vim_status.set_message(f"/{txt}")
-
-        cursor_pos = self.get_cursor().position()
-
-        idx = bisect_right(pos_list, cursor_pos)
-        if idx == len(pos_list):
-            idx = 0
-
-        idx += num - 1
-        idx = idx % len(pos_list)
-
-        return self._set_motion_info(pos_list[idx], motion_type=MotionType.CharWise)
+        """Move to the next search match."""
+        return self.search_helper.n(num, num_str)
 
     def N(self, num=1, num_str=""):
-        """Get position to the previous searched text(from spyder-vim)."""
-        pos_list = self.vim_status.search.get_sel_start_list()
-        n_pos_list = len(pos_list)
-        if not pos_list:
-            return self._set_motion_info(None)
-
-        txt = self.vim_status.search.txt_searched
-        self.vim_status.set_message(f"?{txt}")
-
-        cursor_pos = self.get_cursor().position()
-
-        idx = bisect_left(pos_list, cursor_pos)
-        idx -= num - 1
-        idx = idx % n_pos_list
-
-        return self._set_motion_info(pos_list[idx - 1], motion_type=MotionType.CharWise)
+        """Move to the previous search match."""
+        return self.search_helper.N(num, num_str)
 
     def _get_word_under_cursor(self) -> str:
-        """Get word under cursor."""
+        """Return word under cursor."""
         editor = self.get_editor()
-        word = editor.get_current_word()
-        return word
+        return editor.get_current_word()
 
     def asterisk(self, num=1, num_str=""):
-        """Search word under cusor forward."""
-        word = self._get_word_under_cursor()
-        if word is None:
-            return self._set_motion_info(None)
-        self.search(f"\\b{word}\\b")
-        return self.n(num=num)
+        """Search forward for the word under the cursor."""
+        return self.search_helper.asterisk(num, num_str)
 
     def sharp(self, num=1, num_str=""):
-        """Search word under cusor backward."""
-        word = self._get_word_under_cursor()
-        if word is None:
-            return self._set_motion_info(None)
-        self.search(f"\\b{word}\\b")
-        return self.N(num=num)
+        """Search backward for the word under the cursor."""
+        return self.search_helper.sharp(num, num_str)
 
     def space(self, num=1, num_str=""):
         """Get the position on the right side of the cursor."""

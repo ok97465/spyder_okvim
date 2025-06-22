@@ -8,7 +8,8 @@ import re
 from qtpy.QtGui import QTextCursor
 
 # Project Libraries
-from spyder_okvim.utils.motion_helpers import MotionHelper, MotionInfo, MotionType
+from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.utils.motion_helpers import MotionHelper
 from spyder_okvim.vim import VimState
 
 

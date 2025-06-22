@@ -15,7 +15,7 @@ from spyder.config.manager import CONF
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
-from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
+from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 from .cursor import VimCursor
 from .label import InlineLabel
