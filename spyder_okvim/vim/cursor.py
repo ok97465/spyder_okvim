@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Cursor handling utilities."""
 
+# Third Party Libraries
 from qtpy.QtCore import QTimer
 from qtpy.QtGui import QBrush, QColor, QTextBlock, QTextCursor
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
 from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 
@@ -292,6 +294,7 @@ class VimCursor:
         if pos is None:
             return
         editor = self.get_editor()
+        pos = max(0, min(pos, editor.document().characterCount() - 1))
         cursor = editor.textCursor()
         cursor.setPosition(pos)
         self.set_cursor(cursor)

@@ -88,23 +88,23 @@ class EasyMotionPainter(QObject):
         pen_ch = QPen(QColor(220, 120, 120, 255))
         pen_border = QPen(QColor(0, 160, 100, 255), 1)
 
-        painter = QPainter(viewport)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.setBrush(QColor(57, 34, 79, 255))
-        painter.setFont(editor.font())
-        ch_width = fm.width(" ")
+        with QPainter(viewport) as painter:
+            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            painter.setBrush(QColor(57, 34, 79, 255))
+            painter.setFont(editor.font())
+            ch_width = fm.width(" ")
 
-        for pos_ch, marker_name in zip(self.positions, self.names):
-            tc.setPosition(pos_ch)
+            for pos_ch, marker_name in zip(self.positions, self.names):
+                tc.setPosition(pos_ch)
 
-            rect = editor.cursorRect(tc)
-            rect.setWidth(ch_width * len(marker_name))
+                rect = editor.cursorRect(tc)
+                rect.setWidth(ch_width * len(marker_name))
 
-            if rect.intersects(viewport.rect()):
-                painter.setPen(pen_border)
-                painter.drawRoundedRect(rect, 40, 40, Qt.RelativeSize)
-                painter.setPen(pen_ch)
-                text_height = rect.bottom() - fm.descent()
-                painter.drawText(rect.left(), text_height, marker_name)
+                if rect.intersects(viewport.rect()):
+                    painter.setPen(pen_border)
+                    painter.drawRoundedRect(rect, 40, 40, Qt.RelativeSize)
+                    painter.setPen(pen_ch)
+                    text_height = rect.bottom() - fm.descent()
+                    painter.drawText(rect.left(), text_height, marker_name)
 
         return True
