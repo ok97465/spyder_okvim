@@ -21,10 +21,8 @@ class SearchInfo:
     def __init__(self, vim_cursor):
         """Initialize the search state.
 
-        Parameters
-        ----------
-        vim_cursor
-            Cursor helper used to draw selections.
+        Args:
+            vim_cursor: Cursor helper used to draw selections.
         """
         self.color_fg = QBrush(QColor("#A9B7C6"))
         self.color_bg = QBrush(QColor("#30652F"))
@@ -68,3 +66,5 @@ class SearchInfo:
         )
 
         return [i.cursor.selectionStart() for i in self.selection_list]
+
+

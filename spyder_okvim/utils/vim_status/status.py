@@ -15,8 +15,8 @@ from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPai
 from spyder_okvim.utils.motion_helpers import MotionInfo, MotionType
 
 from .cursor import VimCursor
-from .label import LabelOnTxt
-from .macro import ManagerMacro
+from .label import InlineLabel
+from .macro import MacroManager
 from .search import SearchInfo
 from .state import (
     DotCmdInfo,
@@ -78,7 +78,7 @@ class VimStatus(QObject):
         self.msg_prefix = ""
 
         # Macro
-        self.manager_macro = ManagerMacro()
+        self.manager_macro = MacroManager()
 
         # bookmarks
         bookmarks_file = osp.join(
@@ -103,7 +103,7 @@ class VimStatus(QObject):
         # Sneak
         self.n_annotate_max = 50
         self.labels_for_annotate = [
-            LabelOnTxt(self.main) for _ in range(self.n_annotate_max)
+            InlineLabel(self.main) for _ in range(self.n_annotate_max)
         ]
         self.hide_annotate_on_txt()
 
@@ -151,7 +151,7 @@ class VimStatus(QObject):
         self.search = SearchInfo(self.cursor)
 
         # Macro
-        self.manager_macro = ManagerMacro()
+        self.manager_macro = MacroManager()
 
         self.msg_label.setText("")
 
@@ -214,10 +214,13 @@ class VimStatus(QObject):
             self.cmd_line.setFocus()
 
     def set_focus_to_vim_after_delay(self, delay=300):
-        """Set focus to vim command line after delay.
+        """Set focus to the Vim command line after ``delay`` milliseconds.
 
-        Spyder is focused after receiving the result of pyls.
-        So set_focus_to_vim method is useless.
+        Note: This is mainly used when the editor regains focus after external
+        actions.
+
+        Args:
+            delay: Delay in milliseconds before focusing the command line.
         """
 
         def focus():
@@ -358,8 +361,6 @@ class VimStatus(QObject):
             self.add_key_from_editor_to_macro_manager
         )
 
-    # Backwards compatibility
-    stop_recoding_macro = stop_recording_macro
 
     @Slot(QKeyEvent)
     def add_key_from_editor_to_macro_manager(self, event):
@@ -367,7 +368,12 @@ class VimStatus(QObject):
         self.manager_macro.add_editor_keyevent(event)
 
     def set_marker_for_easymotion(self, positions: list[int], motion_type):
-        """Set marker for easymotion."""
+        """Set markers for EasyMotion.
+
+        Args:
+            positions: Character positions to annotate.
+            motion_type: Kind of motion that triggered the annotation.
+        """
         if not positions:
             return
         self.remove_marker_of_easymotion()
@@ -406,7 +412,12 @@ class VimStatus(QObject):
             self.labels_for_annotate[idx].hide()
 
     def annotate_on_txt(self, info: dict[int, str], timeout: int = -1):
-        """Annotate on txt."""
+        """Annotate the editor with temporary inline labels.
+
+        Args:
+            info: Mapping of cursor positions to text labels.
+            timeout: Milliseconds before labels are cleared.
+        """
         editor = self.get_editor()
         tc = editor.textCursor()
         font = editor.viewport().font()
@@ -434,3 +445,5 @@ class VimStatus(QObject):
                 break
 
         QTimer.singleShot(timeout, self.hide_annotate_on_txt)
+
+

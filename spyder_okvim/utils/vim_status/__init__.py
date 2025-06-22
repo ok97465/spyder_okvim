@@ -14,8 +14,8 @@ from .state import (
     RegisterInfo,
 )
 from .search import SearchInfo
-from .macro import MacroManager, ManagerMacro
-from .label import InlineLabel, LabelOnTxt
+from .macro import MacroManager
+from .label import InlineLabel
 from .cursor import VimCursor
 from .status import VimStatus
 
@@ -28,9 +28,9 @@ __all__ = [
     "RegisterInfo",
     "SearchInfo",
     "MacroManager",
-    "ManagerMacro",
     "InlineLabel",
-    "LabelOnTxt",
     "VimCursor",
     "VimStatus",
 ]
+
+

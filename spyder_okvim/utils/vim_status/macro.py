@@ -29,12 +29,9 @@ class MacroManager:
     def set_info_for_execute(self, register, count):
         """Configure macro execution.
 
-        Parameters
-        ----------
-        register
-            Name of the register to execute.
-        count
-            Number of times to repeat execution.
+        Args:
+            register: Name of the register to execute.
+            count: Number of times to repeat execution.
         """
         self.reg_name_for_execute = register
         self.num_execute = count
@@ -42,10 +39,8 @@ class MacroManager:
     def start_record(self, register):
         """Begin recording keystrokes.
 
-        Parameters
-        ----------
-        register
-            Name of the register to store the recording in.
+        Args:
+            register: Name of the register to store the recording in.
         """
         self.reg_name_for_record = register
         self.is_recording = True
@@ -63,10 +58,8 @@ class MacroManager:
     def remove_last_key(self, text):
         """Remove a trailing key from the recording if it matches ``text``.
 
-        Parameters
-        ----------
-        text
-            Character to remove from the end of the recorded sequence.
+        Args:
+            text: Character to remove from the end of the recorded sequence.
         """
         key_list = self.registers[self.reg_name_for_record]
         if key_list:
@@ -90,12 +83,9 @@ class MacroManager:
     def connect_to_editor(self, editor: QObject, slot):
         """Start receiving key events from ``editor``.
 
-        Parameters
-        ----------
-        editor
-            Editor emitting ``sig_key_pressed``.
-        slot
-            Slot connected to the editor signal.
+        Args:
+            editor: Editor emitting ``sig_key_pressed``.
+            slot: Slot connected to the editor signal.
         """
         self.editor_connected = editor
         editor.sig_key_pressed.connect(slot)
@@ -112,6 +102,5 @@ class MacroManager:
         self.editor_connected = None
 
 
-# Backwards compatibility -------------------------------------------------
-# Retain the previous class name "ManagerMacro" for external imports.
-ManagerMacro = MacroManager
+
+

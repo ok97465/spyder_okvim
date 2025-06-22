@@ -93,12 +93,9 @@ class VimCursor:
     def create_selection(self, start, end):
         """Create a text selection between two positions.
 
-        Parameters
-        ----------
-        start
-            Starting position of the selection.
-        end
-            End position of the selection.
+        Args:
+            start: Starting position of the selection.
+            end: End position of the selection.
         """
         end_document = self.get_end_position()
         if end > end_document:
@@ -114,10 +111,8 @@ class VimCursor:
     def set_cursor_pos_in_visual(self, pos_new):
         """Move the cursor while adjusting the current visual selection.
 
-        Parameters
-        ----------
-        pos_new
-            Desired new cursor position.
+        Args:
+            pos_new: Desired new cursor position.
         """
         if pos_new is None:
             return
@@ -239,10 +234,8 @@ class VimCursor:
     def set_cursor_pos_in_vline(self, pos_new):
         """Move the cursor while updating the visual line selection.
 
-        Parameters
-        ----------
-        pos_new
-            Desired new cursor position.
+        Args:
+            pos_new: Desired new cursor position.
         """
         if pos_new is None:
             return
@@ -280,10 +273,8 @@ class VimCursor:
     def set_block_selection_in_visual(self, motion_info: MotionInfo):
         """Update block-wise visual selection from ``motion_info``.
 
-        Parameters
-        ----------
-        motion_info
-            Motion information computed by a helper.
+        Args:
+            motion_info: Motion information computed by a helper.
         """
         editor = self.get_editor()
         sel = editor.get_extra_selections("vim_selection")[0]
@@ -295,10 +286,8 @@ class VimCursor:
     def set_cursor_pos(self, pos):
         """Place the editor cursor at ``pos``.
 
-        Parameters
-        ----------
-        pos
-            New absolute position for the cursor.
+        Args:
+            pos: New absolute position for the cursor.
         """
         if pos is None:
             return
@@ -311,10 +300,8 @@ class VimCursor:
     def set_cursor_pos_without_end(self, pos):
         """Set the cursor avoiding the final block boundary.
 
-        Parameters
-        ----------
-        pos
-            Desired cursor position.
+        Args:
+            pos: Desired cursor position.
         """
         if pos is None:
             return
@@ -374,3 +361,5 @@ class VimCursor:
         QTimer.singleShot(
             self.hl_yank_dur, lambda: editor.clear_extra_selections("hl_yank")
         )
+
+

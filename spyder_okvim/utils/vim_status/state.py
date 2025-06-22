@@ -25,12 +25,9 @@ class FindInfo:
     def set(self, cmd_name: str, ch: str):
         """Update this command information.
 
-        Parameters
-        ----------
-        cmd_name
-            Command name (``f``/``F``/``t``/``T``).
-        ch
-            Character used with the command.
+        Args:
+            cmd_name: Command name (``f``/``F``/``t``/``T``).
+            ch: Character used with the command.
         """
         self.cmd_name = cmd_name
         self.ch = ch
@@ -40,6 +37,12 @@ class InputCmdInfo:
     """Container for the command currently being typed."""
 
     def __init__(self, num_str: str, cmd: str):
+        """Create a new instance.
+
+        Args:
+            num_str: Number prefix for the command.
+            cmd: Command string.
+        """
         self.num_str: str = num_str
         self.cmd: str = cmd
 
@@ -49,7 +52,11 @@ class InputCmdInfo:
         self.cmd = ""
 
     def set(self, input_cmd_info):
-        """Copy the fields from another :class:`InputCmdInfo`."""
+        """Copy the fields from another ``InputCmdInfo``.
+
+        Args:
+            input_cmd_info: Source command info to copy from.
+        """
         self.num_str = input_cmd_info.num_str
         self.cmd = input_cmd_info.cmd
 
@@ -77,7 +84,12 @@ class DotCmdInfo:
         self.key_list_to_cmd_line.clear()
 
     def to_cmd_string(self, num, num_str):
-        """Return the textual representation of this dot command."""
+        """Return the textual representation of this dot command.
+
+        Args:
+            num: Numeric prefix used for the command.
+            num_str: Original numeric string typed by the user.
+        """
         # TODO : apply register name.
         cmd_str = ""
 
@@ -109,8 +121,6 @@ class DotCmdInfo:
         else:
             return self.num_str + self.cmd
 
-    # Backwards compatibility
-    cmd2string = to_cmd_string
 
 
 class KeyInfo:
@@ -138,3 +148,5 @@ class RegisterInfo:
         self.name = ""
         self.content = ""
         self.type = VimState.NORMAL
+
+

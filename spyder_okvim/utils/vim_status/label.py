@@ -14,7 +14,12 @@ class InlineLabel(QLabel):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
     def set_style(self, font_family: str, font_size_pt: int):
-        """Apply styling for display."""
+        """Apply styling for display.
+
+        Args:
+            font_family: Font family name.
+            font_size_pt: Size of the font in points.
+        """
         self.setStyleSheet(
             f"""QLabel {{
             background-color : #222b35;
@@ -29,6 +34,5 @@ class InlineLabel(QLabel):
         )
 
 
-# Backwards compatibility -------------------------------------------------
-# Keep the previous name for external imports
-LabelOnTxt = InlineLabel
+
+
