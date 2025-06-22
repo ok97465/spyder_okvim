@@ -1533,6 +1533,27 @@ def test_clipboard(vim_bot):
     assert clipboard.text() == "1dhrwodn\n"
 
 
+def test_double_indent_unindent(vim_bot):
+    """Test >> and << commands."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("ab\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, ">>")
+
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == "    ab\n"
+    assert editor.textCursor().position() == 4
+
+    qtbot.keyClicks(cmd_line, "<<")
+
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == "ab\n"
+    assert editor.textCursor().position() == 0
+
+
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, register_name, text_yanked",
     [
@@ -1636,6 +1657,25 @@ def test_highlight_yank(vim_bot):
 
     sel = editor.get_extra_selections("hl_yank")
     assert len(sel) > 0
+
+
+def test_yy_cmd(vim_bot):
+    """Test yy command to yank a whole line."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("foo\nbar\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "yy")
+
+    reg_default = vim.vim_cmd.vim_status.register_dict['"']
+    reg_zero = vim.vim_cmd.vim_status.register_dict["0"]
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().position() == 0
+    assert reg_default.content == "foo\n"
+    assert reg_zero.content == "foo\n"
 
 
 @pytest.mark.parametrize(

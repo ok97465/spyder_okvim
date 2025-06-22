@@ -950,6 +950,29 @@ def test_less_cmd_in_visual(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert vim.vim_cmd.vim_status.get_pos_start_in_selection() is None
 
 
+def test_double_indent_unindent_visual(vim_bot):
+    """Test >> and << in visual mode."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, ">>")
+
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == "    a\n"
+    assert editor.textCursor().position() == 4
+
+    qtbot.keyClicks(cmd_line, "v")
+    qtbot.keyClicks(cmd_line, "<<")
+
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == "a\n"
+    assert editor.textCursor().position() == 0
+
+
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
     [
