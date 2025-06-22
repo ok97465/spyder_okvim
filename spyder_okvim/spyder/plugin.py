@@ -30,7 +30,14 @@ class StatusBarVimWidget(StatusBarWidget):
     ID = f"{CONF_SECTION}_status_bar"
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
-        """Status bar widget base."""
+        """Initialize status bar widget.
+
+        Args:
+            parent: Parent widget for this status bar widget.
+            msg_label: Label used to display messages.
+            status_label: Label showing the current Vim mode.
+            cmd_line: Line edit used for entering commands.
+        """
         self.msg_label = msg_label
         self.status_label = status_label
         self.cmd_line = cmd_line
@@ -38,7 +45,7 @@ class StatusBarVimWidget(StatusBarWidget):
 
     # ---- Private API -------------------------------------------------
     def _set_layout(self):
-        """Set layout for the status bar widget."""
+        """Create the internal layout of the status bar widget."""
         spacing_post = 12
         spacing = 5
 
@@ -63,8 +70,8 @@ class StatusBarVimWidget(StatusBarWidget):
         self.setLayout(layout)
 
     def set_layout(self):
-        """Create and apply the layout for the status bar widget."""
-        pass
+        """Public entry point to apply the layout."""
+        self._set_layout()
 
     # ---- Status bar widget API
     def set_icon(self):
@@ -89,7 +96,7 @@ class StatusBarVimWidget(StatusBarWidget):
         return ""
 
     def get_icon(self):
-        """Return the widget tooltip text."""
+        """Return the widget icon."""
         return None
 
 
@@ -147,12 +154,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
-        sc = QShortcut(
+        esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
             vim_cmd.commandline.setFocus,
         )
-        sc.setContext(Qt.WidgetWithChildrenShortcut)
+        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:

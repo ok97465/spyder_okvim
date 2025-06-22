@@ -15,7 +15,7 @@ class OkvimConfigPage(PluginConfigPage):
     """Preferences page for configuring OkVim."""
 
     def setup_page(self):
-        """Create configuration page."""
+        """Create configuration page for the plugin."""
         newcb = self.create_checkbox
         newce = self.create_coloredit
         newsb = self.create_spinbox
@@ -94,13 +94,22 @@ class ShortcutLineEdit(QLineEdit):
     """QLineEdit that filters its key press and release events."""
 
     def __init__(self, parent, viewer):
-        """Create line edit used to record a leader key sequence."""
+        """Create line edit used to record a leader key sequence.
+
+        Args:
+            parent: Parent widget.
+            viewer: Line edit that displays the captured shortcut.
+        """
         super().__init__(parent)
         self.setPlaceholderText("Press leader key...")
         self.viewer = viewer
 
     def keyPressEvent(self, event):
-        """Override Qt method."""
+        """Filter key presses to capture a valid shortcut.
+
+        Args:
+            event: Key event captured by Qt.
+        """
         key = event.key()
         modifier = event.modifiers()
 
