@@ -435,8 +435,12 @@ class ActionHelper:
             is_explicit: When ``True`` the yank was explicitly requested.
 
         """
-        if self.vim_status.is_normal() and motion_info.cursor_pos is None:
-            return None, None
+        if self.vim_status.is_normal():
+            if motion_info.motion_type == MotionType.BlockWise:
+                if motion_info.sel_start is None or motion_info.sel_end is None:
+                    return None, None
+            elif motion_info.cursor_pos is None:
+                return None, None
 
         register_name = self.vim_status.get_register_name()
         sel_start, sel_end, is_linewise = self._get_selection_range(motion_info)
@@ -622,8 +626,12 @@ class ActionHelper:
         else:
             self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
 
-        if self.vim_status.is_normal() and motion_info.cursor_pos is None:
-            return
+        if self.vim_status.is_normal():
+            if motion_info.motion_type == MotionType.BlockWise:
+                if motion_info.sel_start is None or motion_info.sel_end is None:
+                    return
+            elif motion_info.cursor_pos is None:
+                return
 
         cursor = self.get_cursor()
         editor = self.get_editor()
