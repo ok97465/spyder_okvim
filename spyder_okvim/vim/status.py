@@ -33,7 +33,14 @@ class VimStatus(QObject):
 
     change_label = Signal(int)
 
-    def __init__(self, editor_widget, main, msg_label):
+    def __init__(self, editor_widget, main, msg_label) -> None:
+        """Initialize the status object.
+
+        Args:
+            editor_widget: Editor plugin used to access the current editor.
+            main: Main Spyder window.
+            msg_label: Label widget used to display status messages.
+        """
         super().__init__()
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL

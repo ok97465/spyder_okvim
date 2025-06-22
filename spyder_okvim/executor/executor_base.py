@@ -4,8 +4,8 @@
 This module provides :class:`ExecutorBase` and :class:`ExecutorSubBase`, which
 handle the parsing of command strings and delegation of actions to the
 ``MotionHelper`` and ``ActionHelper`` utilities. Executors interpret user
-keystrokes, update the shared :class:`~spyder_okvim.utils.vim_status.VimStatus`
-object and decide whether submodes should be entered.
+keystrokes, update the shared :class:`~spyder_okvim.vim.VimStatus` object and
+decide whether submodes should be entered.
 """
 
 # Standard Libraries
@@ -57,8 +57,8 @@ class ExecutorBase:
         """Initialize the executor with the shared :class:`VimStatus`.
 
         Args:
-            vim_status: spyder_okvim.utils.vim_status.VimStatus
-                Object exposing editor and cursor helpers used by the executor.
+            vim_status: :class:`spyder_okvim.vim.VimStatus` instance providing
+                editor and cursor helpers.
 
         """
         self.vim_status = vim_status

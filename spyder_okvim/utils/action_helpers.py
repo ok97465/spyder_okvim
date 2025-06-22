@@ -9,7 +9,7 @@ from qtpy.QtGui import QTextCursor
 
 # Project Libraries
 from spyder_okvim.utils.motion_helpers import MotionHelper, MotionInfo, MotionType
-from spyder_okvim.utils.vim_status import VimState
+from spyder_okvim.vim import VimState
 
 
 class ActionHelper:

@@ -5,7 +5,7 @@ import pytest
 from qtpy.QtCore import Qt
 
 # Project Libraries
-from spyder_okvim.utils.vim_status import VimState
+from spyder_okvim.vim import VimState
 
 
 def test_bookmark_set_and_jump(vim_bot):

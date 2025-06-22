@@ -336,13 +336,23 @@ class VimCursor:
         """Apply motion info in visual mode."""
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
-    def set_extra_selections(self, key, sels):
-        """Set the selection info to editor."""
+    def set_extra_selections(self, key: str, sels: list[QTextEdit.ExtraSelection]) -> None:
+        """Set extra selections on the editor.
+
+        Args:
+            key: Name of the selection group.
+            sels: List of selections to apply.
+        """
         editor = self.get_editor()
         editor.set_extra_selections(key, sels)
 
-    def highlight_yank(self, pos_start, pos_end):
-        """Highlight after yank."""
+    def highlight_yank(self, pos_start: int, pos_end: int) -> None:
+        """Highlight yanked text.
+
+        Args:
+            pos_start: Starting position of the yanked text.
+            pos_end: End position of the yanked text.
+        """
         if self.hl_yank is False:
             return
 
