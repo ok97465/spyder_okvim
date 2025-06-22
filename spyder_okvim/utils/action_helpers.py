@@ -45,6 +45,18 @@ class ActionHelper:
         self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
         self.helper_motion = MotionHelper(vim_status)
 
+    def _get_block_range(
+        self, pos_start: int, pos_end: int
+    ) -> tuple[int, int, int, int]:
+        """Return block numbers and adjusted positions for a range."""
+
+        get_block = self.vim_status.cursor.get_block
+        block_start, block_no_start = get_block(pos_start)
+        block_end, block_no_end = get_block(pos_end)
+        pos_start = block_start.position()
+        pos_end = block_end.position() + block_end.length() - 1
+        return block_no_start, block_no_end, pos_start, pos_end
+
     def _get_selection_range(
         self, motion_info: MotionInfo | None
     ) -> tuple[int | None, int | None, bool]:
@@ -357,12 +369,9 @@ class ActionHelper:
         editor = self.get_editor()
         cursor = self.get_cursor()
 
-        get_block = self.vim_status.cursor.get_block
-        block_start, block_no_start = get_block(pos_start)
-        block_end, block_no_end = get_block(pos_end)
-
-        pos_start = block_start.position()
-        pos_end = block_end.position() + block_end.length() - 1
+        block_no_start, block_no_end, pos_start, pos_end = self._get_block_range(
+            pos_start, pos_end
+        )
 
         text_list = _get_block_texts(editor, block_no_start, block_no_end)
 
@@ -399,12 +408,9 @@ class ActionHelper:
         editor = self.get_editor()
         cursor = self.get_cursor()
 
-        get_block = self.vim_status.cursor.get_block
-        block_start, block_no_start = get_block(pos_start)
-        block_end, block_no_end = get_block(pos_end)
-
-        pos_start = block_start.position()
-        pos_end = block_end.position() + block_end.length() - 1
+        block_no_start, block_no_end, pos_start, pos_end = self._get_block_range(
+            pos_start, pos_end
+        )
 
         text_list = _get_block_texts(editor, block_no_start, block_no_end)
 
@@ -694,10 +700,9 @@ class ActionHelper:
         if pos_start is None or pos_end is None:
             return
 
-        block_start, block_no_start = self.vim_status.cursor.get_block(pos_start)
-        block_end, _ = self.vim_status.cursor.get_block(pos_end)
-        pos_start = block_start.position()
-        pos_end = block_end.position() + block_end.length() - 1
+        block_no_start, _, pos_start, pos_end = self._get_block_range(
+            pos_start, pos_end
+        )
 
         new_cursor = editor.textCursor()
         new_cursor.setPosition(pos_start, QTextCursor.MoveAnchor)
