@@ -297,11 +297,16 @@ def test_jumplist_mark_jump(vim_bot):
     assert editor.textCursor().position() == pos_mark
 
 
-@pytest.mark.parametrize("line_num", [2, 3])
+@pytest.mark.parametrize("line_num", [2, 3, 4])
 def test_jumplist_colon_number(vim_bot, line_num):
     """Jump list records :number command for several lines."""
     _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("alpha\nbravo\ncharlie\ndelta\n")
+    editor.set_text(
+        "alpha one two\n"
+        "bravo charlie delta\n"
+        "charlie echo foxtrot\n"
+        "juliet kilo lima\n"
+    )
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
 
