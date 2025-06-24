@@ -259,6 +259,20 @@ class VimShortcut(QObject):
         self.get_editor().hide_tooltip()
         self.vim_status.cursor.set_extra_selections("vim_search", [])
 
+    def jump_backward(self) -> None:
+        """Jump to previous location in the jumplist."""
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+        self.vim_status.jump_backward()
+
+    def jump_forward(self) -> None:
+        """Jump to next location in the jumplist."""
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+        self.vim_status.jump_forward()
+
 
 class VimStateLabel(QLabel):
     """Display state of vim."""
@@ -320,6 +334,8 @@ class VimLineEdit(QLineEdit):
             Qt.Key_R: vim_shortcut.redo,
             Qt.Key_P: vim_shortcut.open_file_search,
             Qt.Key_C: vim_shortcut.clear_tip_search,
+            Qt.Key_O: vim_shortcut.jump_backward,
+            Qt.Key_I: vim_shortcut.jump_forward,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
 

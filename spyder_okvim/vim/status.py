@@ -6,7 +6,7 @@ import os.path as osp
 from collections import defaultdict
 
 # Third Party Libraries
-from qtpy.QtCore import QObject, Qt, QTimer, Signal, Slot
+from qtpy.QtCore import QObject, Qt, QTimer, Signal, Slot, QCoreApplication
 from qtpy.QtGui import QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication, QLabel, QWidget
 from spyder.config.manager import CONF
@@ -14,6 +14,7 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
+from spyder_okvim.utils.jump_list import JumpList
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 
@@ -100,6 +101,9 @@ class VimStatus(QObject):
         self.bookmarks = self.bookmark_manager.bookmarks
         self.bookmarks_global = self.bookmark_manager.bookmarks_global
 
+        # jumplist
+        self.jump_list = JumpList()
+
         # easymotion
         self.painter_easymotion = EasyMotionPainter()
         self.manager_marker_easymotion = EasyMotionMarkerManager()
@@ -139,6 +143,7 @@ class VimStatus(QObject):
 
     def reset_for_test(self):
         """Reset status for test."""
+        QCoreApplication.processEvents()
         self.clear_state()
 
         self.find_info = FindInfo()
@@ -167,6 +172,9 @@ class VimStatus(QObject):
         self.bookmark_manager.clear()
         self.bookmarks = self.bookmark_manager.bookmarks
         self.bookmarks_global = self.bookmark_manager.bookmarks_global
+
+        # jumplist
+        self.jump_list = JumpList()
 
         self.to_normal()
 
@@ -342,6 +350,36 @@ class VimStatus(QObject):
     def jump_to_bookmark(self, name: str) -> None:
         """Move cursor to bookmark *name* if it exists."""
         self.bookmark_manager.jump_to_bookmark(name)
+
+    # ---- Jump list ---------------------------------------------------
+    def push_jump(self) -> None:
+        """Record the current cursor position in the jump list."""
+        editorstack = self.get_editorstack()
+        if not editorstack:
+            return
+        file_path = editorstack.get_current_filename()
+        pos = self.get_cursor().position()
+        self.jump_list.push(file_path, pos)
+
+    def jump_backward(self) -> None:
+        """Jump to the previous location in the jump list."""
+        jump = self.jump_list.back()
+        if not jump:
+            return
+        if self.get_editorstack().is_file_opened(jump.file) is None:
+            self.main.open_file(jump.file)
+        self.get_editorstack().set_current_filename(jump.file)
+        self.cursor.set_cursor_pos(jump.pos)
+
+    def jump_forward(self) -> None:
+        """Jump to the next location in the jump list."""
+        jump = self.jump_list.forward()
+        if not jump:
+            return
+        if self.get_editorstack().is_file_opened(jump.file) is None:
+            self.main.open_file(jump.file)
+        self.get_editorstack().set_current_filename(jump.file)
+        self.cursor.set_cursor_pos(jump.pos)
 
     def set_message(self, msg, duration_ms=-1):
         """Display ``msg`` in the status bar."""

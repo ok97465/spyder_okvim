@@ -206,3 +206,114 @@ def test_message(vim_bot):
 
     # qtbot.keyClicks(cmd_line, "N")
     # assert vim.vim_cmd.msg_label.text() == "?a"
+
+
+def test_ctrl_o_i(vim_bot):
+    """Test jumplist navigation with ^O and ^I."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("alpha\nbravo\ncharlie\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "G")
+    pos_bottom = editor.textCursor().position()
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == 0
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == pos_bottom
+
+
+def test_jumplist_search(vim_bot):
+    """Jump list records search command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("alpha\nsearch\nsearch\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "/search")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    pos_search = editor.textCursor().position()
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == 0
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == pos_search
+
+
+def test_jumplist_n_command(vim_bot):
+    """Jump list records n command."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("foo foo foo foo")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "/foo")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    first = editor.textCursor().position()
+
+    qtbot.keyClicks(cmd_line, "n")
+    second = editor.textCursor().position()
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == first
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == second
+
+
+def test_jumplist_mark_jump(vim_bot):
+    """Jump list records mark jumps."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("alpha\nbravo\ncharlie\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    qtbot.keyClicks(cmd_line, "G")
+    pos_end = editor.textCursor().position()
+
+    qtbot.keyClicks(cmd_line, "'a")
+    pos_mark = editor.textCursor().position()
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == pos_end
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == pos_mark
+
+
+@pytest.mark.parametrize("line_num", [2, 3])
+def test_jumplist_colon_number(vim_bot, line_num):
+    """Jump list records :number command for several lines."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("alpha\nbravo\ncharlie\ndelta\n")
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, f":{line_num}")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+    pos_line = editor.textCursor().position()
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == 0
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert editor.textCursor().position() == pos_line

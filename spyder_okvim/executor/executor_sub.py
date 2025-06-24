@@ -780,7 +780,10 @@ class ExecutorSearch(ExecutorSubBase):
         motion_info = self.helper_motion.n(1, "")
         self.vim_status.sub_mode = None
 
-        return self.process_return(self.execute_func_deferred(motion_info))
+        self.vim_status.push_jump()
+        ret = self.process_return(self.execute_func_deferred(motion_info))
+        self.vim_status.push_jump()
+        return ret
 
 
 class ExecutorSubCmd_alnum(ExecutorSubBase):
