@@ -42,3 +42,11 @@ class JumpList:
         jump = self.jumps[self.index]
         self.index += 1
         return jump
+
+    def pop_last(self) -> None:
+        """Remove the most recently added jump if present."""
+        if not self.jumps:
+            return
+        self.jumps.pop()
+        if self.index > len(self.jumps):
+            self.index = len(self.jumps)

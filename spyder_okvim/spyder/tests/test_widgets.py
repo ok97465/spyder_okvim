@@ -322,3 +322,58 @@ def test_jumplist_colon_number(vim_bot, line_num):
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
     cmd_line.keyPressEvent(event)
     assert editor.textCursor().position() == pos_line
+
+
+def test_jumplist_go_to_definition(vim_bot, monkeypatch):
+    """Jump list records gd command."""
+    _, stack, editor, vim, qtbot = vim_bot
+    vs = vim.vim_cmd.vim_status
+    stack.set_current_filename(stack.get_filenames()[0])
+    vs.cursor.set_cursor_pos(0)
+    vs.reset_for_test()
+
+    other = next(p for p in stack.get_filenames() if p != stack.get_current_filename())
+
+    from spyder.plugins.editor.widgets.codeeditor import CodeEditor
+
+    def fake_gd(self, cursor=None):
+        stack.set_current_filename(other)
+        vs.cursor.set_cursor_pos(1)
+
+    monkeypatch.setattr(CodeEditor, "go_to_definition_from_cursor", fake_gd)
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "gd")
+    qtbot.wait(200)
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert stack.get_current_filename() != other
+    assert editor.textCursor().position() == 0
+
+    event = QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+    cmd_line.keyPressEvent(event)
+    assert stack.get_current_filename() == other
+    assert stack.get_current_editor().textCursor().position() == 1
+
+
+def test_gd_no_change_pop(vim_bot, monkeypatch):
+    """No jumplist entry kept when gd doesn't move."""
+    _, stack, _, vim, qtbot = vim_bot
+    vs = vim.vim_cmd.vim_status
+    stack.set_current_filename(stack.get_filenames()[0])
+    vs.cursor.set_cursor_pos(0)
+    vs.reset_for_test()
+
+    from spyder.plugins.editor.widgets.codeeditor import CodeEditor
+
+    def fake_gd(self, cursor=None):
+        pass
+
+    monkeypatch.setattr(CodeEditor, "go_to_definition_from_cursor", fake_gd)
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "gd")
+    qtbot.wait(2500)
+
+    assert vs.jump_list.jumps == []

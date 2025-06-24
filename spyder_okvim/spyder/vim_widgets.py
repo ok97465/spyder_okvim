@@ -278,7 +278,9 @@ class VimShortcut(QObject):
         path = dlg.get_selected_path()
 
         if osp.isfile(path):
+            self.vim_status.push_jump()
             self.main.open_file(path)
+            self.vim_status.jump_list.push(path, 0)
             self.vim_status.set_focus_to_vim()
 
     def clear_tip_search(self) -> None:

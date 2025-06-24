@@ -103,6 +103,7 @@ class VimStatus(QObject):
 
         # jumplist
         self.jump_list = JumpList()
+        self.timer_go_to_definition = None
 
         # easymotion
         self.painter_easymotion = EasyMotionPainter()
@@ -175,6 +176,10 @@ class VimStatus(QObject):
 
         # jumplist
         self.jump_list = JumpList()
+
+        if self.timer_go_to_definition is not None:
+            self.timer_go_to_definition.stop()
+            self.timer_go_to_definition = None
 
         self.to_normal()
 
@@ -352,14 +357,50 @@ class VimStatus(QObject):
         self.bookmark_manager.jump_to_bookmark(name)
 
     # ---- Jump list ---------------------------------------------------
+    def get_current_location(self):
+        """Return the current file path and cursor position or ``None``."""
+        stack = self.get_editorstack()
+        editor = self.get_editor()
+        if not stack or not editor:
+            return None
+        try:
+            return stack.get_current_filename(), editor.textCursor().position()
+        except Exception:
+            return None
+
+    # ---- Jump list ---------------------------------------------------
     def push_jump(self) -> None:
         """Record the current cursor position in the jump list."""
-        editorstack = self.get_editorstack()
-        if not editorstack:
+        location = self.get_current_location()
+        if location is None:
             return
-        file_path = editorstack.get_current_filename()
-        pos = self.get_cursor().position()
+        file_path, pos = location
         self.jump_list.push(file_path, pos)
+
+    def start_definition_tracking(self, previous):
+        """Monitor cursor movement after ``gd`` and update the jump list."""
+        timer = QTimer(self)
+        self.timer_go_to_definition = timer
+
+        def stop():
+            timer.stop()
+            self.timer_go_to_definition = None
+
+        def check():
+            current = self.get_current_location()
+            if previous is not None and current and current != previous:
+                self.push_jump()
+                stop()
+
+        def finalize():
+            stop()
+            current = self.get_current_location()
+            if previous is not None and current == previous:
+                self.jump_list.pop_last()
+
+        timer.timeout.connect(check)
+        timer.start(100)
+        QTimer.singleShot(2000, finalize)
 
     def jump_backward(self) -> None:
         """Jump to the previous location in the jump list."""

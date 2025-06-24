@@ -544,8 +544,15 @@ class ExecutorSubCmd_g(ExecutorSubBase):
         return self.execute_func_deferred(motion_info)
 
     def d(self, num=1, num_str=""):
-        """Go to definition."""
-        self.get_editor().go_to_definition_from_cursor()
+        """Go to definition and update the jumplist."""
+        vs = self.vim_status
+        previous = vs.get_current_location()
+        vs.push_jump()
+
+        editor = self.get_editor()
+        if editor:
+            editor.go_to_definition_from_cursor()
+            vs.start_definition_tracking(previous)
 
     def t(self, num=1, num_str=""):
         """Cycle to next file."""
