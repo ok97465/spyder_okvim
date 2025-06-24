@@ -8,18 +8,33 @@ from qtpy.QtGui import QKeyEvent
 
 # Project Libraries
 from spyder_okvim.utils.file_search import FileSearchDialog
+from spyder_okvim.utils.jump_list import Jump
 
 
 def test_open_file_search(vim_bot, monkeypatch, tmpdir):
-    """Test opening the file search dialog."""
-    _, _, _, vim, qtbot = vim_bot
+    """Test opening the file search dialog and jump list update."""
+    main, stack, _, vim, qtbot = vim_bot
 
     fn = tmpdir.join("tmp.txt")
     fn.write("content")
+
     monkeypatch.setattr(FileSearchDialog, "exec_", lambda x: x)
     monkeypatch.setattr(FileSearchDialog, "get_selected_path", lambda x: str(fn))
+
+    monkeypatch.setattr(main, "open_file", lambda path: None)
+
+    vs = vim.vim_cmd.vim_status
+    vs.cursor.set_cursor_pos(0)
+    vs.reset_for_test()
+    current = stack.get_current_filename()
+
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_P, Qt.ControlModifier)
     vim.vim_cmd.commandline.keyPressEvent(event)
+
+    assert vs.jump_list.jumps == [
+        Jump(current, 0),
+        Jump(str(fn), 0),
+    ]
 
 
 def test_invalid_folder(qtbot):

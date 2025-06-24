@@ -113,6 +113,16 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 - ZZ : Save and close current file.
 - q, @: macro
 
+## Jump list
+
+The jump list is a core Vim feature that tracks recently visited
+locations. Okvim records each position so you can return with `Ctrl+o` and
+move forward with `Ctrl+i`. Locations are added when opening files with
+`Ctrl+p` and when running `gd`. Because Spyder's "go to definition" works
+asynchronously, Okvim pushes the current location immediately and adds the
+new one once navigation finishes. If the cursor never moves within two
+seconds, that temporary entry is discarded.
+
 ## Special keys
 
 - <leader>f : autoformat the curruent file
@@ -139,7 +149,9 @@ The following actions are supported:
 
 ## Fuzzy path finder
 
-Press Ctrl+p to open the fuzzy path finder.
+Press Ctrl+p to open the fuzzy path finder. Spyder uses the same shortcut as a
+global command, so you may need to reassign Spyder's default Ctrl+p binding to
+use this feature.
 Use ^p, ^n, ^f, ^b, ^u, and ^d to navigate the list.
 
 ![fuzzy path finder](https://github.com/ok97465/spyder_okvim/raw/main/doc/path_finder.gif)
@@ -174,3 +186,4 @@ For operators use `z` because `s` belongs to vim-surround.
 
 When there are matches in another group, hints appear around the group.
 ![sneak](https://github.com/ok97465/spyder_okvim/raw/main/doc/sneak.gif)
+

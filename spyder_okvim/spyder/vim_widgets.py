@@ -14,6 +14,7 @@ import threading
 from functools import wraps
 
 # Third Party Libraries
+from qtpy import PYSIDE2, PYSIDE6
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
@@ -33,6 +34,32 @@ from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 
 running_coverage = "coverage" in sys.modules
+
+
+if PYSIDE2 or PYSIDE6:
+    try:
+        # Third Party Libraries
+        from shiboken6 import isValid as _sbk_is_valid  # PySide6
+    except Exception:
+        try:
+            # Third Party Libraries
+            from shiboken2 import isValid as _sbk_is_valid  # PySide2
+        except Exception:
+            _sbk_is_valid = None
+    def _widget_is_deleted(obj):
+        if _sbk_is_valid is None:
+            return False
+        return not _sbk_is_valid(obj)
+else:
+    try:
+        # Third Party Libraries
+        import sip
+    except Exception:
+        sip = None
+    def _widget_is_deleted(obj):
+        if sip is None:
+            return False
+        return sip.isdeleted(obj)
 
 
 def enable_coverage_tracing(fn):
@@ -251,13 +278,31 @@ class VimShortcut(QObject):
         path = dlg.get_selected_path()
 
         if osp.isfile(path):
+            self.vim_status.push_jump()
             self.main.open_file(path)
+            self.vim_status.jump_list.push(path, 0)
             self.vim_status.set_focus_to_vim()
 
     def clear_tip_search(self) -> None:
         """Clear tooltip, search highlight."""
         self.get_editor().hide_tooltip()
         self.vim_status.cursor.set_extra_selections("vim_search", [])
+
+    def jump_backward(self) -> None:
+        """Jump to previous location in the jumplist."""
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+        self.vim_status.jump_backward()
+        self.vim_status.set_focus_to_vim()
+
+    def jump_forward(self) -> None:
+        """Jump to next location in the jumplist."""
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+        self.vim_status.jump_forward()
+        self.vim_status.set_focus_to_vim()
 
 
 class VimStateLabel(QLabel):
@@ -276,6 +321,8 @@ class VimStateLabel(QLabel):
     def change_state(self, state):
         """Display the state of vim."""
         try:
+            if _widget_is_deleted(self):
+                return
             self.setStyleSheet("QLabel { color: white }")
             if state == VimState.VISUAL:
                 self.setText("VISUAL")
@@ -320,6 +367,8 @@ class VimLineEdit(QLineEdit):
             Qt.Key_R: vim_shortcut.redo,
             Qt.Key_P: vim_shortcut.open_file_search,
             Qt.Key_C: vim_shortcut.clear_tip_search,
+            Qt.Key_O: vim_shortcut.jump_backward,
+            Qt.Key_I: vim_shortcut.jump_forward,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
 

@@ -209,9 +209,11 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def G(self, num=1, num_str=""):
         """Move to the line."""
+        self.vim_status.push_jump()
         motion_info = self.helper_motion.G(num=num, num_str=num_str)
 
         self.set_cursor_pos(motion_info.cursor_pos)
+        self.vim_status.push_jump()
 
     def tilde(self, num=1, num_str=""):
         """Switch case of the character under the cursor.
@@ -522,15 +524,19 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def n(self, num=1, num_str=""):
         """Go to the next searched text."""
+        self.vim_status.push_jump()
         motion_info = self.helper_motion.n(num=num, num_str=num_str)
 
         self.set_cursor_pos(motion_info.cursor_pos)
+        self.vim_status.push_jump()
 
     def N(self, num=1, num_str=""):
         """Go to the previous searched text."""
+        self.vim_status.push_jump()
         motion_info = self.helper_motion.N(num=num, num_str=num_str)
 
         self.set_cursor_pos(motion_info.cursor_pos)
+        self.vim_status.push_jump()
 
     def m(self, num=1, num_str=""):
         """Set bookmark with given name."""
@@ -547,6 +553,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
         def run(ch):
+            self.vim_status.push_jump()
             if ch.isupper():
                 self.vim_status.jump_to_bookmark(ch)
                 cursor = self.get_cursor()
@@ -555,6 +562,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
                 info = self.helper_motion.apostrophe(ch)
                 if info.cursor_pos is not None:
                     self.vim_status.cursor.set_cursor_pos(info.cursor_pos)
+            self.vim_status.push_jump()
 
         executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
@@ -565,12 +573,14 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
         def run(ch):
+            self.vim_status.push_jump()
             if ch.isupper():
                 self.vim_status.jump_to_bookmark(ch)
             else:
                 info = self.helper_motion.backtick(ch)
                 if info.cursor_pos is not None:
                     self.vim_status.cursor.set_cursor_pos(info.cursor_pos)
+            self.vim_status.push_jump()
 
         executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
