@@ -546,8 +546,6 @@ class ExecutorSubCmd_g(ExecutorSubBase):
     def d(self, num=1, num_str=""):
         """Go to definition."""
         self.get_editor().go_to_definition_from_cursor()
-        # TODO: Need the API of spyder
-        # self.vim_status.set_focus_to_vim_after_delay(300)
 
     def t(self, num=1, num_str=""):
         """Cycle to next file."""
@@ -780,7 +778,10 @@ class ExecutorSearch(ExecutorSubBase):
         motion_info = self.helper_motion.n(1, "")
         self.vim_status.sub_mode = None
 
-        return self.process_return(self.execute_func_deferred(motion_info))
+        self.vim_status.push_jump()
+        ret = self.process_return(self.execute_func_deferred(motion_info))
+        self.vim_status.push_jump()
+        return ret
 
 
 class ExecutorSubCmd_alnum(ExecutorSubBase):

@@ -11,6 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 import requests
 from pytestqt.plugin import QtBot
+from qtpy.QtCore import QCoreApplication
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QVBoxLayout, QWidget
 from spyder.config.manager import CONF
@@ -157,3 +158,5 @@ def vim_bot(qtbot_module):
     finfo2.deleteLater()
     finfo3.deleteLater()
     editor_stack.deleteLater()
+    # Ensure deferred deletions are processed to avoid segmentation faults
+    QCoreApplication.processEvents()

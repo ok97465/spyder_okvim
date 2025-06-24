@@ -94,6 +94,7 @@ class ExecutorColon(ExecutorSubBase):
     def goto_line(self, num):
         """Move cursor according to :number command."""
         vs = self.vim_status
+        vs.push_jump()
         if vs.vim_state == VimState.NORMAL:
             motion_info = self.helper_motion.G(num, True)
             vs.cursor.apply_motion_info_in_normal(motion_info)
@@ -104,3 +105,4 @@ class ExecutorColon(ExecutorSubBase):
             else:
                 vs.cursor.apply_motion_info_in_vline(motion_info)
             vs.to_normal()
+        vs.push_jump()
