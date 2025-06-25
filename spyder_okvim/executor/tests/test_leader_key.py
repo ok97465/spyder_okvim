@@ -108,29 +108,37 @@ def test_formatting(vim_bot):
     assert editor.format_document_or_range.called
 
 
-def test_open_swithcer(vim_bot):
-    """Test open switcher."""
+def test_open_switcher_plugin(vim_bot):
+    """Test open switcher when provided by plugin."""
     main, _, _, vim, qtbot = vim_bot
 
-    main.open_switcher = Mock()
+    if hasattr(main, "open_switcher"):
+        delattr(main, "open_switcher")
+
+    plugin = Mock()
+    main.get_plugin = Mock(return_value=plugin)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, "p")
 
     assert cmd_line.text() == ""
-    assert main.open_switcher.called
+    assert plugin.open_switcher.called
 
 
-def test_open_symbol_swithcer(vim_bot):
-    """Test open symbol switcher."""
+def test_open_symbol_swithcer_plugin(vim_bot):
+    """Test open symbol switcher when provided by plugin."""
     main, _, _, vim, qtbot = vim_bot
 
-    main.open_switcher = Mock()
+    if hasattr(main, "open_switcher"):
+        delattr(main, "open_switcher")
+
+    plugin = Mock()
+    main.get_plugin = Mock(return_value=plugin)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, "s")
 
     assert cmd_line.text() == ""
-    assert main.open_switcher.called
+    assert plugin.open_switcher.called

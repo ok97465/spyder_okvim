@@ -125,12 +125,12 @@ seconds, that temporary entry is discarded.
 
 ## Special keys
 
-- <leader>f : autoformat the curruent file
-- <leader>b : toggle a breakpoint
-- <leader>r : run the selection or current line in the console.
-- <leader>enter :  run cell and advance
-- <leader>p : Spyder switcher
-- <leader>s : Spyder symbol switcher
+- \<leader\>f : autoformat the curruent file
+- \<leader\>b : toggle a breakpoint
+- \<leader\>r : run the selection or current line in the console.
+- \<leader\>enter :  run cell and advance
+- \<leader\>p : Spyder switcher
+- \<leader\>s : Spyder symbol switcher
 - [d : go to previous warning/error
 - ]d : go to next warning/error
 - gc{motion} : toggle comments (works in visual mode)
@@ -150,7 +150,7 @@ The following actions are supported:
 ## Fuzzy path finder
 
 Press Ctrl+p to open the fuzzy path finder. Spyder uses the same shortcut as a
-global command, so you may need to reassign Spyder's default Ctrl+p binding to
+global command, so you may need to `reassign Spyder's default Ctrl+p binding` to
 use this feature.
 Use ^p, ^n, ^f, ^b, ^u, and ^d to navigate the list.
 

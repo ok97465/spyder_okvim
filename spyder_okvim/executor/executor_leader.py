@@ -3,6 +3,7 @@
 
 # Third Party Libraries
 from qtpy.QtCore import QTimer
+from spyder.api.plugins import Plugins
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorBase
@@ -89,16 +90,19 @@ class ExecutorLeaderKey(ExecutorBase):
     def formatting(self, num=1, num_str=""):
         """Format document automatically."""
         editor = self.get_editor()
-        pos = self.vim_status.get_cursor().position()
         editor.format_document_or_range()
 
     def open_switcher(self, num=1, num_str=""):
         """Open switcher for buffers."""
-        self.vim_status.main.open_switcher()
+        main = self.vim_status.main
+        switcher = main.get_plugin(Plugins.Switcher)
+        switcher.open_switcher()
 
     def open_symbol_swicher(self, num=1, num_str=""):
         """Open switcher for symbol."""
-        self.vim_status.main.open_switcher(symbol=True)
+        main = self.vim_status.main
+        switcher = main.get_plugin(Plugins.Switcher)
+        switcher.open_switcher(symbol=True)
 
     def execute_easymotion(self, num=1, num_str=""):
         """Execute easymotion."""
