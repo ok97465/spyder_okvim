@@ -138,3 +138,26 @@ def test_colon_backspace_command(vim_bot):
 
     assert cmd_line.text() == ""
     assert vim.vim_cmd.vim_status.sub_mode is None
+
+def test_colon_marks_command(vim_bot, monkeypatch):
+    """Test :marks opens dialog and jumps to the selected mark."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\nc\n")
+    vs = vim.vim_cmd.vim_status
+    vs.cursor.set_cursor_pos(2)
+    vs.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    vs.cursor.set_cursor_pos(0)
+
+    from spyder_okvim.utils import mark_dialog
+
+    monkeypatch.setattr(mark_dialog.MarkListDialog, "exec_", lambda self: None)
+    monkeypatch.setattr(mark_dialog.MarkListDialog, "get_selected_mark", lambda self: "a")
+
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "marks")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+
+    assert editor.textCursor().position() == 2

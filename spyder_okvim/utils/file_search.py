@@ -8,17 +8,17 @@ import re
 import sys
 
 # Third Party Libraries
-from qtpy.QtCore import QDir, QDirIterator, QStringListModel, Qt, Signal
+from qtpy.QtCore import QDir, QDirIterator, Qt, Signal
 from qtpy.QtGui import QKeyEvent
 from qtpy.QtWidgets import (
     QApplication,
     QDialog,
     QLineEdit,
-    QListView,
-    QVBoxLayout,
     QWidget,
 )
 from spyder.config.gui import get_font
+
+from .list_dialog import PopupListDialog
 
 
 def fuzzyfinder(query: str, collection: list[str]) -> list[str]:
@@ -106,7 +106,7 @@ class FileSearchLineEdit(QLineEdit):
         super().keyPressEvent(e)
 
 
-class FileSearchDialog(QDialog):
+class FileSearchDialog(PopupListDialog):
     """Dialog used to select a file path from a project."""
 
     _MIN_WIDTH = 800
@@ -119,28 +119,17 @@ class FileSearchDialog(QDialog):
             folder: Root directory to search.
             parent: Parent widget for the dialog.
         """
-        super().__init__(parent)
+        super().__init__(
+            "Path Finder", parent=parent, width=self._MIN_WIDTH, max_height=self._MAX_HEIGHT
+        )
         font = get_font()
 
         self.folder = folder
         self.path_selected = ""
         self.path_list = []
         self.results_old = {}
-        self.setWindowTitle("Path Finder")
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-        self.setWindowOpacity(0.95)
-        self.setFixedHeight(self._MAX_HEIGHT)
-        self.setFont(font)
-
-        # Set List widget
-        self.list_viewer = QListView(self)
         self.list_viewer.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.list_viewer.setFocusPolicy(Qt.NoFocus)
-        self.list_viewer.setFixedWidth(self._MIN_WIDTH)
-        self.list_viewer.setUniformItemSizes(True)
-        self.list_model = QStringListModel()
-        self.list_viewer.setModel(self.list_model)
-        self.list_viewer.setFont(font)
 
         # Set edit
         self.edit = FileSearchLineEdit(self, textChanged=self.update_list)
@@ -156,11 +145,7 @@ class FileSearchDialog(QDialog):
         self.edit.sig_pg_down_key_pressed.connect(self.pg_down)
         self.edit.sig_pg_half_down_key_pressed.connect(self.pg_half_down)
 
-        layout = QVBoxLayout()
-        layout.addWidget(self.edit)
-        layout.addWidget(self.list_viewer)
-
-        self.setLayout(layout)
+        self.layout_.insertWidget(0, self.edit)
 
         self.collect_paths()
         self.update_list()
@@ -171,14 +156,6 @@ class FileSearchDialog(QDialog):
         """Return the file path chosen by the user."""
         return self.path_selected
 
-    def get_number_of_visible_lines(self) -> int:
-        """Get the number of visible lines in list."""
-        num_lines = 0
-        lv = self.list_viewer
-        height = lv.visualRect(lv.model().index(0, 0)).height()
-        if height > 0:
-            num_lines = lv.viewport().height() // height
-        return num_lines
 
     def collect_paths(self) -> None:
         """Populate the list of discoverable file paths."""
@@ -211,40 +188,6 @@ class FileSearchDialog(QDialog):
             self.list_model.setStringList(paths)
             self.list_viewer.setCurrentIndex(self.list_model.index(0))
 
-    def prev_row(self, stride: int = 1) -> None:
-        """Select prev row in list viewer."""
-        prev_row = self.list_viewer.currentIndex().row() - stride
-        prev_row = max([prev_row, 0])
-        self.list_viewer.setCurrentIndex(self.list_model.index(prev_row))
-
-    def next_row(self, stride: int = 1) -> None:
-        """Select next row in list viewer."""
-        n_row = self.list_model.rowCount()
-        if n_row == 0:
-            return
-        next_row = self.list_viewer.currentIndex().row() + stride
-        next_row = min([next_row, n_row - 1])
-        self.list_viewer.setCurrentIndex(self.list_model.index(next_row))
-
-    def pg_up(self) -> None:
-        """Scroll windows 1page backwards."""
-        n_line = self.get_number_of_visible_lines()
-        self.prev_row(n_line)
-
-    def pg_down(self) -> None:
-        """Scroll windows 1page forwards."""
-        n_line = self.get_number_of_visible_lines()
-        self.next_row(n_line)
-
-    def pg_half_up(self) -> None:
-        """Scroll windows half page backwards."""
-        n_line = self.get_number_of_visible_lines()
-        self.prev_row(n_line // 2)
-
-    def pg_half_down(self) -> None:
-        """Scroll windows half page forwards."""
-        n_line = self.get_number_of_visible_lines()
-        self.next_row(n_line // 2)
 
     def enter(self) -> None:
         """Select next row in list viewer."""

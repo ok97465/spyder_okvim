@@ -117,3 +117,13 @@ class BookmarkManager:
                 return
             pos = block.position() + min(col, block.length() - 1)
             self.set_cursor_pos(pos)
+
+    def list_bookmarks(self) -> list[tuple[str, dict]]:
+        """Return a combined list of local and global bookmarks."""
+        current = self.get_editorstack().get_current_filename()
+        marks = []
+        for name, info in sorted(self.bookmarks.get(current, {}).items()):
+            marks.append((name, info))
+        for name, info in sorted(self.bookmarks_global.items()):
+            marks.append((name, info))
+        return marks

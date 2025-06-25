@@ -91,6 +91,21 @@ class ExecutorColon(ExecutorSubBase):
         self.editor_widget.get_widget().new_action.trigger()
         self.vim_status.set_focus_to_vim()
 
+    def marks(self, arg=""):
+        """Show bookmarks and jump to the selected one."""
+        vs = self.vim_status
+        marks = vs.bookmark_manager.list_bookmarks()
+        from spyder_okvim.utils.mark_dialog import MarkListDialog
+
+        dlg = MarkListDialog(marks, vs.main)
+        dlg.exec_()
+        mark = dlg.get_selected_mark()
+        if mark:
+            vs.push_jump()
+            vs.jump_to_bookmark(mark)
+            vs.push_jump()
+            vs.set_focus_to_vim()
+
     def goto_line(self, num):
         """Move cursor according to :number command."""
         vs = self.vim_status
