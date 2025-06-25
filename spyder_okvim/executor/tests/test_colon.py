@@ -138,3 +138,60 @@ def test_colon_backspace_command(vim_bot):
 
     assert cmd_line.text() == ""
     assert vim.vim_cmd.vim_status.sub_mode is None
+
+
+def test_colon_marks_command(vim_bot, monkeypatch):
+    """Test :marks opens dialog and jumps to the selected mark."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\nc\n")
+    vs = vim.vim_cmd.vim_status
+    vs.cursor.set_cursor_pos(2)
+    vs.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, "ma")
+    vs.cursor.set_cursor_pos(0)
+
+    # Project Libraries
+    from spyder_okvim.utils import mark_dialog
+
+    monkeypatch.setattr(mark_dialog.MarkListDialog, "exec_", lambda self: None)
+    monkeypatch.setattr(
+        mark_dialog.MarkListDialog, "get_selected_mark", lambda self: "a"
+    )
+
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "marks")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+
+    assert editor.textCursor().position() == 2
+
+
+def test_colon_marks_escape_focus(vim_bot, monkeypatch):
+    """Focus returns to command line when dialog closed with ESC."""
+    _, _, editor, vim, qtbot = vim_bot
+    editor.set_text("a\nb\nc\n")
+    vs = vim.vim_cmd.vim_status
+    pos_before = editor.textCursor().position()
+
+    # Project Libraries
+    from spyder_okvim.utils import mark_dialog
+
+    monkeypatch.setattr(mark_dialog.MarkListDialog, "exec_", lambda self: 0)
+    # Return a mark even though the dialog was rejected to ensure the
+    # executor ignores it when ESC is pressed.
+    monkeypatch.setattr(
+        mark_dialog.MarkListDialog, "get_selected_mark", lambda self: "a"
+    )
+
+    called = []
+    monkeypatch.setattr(vs, "jump_to_bookmark", lambda *a: called.append(True))
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, ":")
+    qtbot.keyClicks(cmd_line, "marks")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+
+    assert editor.textCursor().position() == pos_before
+    assert cmd_line.hasFocus()
+    assert not called

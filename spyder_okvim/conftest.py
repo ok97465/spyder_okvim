@@ -158,5 +158,9 @@ def vim_bot(qtbot_module):
     finfo2.deleteLater()
     finfo3.deleteLater()
     editor_stack.deleteLater()
+    # Close plugin widgets to avoid segmentation faults under Qt
+    vim.on_close()
+    main.close()
+    main.deleteLater()
     # Ensure deferred deletions are processed to avoid segmentation faults
     QCoreApplication.processEvents()

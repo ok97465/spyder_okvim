@@ -112,6 +112,7 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 - zz, zt, tb : Cursor line to some locations of screen.
 - ZZ : Save and close current file.
 - q, @: macro
+- :marks: Displays the list of currently set marks.
 
 ## Jump list
 

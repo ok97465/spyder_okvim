@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """Executor for ":" command-line input."""
 
+# Third Party Libraries
+from qtpy.QtWidgets import QDialog
+
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
+from spyder_okvim.utils.mark_dialog import MarkListDialog
 from spyder_okvim.vim import VimState
 
 
@@ -90,6 +94,31 @@ class ExecutorColon(ExecutorSubBase):
         """Create new file."""
         self.editor_widget.get_widget().new_action.trigger()
         self.vim_status.set_focus_to_vim()
+
+    def marks(self, arg=""):
+        """Show bookmarks and jump to the selected one."""
+        vs = self.vim_status
+        marks = vs.bookmark_manager.list_bookmarks()
+
+        dlg = MarkListDialog(marks, vs.main)
+        result = dlg.exec_()
+        # When running tests ``exec_`` is patched to return ``None`` so the
+        # selected mark must be retrieved regardless of the returned value.
+        # Only reject the action explicitly when ``QDialog.Rejected`` (0) is
+        # returned.
+        mark = (
+            dlg.get_selected_mark()
+            if result is None or result == QDialog.Accepted
+            else None
+        )
+        # Ensure dialog is properly destroyed even when exec_ is mocked
+        dlg.deleteLater()
+        if mark:
+            vs.push_jump()
+            vs.jump_to_bookmark(mark)
+            vs.push_jump()
+
+        vs.set_focus_to_vim()
 
     def goto_line(self, num):
         """Move cursor according to :number command."""

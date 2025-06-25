@@ -144,6 +144,8 @@ class VimStatus(QObject):
 
     def reset_for_test(self):
         """Reset status for test."""
+        # Remove any pending EasyMotion overlays before processing Qt events.
+        self.remove_marker_of_easymotion()
         QCoreApplication.processEvents()
         self.clear_state()
 
@@ -176,6 +178,10 @@ class VimStatus(QObject):
 
         # jumplist
         self.jump_list = JumpList()
+
+        # Ensure EasyMotion overlays are removed between tests to avoid
+        # accessing deleted widgets when reusing the session-scoped editor.
+        self.remove_marker_of_easymotion()
 
         if self.timer_go_to_definition is not None:
             self.timer_go_to_definition.stop()

@@ -276,6 +276,8 @@ class VimShortcut(QObject):
         dlg = FileSearchDialog(root_folder, self.main)
         dlg.exec_()
         path = dlg.get_selected_path()
+        # Ensure dialog is properly destroyed even when exec_ is mocked
+        dlg.deleteLater()
 
         if osp.isfile(path):
             self.vim_status.push_jump()
@@ -477,6 +479,8 @@ class VimWidget(QWidget):
         self.msg_label = VimMessageLabel("", main)
 
         self.vim_status = VimStatus(editor_widget, main, self.msg_label)
+        # # Avoid Qt crashes if the label is deleted by ignoring the signal
+        # self.vim_status.change_label.connect(lambda state: None)
         self.vim_status.change_label.connect(self.status_label.change_state)
 
         self.vim_shortcut = VimShortcut(self.main, self.vim_status)
