@@ -60,7 +60,8 @@ class ExecutorLeaderKey(ExecutorBase):
 
     def toggle_breakpoint(self, num=1, num_str=""):
         """Toggle break."""
-        self.get_editorstack().set_or_clear_breakpoint()
+        editor = self.get_editor()
+        editor.breakpoints_manager.toogle_breakpoint()
 
     def run_cell_and_advance(self, num=1, num_str=""):
         """Run cell and advance."""

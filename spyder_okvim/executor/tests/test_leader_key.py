@@ -26,16 +26,17 @@ def test_auto_import(vim_bot):
 
 def test_toggle_breakpoint(vim_bot):
     """Test toggle breakpoint command."""
-    _, editor_stack, _, vim, qtbot = vim_bot
+    _, editor_stack, editor, vim, qtbot = vim_bot
 
-    editor_stack.set_or_clear_breakpoint = Mock()
+    editor.breakpoints_manager = Mock()
+    editor.breakpoints_manager.toogle_breakpoint = Mock()
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
     qtbot.keyClicks(cmd_line, "b")
 
     assert cmd_line.text() == ""
-    assert editor_stack.set_or_clear_breakpoint.called
+    assert editor.breakpoints_manager.toogle_breakpoint.called
 
 
 def test_run_cell_and_advance(vim_bot):
