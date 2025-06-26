@@ -9,6 +9,7 @@ from qtpy.QtWidgets import (
     QTableView,
     QVBoxLayout,
     QHeaderView,
+    QAbstractItemView,
 )
 from spyder.config.gui import get_font
 
@@ -137,6 +138,7 @@ class PopupTableDialog(QDialog):
 
         self.list_viewer = QTableView(self)
         self.list_viewer.setSelectionBehavior(QTableView.SelectRows)
+        self.list_viewer.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_viewer.verticalHeader().setVisible(False)
         self.list_viewer.horizontalHeader().setStretchLastSection(True)
         if min_width:
@@ -175,6 +177,7 @@ class PopupTableDialog(QDialog):
         row = self.list_viewer.currentIndex().row() - stride
         row = max(row, 0)
         self.list_viewer.setCurrentIndex(self.list_model.index(row, 0))
+        self.list_viewer.selectRow(row)
 
     def next_row(self, stride: int = 1) -> None:
         """Select the next row."""
@@ -184,6 +187,7 @@ class PopupTableDialog(QDialog):
         row = self.list_viewer.currentIndex().row() + stride
         row = min(row, n_row - 1)
         self.list_viewer.setCurrentIndex(self.list_model.index(row, 0))
+        self.list_viewer.selectRow(row)
 
     def pg_up(self) -> None:
         """Scroll one page up."""

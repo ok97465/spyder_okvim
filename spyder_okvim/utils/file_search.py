@@ -117,7 +117,7 @@ class FileSearchDialog(PopupTableDialog):
         super().__init__(
             "Path Finder",
             parent=parent,
-            headers=["File", "Path"],
+            headers=["File", "Folder"],
             min_width=self._MIN_WIDTH,
             max_height=self._MAX_HEIGHT,
         )
@@ -194,6 +194,7 @@ class FileSearchDialog(PopupTableDialog):
                     it.setEditable(False)
                 self.list_model.appendRow(row)
             self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
+            self.list_viewer.selectRow(0)
 
     def enter(self) -> None:
         """Select next row in list viewer."""

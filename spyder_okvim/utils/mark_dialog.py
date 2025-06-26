@@ -31,6 +31,7 @@ class MarkListDialog(PopupTableDialog):
         self._populate()
         if self.list_model.rowCount() > 0:
             self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
+            self.list_viewer.selectRow(0)
 
     def _populate(self) -> None:
         self.list_model.setRowCount(0)
@@ -54,8 +55,10 @@ class MarkListDialog(PopupTableDialog):
                 QStandardItem(basename),
                 QStandardItem(text),
             ]
-            for item in row:
+            for i, item in enumerate(row):
                 item.setEditable(False)
+                if i in (1, 2):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.list_model.appendRow(row)
 
     def get_selected_mark(self) -> str:

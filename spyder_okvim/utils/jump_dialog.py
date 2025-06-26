@@ -69,14 +69,17 @@ class JumpListDialog(PopupTableDialog):
                 QStandardItem(basename),
                 QStandardItem(text),
             ]
-            for item in row:
+            for idx, item in enumerate(row):
                 item.setEditable(False)
+                if idx in (1, 2):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.list_model.appendRow(row)
 
     def update_current_row(self) -> None:
         row = max(0, self.jump_list.index - 1)
         if self.list_model.rowCount() > 0:
             self.list_viewer.setCurrentIndex(self.list_model.index(row, 0))
+            self.list_viewer.selectRow(row)
 
     # ------------------------------------------------------------------
     # Qt overrides
