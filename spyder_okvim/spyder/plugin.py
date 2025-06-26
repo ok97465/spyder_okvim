@@ -9,11 +9,14 @@
 
 # Third Party Libraries
 import qtawesome as qta
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QHBoxLayout, QShortcut
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
+
+# Project Libraries
+from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder.api.widgets.status import StatusBarWidget
 from spyder.utils.icon_manager import MAIN_FG_COLOR
 
@@ -176,6 +179,16 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def on_close(self, cancellable: bool = True) -> bool:
         """Handle plugin shutdown."""
+        widget = self.get_widget()
+        if widget is not None:
+            try:
+                widget.vim_cmd.cleanup()
+            except AttributeError:
+                pass
+            widget.close()
+            if running_in_pytest():
+                widget.deleteLater()
+        QCoreApplication.processEvents()
         return True
 
     def get_plugin_actions(self):

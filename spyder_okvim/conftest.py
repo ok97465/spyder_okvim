@@ -164,3 +164,10 @@ def vim_bot(qtbot_module):
     main.deleteLater()
     # Ensure deferred deletions are processed to avoid segmentation faults
     QCoreApplication.processEvents()
+
+
+@pytest.fixture(autouse=True)
+def process_events_after_test():
+    """Process pending Qt events after each test."""
+    yield
+    QCoreApplication.processEvents()
