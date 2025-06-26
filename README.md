@@ -113,6 +113,7 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 - ZZ : Save and close current file.
 - q, @: macro
 - :marks: Displays the list of currently set marks.
+- :jumps: Displays the list of currently set jumplist.
 
 ## Jump list
 

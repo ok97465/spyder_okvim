@@ -276,8 +276,6 @@ class VimShortcut(QObject):
         dlg = FileSearchDialog(root_folder, self.main)
         dlg.exec_()
         path = dlg.get_selected_path()
-        # Ensure dialog is properly destroyed even when exec_ is mocked
-        dlg.deleteLater()
 
         if osp.isfile(path):
             self.vim_status.push_jump()

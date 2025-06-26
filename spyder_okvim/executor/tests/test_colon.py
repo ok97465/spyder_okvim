@@ -3,7 +3,8 @@
 
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QEvent, Qt
+from qtpy.QtGui import QKeyEvent
 
 
 @pytest.mark.parametrize(
@@ -195,3 +196,54 @@ def test_colon_marks_escape_focus(vim_bot, monkeypatch):
     assert editor.textCursor().position() == pos_before
     assert cmd_line.hasFocus()
     assert not called
+
+
+def test_colon_jumps_dialog_navigation(vim_bot, monkeypatch):
+    """Jump dialog tracks jumplist navigation across files."""
+    _, stack, editor, vim, qtbot = vim_bot
+    vs = vim.vim_cmd.vim_status
+    orig_file = stack.get_current_filename()
+    stack.set_current_filename(stack.get_filenames()[0])
+    vs.cursor.set_cursor_pos(0)
+    vs.reset_for_test()
+
+    # Create jumps across multiple files
+    vs.push_jump()
+    stack.set_current_filename(stack.get_filenames()[1])
+    vs.push_jump()
+    stack.set_current_filename(stack.get_filenames()[2])
+    vs.push_jump()
+
+    # Project Libraries
+    from spyder_okvim.utils import jump_dialog
+
+    captured = {}
+
+    def fake_exec(self):
+        captured["dlg"] = self
+        return None
+
+    monkeypatch.setattr(jump_dialog.JumpListDialog, "exec_", fake_exec)
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, ":jumps")
+    qtbot.keyPress(cmd_line, Qt.Key_Return)
+
+    dlg = captured["dlg"]
+    dlg.list_viewer.setFocus()
+    assert dlg.list_model.rowCount() == 3
+    assert dlg.list_viewer.currentIndex().row() == vs.jump_list.index - 1
+
+    qtbot.keyPress(dlg.list_viewer, Qt.Key_O, modifier=Qt.ControlModifier)
+    assert stack.get_current_filename() == stack.get_filenames()[1]
+    assert dlg.list_viewer.currentIndex().row() == vs.jump_list.index - 1
+
+    qtbot.keyPress(dlg.list_viewer, Qt.Key_I, modifier=Qt.ControlModifier)
+    assert stack.get_current_filename() == stack.get_filenames()[2]
+    assert dlg.list_viewer.currentIndex().row() == vs.jump_list.index - 1
+
+    dlg.reject()
+    assert cmd_line.hasFocus()
+
+    # Restore state for other tests
+    stack.set_current_filename(orig_file)

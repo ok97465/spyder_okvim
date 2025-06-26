@@ -14,26 +14,31 @@ class PopupListDialog(QDialog):
         title: str,
         parent=None,
         *,
-        width: int | None = None,
-        max_height: int = 300,
+        min_width: int | None = None,
+        max_height: int = 600,
+        font_delta: int = 10,
     ) -> None:
         super().__init__(parent)
-        font = get_font()
+        font = get_font(font_size_delta=2)
 
         self.setWindowTitle(title)
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setWindowOpacity(0.95)
-        self.setFixedHeight(max_height)
         self.setFont(font)
         self.setAttribute(Qt.WA_DeleteOnClose)
 
         self.list_viewer = QListView(self)
         self.list_viewer.setUniformItemSizes(True)
-        if width:
-            self.list_viewer.setFixedWidth(width)
+        if min_width:
+            self.list_viewer.setMinimumWidth(min_width)
+        if max_height:
+            self.list_viewer.setFixedHeight(max_height)
         self.list_model = QStringListModel()
         self.list_viewer.setModel(self.list_model)
         self.list_viewer.setFont(font)
+        self.list_viewer.setStyleSheet(
+            "QListView { color: #f0f0f0; }"
+        )
 
         self.layout_ = QVBoxLayout()
         self.layout_.addWidget(self.list_viewer)

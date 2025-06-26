@@ -12,12 +12,15 @@ from .list_dialog import PopupListDialog
 class MarkListDialog(PopupListDialog):
     """Dialog to display bookmarks and allow jumping to them."""
 
-    _MIN_WIDTH = 400
-    _MAX_HEIGHT = 300
+    _MIN_WIDTH = 800
+    _MAX_HEIGHT = 600
 
     def __init__(self, marks: list[tuple[str, dict]], parent=None) -> None:
         super().__init__(
-            "Marks", parent=parent, width=self._MIN_WIDTH, max_height=self._MAX_HEIGHT
+            "Marks",
+            parent=parent,
+            min_width=self._MIN_WIDTH,
+            max_height=self._MAX_HEIGHT,
         )
 
         self.marks = marks
@@ -42,7 +45,9 @@ class MarkListDialog(PopupListDialog):
             except Exception:
                 pass
             basename = osp.basename(file_path)
-            items.append(f"{mark:>2} {line + 1:>5} {col + 1:>4} {basename} {text}")
+            items.append(
+                f"{mark:>2} | {line + 1:>5} | {col + 1:>4} | {basename} | {text}"
+                )
         self.list_model.setStringList(items)
 
     def get_selected_mark(self) -> str:
@@ -50,4 +55,3 @@ class MarkListDialog(PopupListDialog):
         if 0 <= row < len(self.marks):
             return self.marks[row][0]
         return ""
-

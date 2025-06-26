@@ -6,6 +6,7 @@ from qtpy.QtWidgets import QDialog
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
+from spyder_okvim.utils.jump_dialog import JumpListDialog
 from spyder_okvim.utils.mark_dialog import MarkListDialog
 from spyder_okvim.vim import VimState
 
@@ -111,12 +112,19 @@ class ExecutorColon(ExecutorSubBase):
             if result is None or result == QDialog.Accepted
             else None
         )
-        # Ensure dialog is properly destroyed even when exec_ is mocked
-        dlg.deleteLater()
         if mark:
             vs.push_jump()
             vs.jump_to_bookmark(mark)
             vs.push_jump()
+
+        vs.set_focus_to_vim()
+
+    def jumps(self, arg=""):
+        """Display the jumplist in a popup dialog."""
+        vs = self.vim_status
+
+        dlg = JumpListDialog(vs, vs.main)
+        dlg.exec_()
 
         vs.set_focus_to_vim()
 

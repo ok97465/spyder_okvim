@@ -10,12 +10,7 @@ import sys
 # Third Party Libraries
 from qtpy.QtCore import QDir, QDirIterator, Qt, Signal
 from qtpy.QtGui import QKeyEvent
-from qtpy.QtWidgets import (
-    QApplication,
-    QDialog,
-    QLineEdit,
-    QWidget,
-)
+from qtpy.QtWidgets import QApplication, QDialog, QLineEdit, QWidget
 from spyder.config.gui import get_font
 
 from .list_dialog import PopupListDialog
@@ -120,9 +115,12 @@ class FileSearchDialog(PopupListDialog):
             parent: Parent widget for the dialog.
         """
         super().__init__(
-            "Path Finder", parent=parent, width=self._MIN_WIDTH, max_height=self._MAX_HEIGHT
+            "Path Finder",
+            parent=parent,
+            min_width=self._MIN_WIDTH,
+            max_height=self._MAX_HEIGHT,
         )
-        font = get_font()
+        font = get_font(font_size_delta=2)
 
         self.folder = folder
         self.path_selected = ""
@@ -156,7 +154,6 @@ class FileSearchDialog(PopupListDialog):
         """Return the file path chosen by the user."""
         return self.path_selected
 
-
     def collect_paths(self) -> None:
         """Populate the list of discoverable file paths."""
         if self.folder is None or not osp.isdir(self.folder):
@@ -187,7 +184,6 @@ class FileSearchDialog(PopupListDialog):
         if paths:
             self.list_model.setStringList(paths)
             self.list_viewer.setCurrentIndex(self.list_model.index(0))
-
 
     def enter(self) -> None:
         """Select next row in list viewer."""
