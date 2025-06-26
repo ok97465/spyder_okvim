@@ -14,7 +14,7 @@ import threading
 from functools import wraps
 
 # Third Party Libraries
-from qtpy import PYSIDE2, PYSIDE6
+from qtpy import PYSIDE2, PYSIDE6, PYQT5
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
@@ -32,6 +32,7 @@ from spyder_okvim.executor import (
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
+from spyder_okvim.utils.testing_env import running_in_pytest
 
 running_coverage = "coverage" in sys.modules
 
@@ -50,12 +51,16 @@ if PYSIDE2 or PYSIDE6:
         if _sbk_is_valid is None:
             return False
         return not _sbk_is_valid(obj)
-else:
+else:  # PYQT5
     try:
         # Third Party Libraries
-        import sip
-    except Exception:
-        sip = None
+        from PyQt5 import sip
+    except Exception:  # pragma: no cover - fallback for standalone sip module
+        try:
+            import sip  # type: ignore
+        except Exception:
+            sip = None
+
     def _widget_is_deleted(obj):
         if sip is None:
             return False
@@ -555,3 +560,20 @@ class VimWidget(QWidget):
             self.worker_macro.set_key_infos(mm.registers[ch], mm.num_execute)
             self.worker_macro.start()
             mm.set_info_for_execute("", 0)
+
+    def cleanup(self) -> None:
+        """Clean up resources used by the widget."""
+        try:
+            self.vim_status.change_label.disconnect(self.status_label.change_state)
+        except Exception:
+            pass
+        if self.worker_macro.isRunning():
+            self.worker_macro.quit()
+            self.worker_macro.wait()
+        if running_in_pytest():
+            self.worker_macro.deleteLater()
+            self.commandline.deleteLater()
+            self.status_label.deleteLater()
+            self.msg_label.deleteLater()
+
+
