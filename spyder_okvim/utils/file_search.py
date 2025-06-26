@@ -9,11 +9,11 @@ import sys
 
 # Third Party Libraries
 from qtpy.QtCore import QDir, QDirIterator, Qt, Signal
-from qtpy.QtGui import QKeyEvent
+from qtpy.QtGui import QKeyEvent, QStandardItem
 from qtpy.QtWidgets import QApplication, QDialog, QLineEdit, QWidget
 from spyder.config.gui import get_font
 
-from .list_dialog import PopupListDialog
+from .list_dialog import PopupTableDialog
 
 
 def fuzzyfinder(query: str, collection: list[str]) -> list[str]:
@@ -101,7 +101,7 @@ class FileSearchLineEdit(QLineEdit):
         super().keyPressEvent(e)
 
 
-class FileSearchDialog(PopupListDialog):
+class FileSearchDialog(PopupTableDialog):
     """Dialog used to select a file path from a project."""
 
     _MIN_WIDTH = 800
@@ -117,6 +117,7 @@ class FileSearchDialog(PopupListDialog):
         super().__init__(
             "Path Finder",
             parent=parent,
+            headers=["File", "Folder"],
             min_width=self._MIN_WIDTH,
             max_height=self._MAX_HEIGHT,
         )
@@ -182,13 +183,24 @@ class FileSearchDialog(PopupListDialog):
             paths = fuzzyfinder(query, collections)
 
         if paths:
-            self.list_model.setStringList(paths)
-            self.list_viewer.setCurrentIndex(self.list_model.index(0))
+            self.list_model.setRowCount(0)
+            for path in paths:
+                basename = osp.basename(path)
+                dirname = osp.dirname(path)
+                item = QStandardItem(basename)
+                item.setData(path, Qt.UserRole)
+                row = [item, QStandardItem(dirname)]
+                for it in row:
+                    it.setEditable(False)
+                self.list_model.appendRow(row)
+            self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
+            self.list_viewer.selectRow(0)
 
     def enter(self) -> None:
         """Select next row in list viewer."""
         idx = self.list_viewer.currentIndex()
-        rel_path = idx.data(Qt.DisplayRole)
+        item = self.list_model.item(idx.row(), 0)
+        rel_path = item.data(Qt.UserRole) if item else None
         if rel_path and isinstance(self.folder, str):
             path = osp.join(self.folder, rel_path)
             self.path_selected = path

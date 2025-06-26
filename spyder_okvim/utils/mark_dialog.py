@@ -5,11 +5,12 @@ import os.path as osp
 
 # Third Party Libraries
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QStandardItem
 
-from .list_dialog import PopupListDialog
+from .list_dialog import PopupTableDialog
 
 
-class MarkListDialog(PopupListDialog):
+class MarkListDialog(PopupTableDialog):
     """Dialog to display bookmarks and allow jumping to them."""
 
     _MIN_WIDTH = 800
@@ -19,6 +20,7 @@ class MarkListDialog(PopupListDialog):
         super().__init__(
             "Marks",
             parent=parent,
+            headers=["Mark", "Line", "Col", "File", "Text"],
             min_width=self._MIN_WIDTH,
             max_height=self._MAX_HEIGHT,
         )
@@ -28,10 +30,28 @@ class MarkListDialog(PopupListDialog):
 
         self._populate()
         if self.list_model.rowCount() > 0:
-            self.list_viewer.setCurrentIndex(self.list_model.index(0))
+            self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
+            self.list_viewer.selectRow(0)
+
+    # ------------------------------------------------------------------
+    # Qt overrides
+    # ------------------------------------------------------------------
+    def accept(self) -> None:
+        """Store selected mark and close the dialog."""
+        row = self.list_viewer.currentIndex().row()
+        if 0 <= row < len(self.marks):
+            self.selected_mark = self.marks[row][0]
+        else:
+            self.selected_mark = ""
+        super().accept()
+
+    def reject(self) -> None:
+        """Clear selected mark when dialog is cancelled."""
+        self.selected_mark = ""
+        super().reject()
 
     def _populate(self) -> None:
-        items: list[str] = []
+        self.list_model.setRowCount(0)
         for mark, info in self.marks:
             file_path = info.get("file", "")
             line = info.get("line", 0)
@@ -45,13 +65,19 @@ class MarkListDialog(PopupListDialog):
             except Exception:
                 pass
             basename = osp.basename(file_path)
-            items.append(
-                f"{mark:>2} | {line + 1:>5} | {col + 1:>4} | {basename} | {text}"
-                )
-        self.list_model.setStringList(items)
+            row = [
+                QStandardItem(mark),
+                QStandardItem(str(line + 1)),
+                QStandardItem(str(col + 1)),
+                QStandardItem(basename),
+                QStandardItem(text),
+            ]
+            for i, item in enumerate(row):
+                item.setEditable(False)
+                if i in (1, 2):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.list_model.appendRow(row)
 
     def get_selected_mark(self) -> str:
-        row = self.list_viewer.currentIndex().row()
-        if 0 <= row < len(self.marks):
-            return self.marks[row][0]
-        return ""
+        """Return the mark selected by the user."""
+        return self.selected_mark

@@ -4,12 +4,13 @@ from __future__ import annotations
 import os.path as osp
 
 # Third Party Libraries
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QEvent, Qt
+from qtpy.QtGui import QStandardItem
 
-from .list_dialog import PopupListDialog
+from .list_dialog import PopupTableDialog
 
 
-class JumpListDialog(PopupListDialog):
+class JumpListDialog(PopupTableDialog):
     """Dialog to display the jump list."""
 
     _MIN_WIDTH = 800
@@ -19,6 +20,7 @@ class JumpListDialog(PopupListDialog):
         super().__init__(
             "Jumps",
             parent=parent,
+            headers=["#", "Line", "Col", "File", "Text"],
             min_width=self._MIN_WIDTH,
             max_height=self._MAX_HEIGHT,
         )
@@ -28,6 +30,9 @@ class JumpListDialog(PopupListDialog):
 
         self._populate()
         self.update_current_row()
+
+        # Forward key events from the list viewer to this dialog
+        self.list_viewer.installEventFilter(self)
 
         # When closed return focus to command line
         self.finished.connect(lambda *_: self.vim_status.set_focus_to_vim())
@@ -54,20 +59,29 @@ class JumpListDialog(PopupListDialog):
         return line + 1, col + 1, text
 
     def _populate(self) -> None:
-        items: list[str] = []
+        self.list_model.setRowCount(0)
         for i, jump in enumerate(self.jump_list.jumps, start=1):
             line, col, text = self._get_line_info(jump.file, jump.pos)
             basename = osp.basename(jump.file)
-            mark = ">" if i == self.jump_list.index else " "
-            items.append(
-                f"{mark}{i:>3} | {line:>5} | {col:>4} | {basename} | {text}"
-            )
-        self.list_model.setStringList(items)
+            mark = ">" if i == self.jump_list.index else ""
+            row = [
+                QStandardItem(f"{mark}{i}"),
+                QStandardItem(str(line)),
+                QStandardItem(str(col)),
+                QStandardItem(basename),
+                QStandardItem(text),
+            ]
+            for idx, item in enumerate(row):
+                item.setEditable(False)
+                if idx in (1, 2):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.list_model.appendRow(row)
 
     def update_current_row(self) -> None:
         row = max(0, self.jump_list.index - 1)
         if self.list_model.rowCount() > 0:
-            self.list_viewer.setCurrentIndex(self.list_model.index(row))
+            self.list_viewer.setCurrentIndex(self.list_model.index(row, 0))
+            self.list_viewer.selectRow(row)
 
     # ------------------------------------------------------------------
     # Qt overrides
@@ -90,3 +104,13 @@ class JumpListDialog(PopupListDialog):
             # (these shortcuts are used in other dialogs)
             return
         super().keyPressEvent(event)
+
+    def eventFilter(self, obj, event):
+        """Handle shortcut events forwarded from the list viewer."""
+        if obj is self.list_viewer and event.type() in (
+            QEvent.ShortcutOverride,
+            QEvent.KeyPress,
+        ):
+            self.keyPressEvent(event)
+            return True
+        return super().eventFilter(obj, event)
