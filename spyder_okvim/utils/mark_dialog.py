@@ -33,6 +33,23 @@ class MarkListDialog(PopupTableDialog):
             self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
             self.list_viewer.selectRow(0)
 
+    # ------------------------------------------------------------------
+    # Qt overrides
+    # ------------------------------------------------------------------
+    def accept(self) -> None:
+        """Store selected mark and close the dialog."""
+        row = self.list_viewer.currentIndex().row()
+        if 0 <= row < len(self.marks):
+            self.selected_mark = self.marks[row][0]
+        else:
+            self.selected_mark = ""
+        super().accept()
+
+    def reject(self) -> None:
+        """Clear selected mark when dialog is cancelled."""
+        self.selected_mark = ""
+        super().reject()
+
     def _populate(self) -> None:
         self.list_model.setRowCount(0)
         for mark, info in self.marks:
@@ -62,7 +79,5 @@ class MarkListDialog(PopupTableDialog):
             self.list_model.appendRow(row)
 
     def get_selected_mark(self) -> str:
-        row = self.list_viewer.currentIndex().row()
-        if 0 <= row < len(self.marks):
-            return self.marks[row][0]
-        return ""
+        """Return the mark selected by the user."""
+        return self.selected_mark
