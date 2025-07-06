@@ -2611,3 +2611,79 @@ def test_prev_python_definition(vim_bot, start_line, cmd, expected):
 
     assert cmd_line.text() == ""
     assert editor.textCursor().blockNumber() == expected
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd, expected",
+    [
+        (0, "}}", 3),
+        (3, "}}", 6),
+        (6, "}}", 9),
+        (9, "}}", 12),
+        (12, "}}", 17),
+        (17, "}}", 20),
+    ],
+)
+def test_next_python_block(vim_bot, start_line, cmd, expected):
+    """Jump to next Python block."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "def a():\n"
+        "    pass\n\n"
+        "if x:\n    pass\n\n"
+        "for i in range(3):\n    pass\n\n"
+        "while False:\n    pass\n\n"
+        "try:\n    pass\nexcept Exception:\n    pass\n\n"
+        "with open('file') as f:\n    pass\n\n"
+        "class Foo:\n    def bar(self):\n        pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd, expected",
+    [
+        (20, "{{", 17),
+        (17, "{{", 12),
+        (12, "{{", 9),
+        (9, "{{", 6),
+        (6, "{{", 3),
+        (3, "{{", 0),
+    ],
+)
+def test_prev_python_block(vim_bot, start_line, cmd, expected):
+    """Jump to previous Python block."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "def a():\n"
+        "    pass\n\n"
+        "if x:\n    pass\n\n"
+        "for i in range(3):\n    pass\n\n"
+        "while False:\n    pass\n\n"
+        "try:\n    pass\nexcept Exception:\n    pass\n\n"
+        "with open('file') as f:\n    pass\n\n"
+        "class Foo:\n    def bar(self):\n        pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected
