@@ -1161,3 +1161,67 @@ class MotionHelper:
             return self._set_motion_info(None)
         idx = min(len(next_positions) - 1, num - 1)
         return self._set_motion_info(next_positions[idx], motion_type=MotionType.LineWise)
+
+    # ------------------------------------------------------------------
+    # Python block navigation helpers
+    # ------------------------------------------------------------------
+    def _get_python_block_positions(self) -> list[int]:
+        """Return start positions of Python code blocks."""
+        editor = self.get_editor()
+        text = editor.toPlainText()
+
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            return []
+
+        block_nodes = (
+            ast.FunctionDef,
+            ast.AsyncFunctionDef,
+            ast.ClassDef,
+            ast.If,
+            ast.For,
+            ast.AsyncFor,
+            ast.While,
+            ast.Try,
+            ast.With,
+            ast.AsyncWith,
+        )
+
+        lines: set[int] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, block_nodes):
+                lines.add(node.lineno)
+
+        positions: list[int] = []
+        for line in sorted(lines):
+            block = editor.document().findBlockByNumber(line - 1)
+            if not block.isValid():
+                continue
+            txt = block.text()
+            start_of_line = len(txt) - len(txt.lstrip())
+            positions.append(block.position() + start_of_line)
+
+        return positions
+
+    def prev_pyblock(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Return position of previous Python block."""
+        positions = self._get_python_block_positions()
+        cursor = self.get_cursor()
+        cur_line_start = cursor.block().position()
+        prev_positions = [p for p in positions if p < cur_line_start]
+        if not prev_positions:
+            return self._set_motion_info(None)
+        idx = max(0, len(prev_positions) - num)
+        return self._set_motion_info(prev_positions[idx], motion_type=MotionType.LineWise)
+
+    def next_pyblock(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Return position of next Python block."""
+        positions = self._get_python_block_positions()
+        cursor = self.get_cursor()
+        cur_line_start = cursor.block().position()
+        next_positions = [p for p in positions if p > cur_line_start]
+        if not next_positions:
+            return self._set_motion_info(None)
+        idx = min(len(next_positions) - 1, num - 1)
+        return self._set_motion_info(next_positions[idx], motion_type=MotionType.LineWise)

@@ -26,9 +26,11 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
     ExecutorSubCmd_alnum,
     ExecutorSubCmd_closesquarebracket,
+    ExecutorSubCmd_closebrace,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
     ExecutorSubCmd_opensquarebracket,
+    ExecutorSubCmd_openbrace,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
     ExecutorSubCmdSneak,
@@ -50,7 +52,7 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.move_cursor = vim_status.cursor.set_cursor_pos_in_visual
         self.move_cursor_no_end = vim_status.cursor.set_cursor_pos_in_visual
 
-        cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<> \b\r[]*#"
+        cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<>{} \b\r[]*#"
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
@@ -79,6 +81,8 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.executor_sub_closesquarebracekt = (
             ExecutorSubCmd_closesquarebracket(vim_status)
         )
+        self.executor_sub_openbrace = ExecutorSubCmd_openbrace(vim_status)
+        self.executor_sub_closebrace = ExecutorSubCmd_closebrace(vim_status)
 
         # SelectionMixin hooks
         self.apply_motion_info_in_sel = self.apply_motion_info_in_visual
@@ -158,6 +162,16 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
     def closesquarebracket(self, num=1, num_str=""):
         """Start ] submode."""
         return self.executor_sub_closesquarebracekt
+
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
+    def openbrace(self, num=1, num_str=""):
+        """Start { submode."""
+        return self.executor_sub_openbrace
+
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
+    def closebrace(self, num=1, num_str=""):
+        """Start } submode."""
+        return self.executor_sub_closebrace
 
     def i(self, num=1, num_str=""):
         """Select block exclusively."""
