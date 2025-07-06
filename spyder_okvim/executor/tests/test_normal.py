@@ -2549,3 +2549,65 @@ def test_squarebracket_d_cmd(vim_bot):
     assert cmd_line.text() == ""
     assert editor.go_to_next_warning.called
     assert editor.go_to_previous_warning.called
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd, expected",
+    [
+        (0, "]]", 2),
+        (6, "]]", 6),
+        (9, "]]", 9),
+    ],
+)
+def test_next_python_definition(vim_bot, start_line, cmd, expected):
+    """Jump to next Python function or class definition."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "import os\n\n"
+        "def a():\n    pass\n\n"
+        "class Foo:\n    def b(self):\n        pass\n\n"
+        "def c():\n    pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd, expected",
+    [
+        (10, "[[", 9),
+        (6, "[[", 5),
+        (2, "[[", 2),
+    ],
+)
+def test_prev_python_definition(vim_bot, start_line, cmd, expected):
+    """Jump to previous Python function or class definition."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "import os\n\n"
+        "def a():\n    pass\n\n"
+        "class Foo:\n    def b(self):\n        pass\n\n"
+        "def c():\n    pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected

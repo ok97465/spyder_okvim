@@ -1580,3 +1580,67 @@ def test_jump_mark_in_visual(vim_bot):
     qtbot.keyClicks(cmd_line, "v'a")
     assert vim.vim_cmd.vim_status.vim_state == VimState.VISUAL
     assert editor.textCursor().position() == 0
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd_list, expected",
+    [
+        (0, ["v", "]]"], 2),
+        (6, ["v", "]]"], 6),
+        (9, ["v", "]]"], 9),
+    ],
+)
+def test_next_python_definition_in_visual(vim_bot, start_line, cmd_list, expected):
+    """Jump to next Python definition while in Visual mode."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "import os\n\n"
+        "def a():\n    pass\n\n"
+        "class Foo:\n    def b(self):\n        pass\n\n"
+        "def c():\n    pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd_list, expected",
+    [
+        (10, ["v", "[["], 9),
+        (6, ["v", "[["], 5),
+        (2, ["v", "[["], 2),
+    ],
+)
+def test_prev_python_definition_in_visual(vim_bot, start_line, cmd_list, expected):
+    """Jump to previous Python definition while in Visual mode."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "import os\n\n"
+        "def a():\n    pass\n\n"
+        "class Foo:\n    def b(self):\n        pass\n\n"
+        "def c():\n    pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected

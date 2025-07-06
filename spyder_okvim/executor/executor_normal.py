@@ -632,21 +632,23 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
     def opensquarebracket(self, num=1, num_str=""):
         """Start [ submode."""
         executor_sub = self.executor_sub_opensquarebracekt
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return executor_sub
 
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
     def closesquarebracket(self, num=1, num_str=""):
         """Start ] submode."""
         executor_sub = self.executor_sub_closesquarebracekt
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return executor_sub
 
     def asterisk(self, num=1, num_str=""):
         """Search word under cursor forward."""
