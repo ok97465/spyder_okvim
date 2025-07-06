@@ -866,6 +866,44 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
         return self.execute_func_deferred(motion_info)
 
 
+class ExecutorSubCmd_openbrace(ExecutorSubBase):
+    """Submode of {"""
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+        self.has_zero_cmd = False
+
+        cmds = "{"
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
+
+    def openbrace(self, num=1, num_str=""):
+        """Jump to previous Python block."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.prev_pyblock(num)
+        return self.execute_func_deferred(motion_info)
+
+
+class ExecutorSubCmd_closebrace(ExecutorSubBase):
+    """Submode of }"""
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+        self.has_zero_cmd = False
+
+        cmds = "}"
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
+
+    def closebrace(self, num=1, num_str=""):
+        """Jump to next Python block."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.next_pyblock(num)
+        return self.execute_func_deferred(motion_info)
+
+
 class ExecutorSubCmd_z(ExecutorSubBase):
     """Submode of z."""
 
