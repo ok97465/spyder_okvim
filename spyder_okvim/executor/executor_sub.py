@@ -820,7 +820,7 @@ class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
 
         self.has_zero_cmd = False
 
-        cmds = "d"
+        cmds = ''.join(re.escape(c) for c in "d[")
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def d(self, num=1, num_str=""):
@@ -830,6 +830,12 @@ class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
         for _ in range(num):
             editor.go_to_previous_warning()
         self.vim_status.cursor.draw_vim_cursor()
+
+    def opensquarebracket(self, num=1, num_str=""):
+        """Jump to previous Python definition."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.prev_pydef(num)
+        return self.execute_func_deferred(motion_info)
 
 
 class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
@@ -842,7 +848,7 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
 
         self.has_zero_cmd = False
 
-        cmds = "d"
+        cmds = ''.join(re.escape(c) for c in "d]")
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def d(self, num=1, num_str=""):
@@ -852,6 +858,12 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
         for _ in range(num):
             editor.go_to_next_warning()
         self.vim_status.cursor.draw_vim_cursor()
+
+    def closesquarebracket(self, num=1, num_str=""):
+        """Jump to next Python definition."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.next_pydef(num)
+        return self.execute_func_deferred(motion_info)
 
 
 class ExecutorSubCmd_z(ExecutorSubBase):

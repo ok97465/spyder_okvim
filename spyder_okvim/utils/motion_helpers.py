@@ -2,6 +2,7 @@
 """Cursor movement helpers for Vim emulation."""
 
 # Standard Libraries
+import ast
 import re
 from bisect import bisect_left, bisect_right
 
@@ -1109,3 +1110,54 @@ class MotionHelper:
         return self._set_motion_info(
             None, sel_start, sel_end, motion_type=MotionType.BlockWise
         )
+
+    # ------------------------------------------------------------------
+    # Python navigation helpers
+    # ------------------------------------------------------------------
+    def _get_python_definition_positions(self) -> list[int]:
+        """Return character positions of Python class and function definitions."""
+        editor = self.get_editor()
+        text = editor.toPlainText()
+
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            return []
+
+        lines: set[int] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                lines.add(node.lineno)
+
+        positions: list[int] = []
+        for line in sorted(lines):
+            block = editor.document().findBlockByNumber(line - 1)
+            if not block.isValid():
+                continue
+            txt = block.text()
+            start_of_line = len(txt) - len(txt.lstrip())
+            positions.append(block.position() + start_of_line)
+
+        return positions
+
+    def prev_pydef(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Return position of previous Python definition."""
+        positions = self._get_python_definition_positions()
+        cursor = self.get_cursor()
+        cur_line_start = cursor.block().position()
+        prev_positions = [p for p in positions if p < cur_line_start]
+        if not prev_positions:
+            return self._set_motion_info(None)
+        idx = max(0, len(prev_positions) - num)
+        return self._set_motion_info(prev_positions[idx], motion_type=MotionType.LineWise)
+
+    def next_pydef(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Return position of next Python definition."""
+        positions = self._get_python_definition_positions()
+        cursor = self.get_cursor()
+        cur_line_start = cursor.block().position()
+        next_positions = [p for p in positions if p > cur_line_start]
+        if not next_positions:
+            return self._set_motion_info(None)
+        idx = min(len(next_positions) - 1, num - 1)
+        return self._set_motion_info(next_positions[idx], motion_type=MotionType.LineWise)

@@ -93,6 +93,7 @@ The following motions are supported:
 - ^D, ^U, ^F, ^B
 - HLM
 - %
+- [[, ]]
 - f, F, t, T, ;, ,
 - /, N, n
 - Enter, Space, Backspace

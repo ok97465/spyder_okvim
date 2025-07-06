@@ -25,8 +25,10 @@ from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
 from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
     ExecutorSubCmd_alnum,
+    ExecutorSubCmd_closesquarebracket,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
+    ExecutorSubCmd_opensquarebracket,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
     ExecutorSubCmdSneak,
@@ -48,7 +50,7 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.move_cursor = vim_status.cursor.set_cursor_pos_in_visual
         self.move_cursor_no_end = vim_status.cursor.set_cursor_pos_in_visual
 
-        cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<> \b\r*#"
+        cmds = "uUoiaydxscVhHjJklLMwWbBSepP^$gG~:%fFtTnN/;,\"`'mr<> \b\r[]*#"
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
@@ -71,6 +73,12 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
         self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
         self.executor_sub_surround = ExecutorAddSurround(vim_status)
+        self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
+            vim_status
+        )
+        self.executor_sub_closesquarebracekt = (
+            ExecutorSubCmd_closesquarebracket(vim_status)
+        )
 
         # SelectionMixin hooks
         self.apply_motion_info_in_sel = self.apply_motion_info_in_visual
@@ -140,6 +148,16 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
     def T(self, num=1, num_str=""):
         """Go to the next occurrence of a character."""
         return self.executor_sub_f_t
+
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
+    def opensquarebracket(self, num=1, num_str=""):
+        """Start [ submode."""
+        return self.executor_sub_opensquarebracekt
+
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_visual, True)])
+    def closesquarebracket(self, num=1, num_str=""):
+        """Start ] submode."""
+        return self.executor_sub_closesquarebracekt
 
     def i(self, num=1, num_str=""):
         """Select block exclusively."""
