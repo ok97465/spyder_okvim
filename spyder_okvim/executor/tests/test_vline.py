@@ -1305,3 +1305,81 @@ def test_prev_python_definition_in_vline(vim_bot, start_line, cmd_list, expected
 
     assert cmd_line.text() == ""
     assert editor.textCursor().blockNumber() == expected
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd_list, expected",
+    [
+        (0, ["V", "}}"], 3),
+        (3, ["V", "}}"], 6),
+        (6, ["V", "}}"], 9),
+        (9, ["V", "}}"], 12),
+        (12, ["V", "}}"], 17),
+        (17, ["V", "}}"], 20),
+    ],
+)
+def test_next_python_block_in_vline(vim_bot, start_line, cmd_list, expected):
+    """Jump to next Python block while in Vline mode."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "def a():\n"
+        "    pass\n\n"
+        "if x:\n    pass\n\n"
+        "for i in range(3):\n    pass\n\n"
+        "while False:\n    pass\n\n"
+        "try:\n    pass\nexcept Exception:\n    pass\n\n"
+        "with open('file') as f:\n    pass\n\n"
+        "class Foo:\n    def bar(self):\n        pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected
+
+
+@pytest.mark.parametrize(
+    "start_line, cmd_list, expected",
+    [
+        (20, ["V", "{{"], 17),
+        (17, ["V", "{{"], 12),
+        (12, ["V", "{{"], 9),
+        (9, ["V", "{{"], 6),
+        (6, ["V", "{{"], 3),
+        (3, ["V", "{{"], 0),
+    ],
+)
+def test_prev_python_block_in_vline(vim_bot, start_line, cmd_list, expected):
+    """Jump to previous Python block while in Vline mode."""
+    _, _, editor, vim, qtbot = vim_bot
+
+    text = (
+        "def a():\n"
+        "    pass\n\n"
+        "if x:\n    pass\n\n"
+        "for i in range(3):\n    pass\n\n"
+        "while False:\n    pass\n\n"
+        "try:\n    pass\nexcept Exception:\n    pass\n\n"
+        "with open('file') as f:\n    pass\n\n"
+        "class Foo:\n    def bar(self):\n        pass\n"
+    )
+    editor.set_text(text)
+
+    block = editor.document().findBlockByNumber(start_line)
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
+    vim.vim_cmd.vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    for cmd in cmd_list:
+        qtbot.keyClicks(cmd_line, cmd)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected

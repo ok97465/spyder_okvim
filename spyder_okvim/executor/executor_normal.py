@@ -28,9 +28,11 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSearch,
     ExecutorSubCmd_alnum,
     ExecutorSubCmd_closesquarebracket,
+    ExecutorSubCmd_closebrace,
     ExecutorSubCmd_f_t,
     ExecutorSubCmd_g,
     ExecutorSubCmd_opensquarebracket,
+    ExecutorSubCmd_openbrace,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
     ExecutorSubCmd_z,
@@ -57,7 +59,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.move_cursor_no_end = self.vim_status.cursor.set_cursor_pos_without_end
 
         cmds = (
-            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<> \b\rq@\[\]*#"
+            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<>{} \b\rq@\[\]*#"
         )
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -89,6 +91,8 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.executor_sub_closesquarebracekt = ExecutorSubCmd_closesquarebracket(
             vim_status
         )
+        self.executor_sub_openbrace = ExecutorSubCmd_openbrace(vim_status)
+        self.executor_sub_closebrace = ExecutorSubCmd_closebrace(vim_status)
 
     def a(self, num=1, num_str=""):
         """Append text after the cursor."""
@@ -645,6 +649,24 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
     def closesquarebracket(self, num=1, num_str=""):
         """Start ] submode."""
         executor_sub = self.executor_sub_closesquarebracekt
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        return executor_sub
+
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
+    def openbrace(self, num=1, num_str=""):
+        """Start { submode."""
+        executor_sub = self.executor_sub_openbrace
+
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+
+        return executor_sub
+
+    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
+    def closebrace(self, num=1, num_str=""):
+        """Start } submode."""
+        executor_sub = self.executor_sub_closebrace
 
         self.set_parent_info_to_submode(executor_sub, num, num_str)
 

@@ -51,6 +51,8 @@ class ExecutorBase:
         "]": "closesquarebracket",
         "*": "asterisk",
         "#": "sharp",
+        "{": "openbrace",
+        "}": "closebrace",
     }
 
     def __init__(self, vim_status):
