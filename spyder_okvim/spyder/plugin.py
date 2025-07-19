@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget, QStatusBar, QShortcut
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -190,23 +190,39 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         widget = self._status_bar_widget
 
         if floating:
-            # Move widget to the undocked editor window status bar
+            # Detach from the main window status bar
             if hasattr(self._status_bar, "removeWidget"):
                 try:
                     self._status_bar.removeWidget(widget)
                 except Exception:
                     pass
-            window = self._editor_dockwidget.window()
-            if window is not None and hasattr(window, "statusBar"):
-                window.statusBar().addPermanentWidget(widget)
+
+            # Lazily create a status bar on the dockwidget if needed
+            if not hasattr(self, "_floating_statusbar"):
+                editor_widget = self._editor_dockwidget.widget()
+                container = QWidget()
+                layout = QVBoxLayout(container)
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(0)
+                layout.addWidget(editor_widget)
+
+                self._floating_statusbar = QStatusBar(container)
+                layout.addWidget(self._floating_statusbar)
+
+                self._floating_editor_widget = editor_widget
+                self._floating_container = container
+
+            self._floating_statusbar.addPermanentWidget(widget)
+            self._editor_dockwidget.setWidget(self._floating_container)
         else:
             # Restore widget to the main window status bar
-            try:
-                window = self._editor_dockwidget.window()
-                if window is not None and hasattr(window, "statusBar"):
-                    window.statusBar().removeWidget(widget)
-            except Exception:
-                pass
+            if hasattr(self, "_floating_statusbar"):
+                try:
+                    self._floating_statusbar.removeWidget(widget)
+                except Exception:
+                    pass
+                self._editor_dockwidget.setWidget(self._floating_editor_widget)
+
             if hasattr(self._status_bar, "addPermanentWidget"):
                 self._status_bar.addPermanentWidget(widget)
             else:
