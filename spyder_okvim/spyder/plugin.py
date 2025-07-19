@@ -109,7 +109,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     focus_changed = Signal()
     NAME = CONF_SECTION
     REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
-    OPTIONAL = []
+    OPTIONAL = [Plugins.Editor]
     WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
@@ -155,6 +155,24 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
 
+        # Store references for relocating the widget when the editor is
+        # undocked from the main window.
+        self._status_bar_widget = status_bar_widget
+        self._status_bar = getattr(statusbar, "_statusbar", statusbar)
+
+        # The editor plugin might not be available when testing.
+        editor_plugin = self.get_plugin(Plugins.Editor, error=False)
+        self._editor_dockwidget = None
+        if editor_plugin is not None:
+            editor_widget = editor_plugin.get_widget()
+            self._editor_dockwidget = editor_widget.dockwidget
+        if self._editor_dockwidget is not None:
+            self._editor_dockwidget.topLevelChanged.connect(
+                self._move_statusbar_widget
+            )
+            if self._editor_dockwidget.isWindow():
+                self._move_statusbar_widget(True)
+
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
         esc_shortcut = QShortcut(
@@ -163,6 +181,36 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+    def _move_statusbar_widget(self, floating: bool) -> None:
+        """Reparent status bar widget when the editor is undocked/docked."""
+        if not hasattr(self, "_status_bar_widget") or self._editor_dockwidget is None:
+            return
+
+        widget = self._status_bar_widget
+
+        if floating:
+            # Move widget to the undocked editor window status bar
+            if hasattr(self._status_bar, "removeWidget"):
+                try:
+                    self._status_bar.removeWidget(widget)
+                except Exception:
+                    pass
+            window = self._editor_dockwidget.window()
+            if window is not None and hasattr(window, "statusBar"):
+                window.statusBar().addPermanentWidget(widget)
+        else:
+            # Restore widget to the main window status bar
+            try:
+                window = self._editor_dockwidget.window()
+                if window is not None and hasattr(window, "statusBar"):
+                    window.statusBar().removeWidget(widget)
+            except Exception:
+                pass
+            if hasattr(self._status_bar, "addPermanentWidget"):
+                self._status_bar.addPermanentWidget(widget)
+            else:
+                self._status_bar.add_status_widget(widget)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:

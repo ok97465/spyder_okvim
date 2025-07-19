@@ -37,6 +37,7 @@ class EditorMock(QWidget):
         QWidget.__init__(self, None)
         self.editor_stack = editor_stack
         self.editorsplitter = self.editor_stack
+        self.dockwidget = None
         self.open_action = Mock()
         self.new_action = Mock()
         self.save_action = Mock()
@@ -101,8 +102,15 @@ class MainMock(QWidget):
         qtbot_module.add_widget(self.editor)
         qtbot_module.add_widget(self.status_bar)
 
-    def get_plugin(self, dummy, error=True):
-        return self.status_bar
+    def get_plugin(self, plugin_name, error=True):
+        """Return a mock plugin based on its name."""
+        if plugin_name == "statusbar":
+            return self.status_bar
+        if plugin_name == "editor":
+            return self.editor
+        if error:
+            raise KeyError(plugin_name)
+        return None
 
 
 @pytest.fixture(scope="session")

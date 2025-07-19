@@ -13,7 +13,7 @@ If you run into problems, uninstall Okvim and try again.
 
 ## Known Issues
 
-- Okvim does not work when the Spyder editor is undocked from the main window.
+No major issues are currently known.
 
 ## Overview
 
