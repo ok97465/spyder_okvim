@@ -121,7 +121,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     @property
     def vim_cmd(self):
-        """Return vim_cmd for test."""
+        """Return the active Vim widget."""
+        if getattr(self, "_floating_vim_cmd", None) is not None:
+            return self._floating_vim_cmd
         return self.get_widget().vim_cmd
 
     # --- SpyderDockablePlugin API
@@ -164,6 +166,16 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
+        # Handle editor floating windows
+        editor_widget = self._main.editor.get_widget()
+        try:
+            dockwidget = editor_widget.dockwidget
+            dockwidget.topLevelChanged.connect(self._on_editor_floating)
+        except AttributeError:
+            pass
+
+        self._floating_vim_cmd = None
+
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
         """Connect when preferences available."""
@@ -188,6 +200,10 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             widget.close()
             if running_in_pytest():
                 widget.deleteLater()
+        if getattr(self, "_floating_vim_cmd", None) is not None:
+            self._floating_vim_cmd.setParent(None)
+            self._floating_vim_cmd.deleteLater()
+            self._floating_vim_cmd = None
         QCoreApplication.processEvents()
         return True
 
@@ -199,3 +215,21 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Editor floating handling
+    def _on_editor_floating(self, floating: bool) -> None:
+        """Handle editor dock widget floating state changes."""
+        editor_widget = self._main.editor.get_widget()
+
+        if floating:
+            if self._floating_vim_cmd is None:
+                self._floating_vim_cmd = VimWidget(editor_widget, self._main)
+                try:
+                    editor_widget.layout().addWidget(self._floating_vim_cmd)
+                except AttributeError:
+                    pass
+        else:
+            if self._floating_vim_cmd is not None:
+                self._floating_vim_cmd.setParent(None)
+                self._floating_vim_cmd.deleteLater()
+                self._floating_vim_cmd = None
