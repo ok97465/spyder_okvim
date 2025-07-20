@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QVBoxLayout, QWidget
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -166,9 +166,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         # Add vim widget to floating editor windows
         self._extra_vims = {}
-        editor = getattr(self._main, 'editor', None)
+        editor = getattr(self._main, "editor", None)
         if editor is not None and not running_in_pytest():
-            dock = getattr(editor, 'dockwidget', None)
+            dock = getattr(editor, "dockwidget", None)
             if dock is not None:
                 dock.topLevelChanged.connect(self._handle_editor_floating)
             self._patch_new_window(editor.get_widget())
@@ -219,22 +219,44 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def _attach_vim_widget(self, editor_widget):
         if editor_widget in self._extra_vims:
             return
+
         layout_func = getattr(editor_widget, "layout", None)
         layout = layout_func() if callable(layout_func) else None
+        wrapper = None
         if layout is None:
-            return
+            parent = editor_widget.parent()
+            if parent is None:
+                return
+            wrapper = QWidget(parent)
+            wrapper.setContentsMargins(0, 0, 0, 0)
+            wrapper_layout = QVBoxLayout(wrapper)
+            wrapper_layout.setContentsMargins(0, 0, 0, 0)
+            editor_widget.setParent(wrapper)
+            wrapper_layout.addWidget(editor_widget)
+            if hasattr(parent, "setCentralWidget"):
+                parent.setCentralWidget(wrapper)
+            layout = wrapper_layout
         vim_widget = VimWidget(self._main.editor, self.main)
         layout.addWidget(vim_widget)
-        self._extra_vims[editor_widget] = vim_widget
+        self._extra_vims[editor_widget] = (vim_widget, wrapper)
 
     def _detach_vim_widget(self, editor_widget):
-        vim_widget = self._extra_vims.pop(editor_widget, None)
-        if vim_widget:
-            layout_func = getattr(editor_widget, "layout", None)
-            layout = layout_func() if callable(layout_func) else None
-            if layout is not None:
-                layout.removeWidget(vim_widget)
-            vim_widget.deleteLater()
+        info = self._extra_vims.pop(editor_widget, None)
+        if not info:
+            return
+        vim_widget, wrapper = info
+        target = wrapper if wrapper is not None else editor_widget
+        layout_func = getattr(target, "layout", None)
+        layout = layout_func() if callable(layout_func) else None
+        if layout is not None:
+            layout.removeWidget(vim_widget)
+        vim_widget.deleteLater()
+        if wrapper is not None:
+            parent = wrapper.parent()
+            if hasattr(parent, "setCentralWidget"):
+                parent.setCentralWidget(editor_widget)
+            editor_widget.setParent(parent)
+            wrapper.deleteLater()
 
     def _handle_editor_floating(self, floating):
         editor = getattr(self._main, 'editor', None)
