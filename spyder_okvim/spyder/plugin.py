@@ -27,6 +27,13 @@ from spyder_okvim.spyder.confpage import OkvimConfigPage
 from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
 
 
+def _add_widget_to_layout(widget, child):
+    """Helper to add *child* to *widget* layout if not present."""
+    layout = widget.layout()
+    if layout is not None and layout.indexOf(child) == -1:
+        layout.addWidget(child)
+
+
 class StatusBarVimWidget(StatusBarWidget):
     """Status bar widget for okvim."""
 
@@ -118,6 +125,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     CUSTOM_LAYOUTS = [CustomLayout]
     CAN_BE_DISABLED = True
     RAISE_AND_FOCUS = True
+    _floating_cmd = None
 
     @property
     def vim_cmd(self):
@@ -164,6 +172,22 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
+        # Handle undocked editor windows
+        dock = vim_cmd.editor_widget.dockwidget
+        dock.topLevelChanged.connect(self._on_editor_top_level_changed)
+        self._on_editor_top_level_changed(dock.isFloating())
+
+        # Patch new window creation to include a Vim widget
+        main_widget = vim_cmd.editor_widget.get_widget()
+        orig_create = main_widget.create_new_window
+
+        def create_new_window_patched(*args, **kwargs):
+            win = orig_create(*args, **kwargs)
+            self._add_vim_to_editor_widget(win.editorwidget)
+            return win
+
+        main_widget.create_new_window = create_new_window_patched
+
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
         """Connect when preferences available."""
@@ -199,3 +223,28 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ------------------------------------------------------------------
+    # Helper methods
+    # ------------------------------------------------------------------
+    def _add_vim_to_editor_widget(self, editor_widget):
+        """Add a VimWidget below *editor_widget* if missing."""
+        if editor_widget is None:
+            return
+        if getattr(editor_widget, "_okvim_widget", None) is None:
+            vim_cmd = VimWidget(editor_widget, self.main)
+            _add_widget_to_layout(editor_widget, vim_cmd)
+            editor_widget._okvim_widget = vim_cmd
+
+    def _on_editor_top_level_changed(self, floating):
+        """Handle editor undocking/docking."""
+        editor_widget = self.main.editor.get_widget()
+        if floating:
+            if self._floating_cmd is None:
+                self._floating_cmd = VimWidget(editor_widget, self.main)
+                _add_widget_to_layout(editor_widget, self._floating_cmd)
+        else:
+            if self._floating_cmd is not None:
+                editor_widget.layout().removeWidget(self._floating_cmd)
+                self._floating_cmd.deleteLater()
+                self._floating_cmd = None
