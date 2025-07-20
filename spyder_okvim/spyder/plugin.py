@@ -164,6 +164,15 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
+        # Add vim widget to floating editor windows
+        self._extra_vims = {}
+        editor = getattr(self._main, 'editor', None)
+        if editor is not None:
+            dock = getattr(editor, 'dockwidget', None)
+            if dock is not None:
+                dock.topLevelChanged.connect(self._handle_editor_floating)
+            self._patch_new_window(editor.get_widget())
+
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
         """Connect when preferences available."""
@@ -185,6 +194,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
                 widget.vim_cmd.cleanup()
             except AttributeError:
                 pass
+            for extra_widget, vim_w in list(self._extra_vims.items()):
+                try:
+                    vim_w.cleanup()
+                except Exception:
+                    pass
+                self._detach_vim_widget(extra_widget)
             widget.close()
             if running_in_pytest():
                 widget.deleteLater()
@@ -199,3 +214,40 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Private API -------------------------------------------------
+    def _attach_vim_widget(self, editor_widget):
+        if editor_widget in self._extra_vims:
+            return
+        vim_widget = VimWidget(editor_widget, self.main)
+        editor_widget.layout().addWidget(vim_widget)
+        self._extra_vims[editor_widget] = vim_widget
+
+    def _detach_vim_widget(self, editor_widget):
+        vim_widget = self._extra_vims.pop(editor_widget, None)
+        if vim_widget:
+            editor_widget.layout().removeWidget(vim_widget)
+            vim_widget.deleteLater()
+
+    def _handle_editor_floating(self, floating):
+        editor = getattr(self._main, 'editor', None)
+        if editor is None:
+            return
+        widget = editor.get_widget()
+        if floating:
+            self._attach_vim_widget(widget)
+        else:
+            self._detach_vim_widget(widget)
+
+    def _patch_new_window(self, main_widget):
+        orig_create = getattr(main_widget, 'create_new_window', None)
+        if orig_create is None:
+            return
+
+        def wrapper(*args, **kwargs):
+            win = orig_create(*args, **kwargs)
+            self._attach_vim_widget(win.editorwidget)
+            win.destroyed.connect(lambda: self._detach_vim_widget(win.editorwidget))
+            return win
+
+        main_widget.create_new_window = wrapper
