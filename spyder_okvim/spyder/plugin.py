@@ -238,6 +238,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             layout = wrapper_layout
         vim_widget = VimWidget(self._main.editor, self.main)
         layout.addWidget(vim_widget)
+        vim_widget.show()
         self._extra_vims[editor_widget] = (vim_widget, wrapper)
 
     def _detach_vim_widget(self, editor_widget):
