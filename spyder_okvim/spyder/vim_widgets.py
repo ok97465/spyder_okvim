@@ -513,6 +513,29 @@ class VimWidget(QWidget):
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
 
+    def restore_status_widgets(self) -> bool:
+        """Recreate status bar widgets if they were deleted.
+
+        Returns
+        -------
+        bool
+            Whether new widgets were created.
+        """
+        if not any(
+            _widget_is_deleted(w)
+            for w in (self.msg_label, self.status_label, self.commandline)
+        ):
+            return False
+
+        self.status_label = VimStateLabel(self.main)
+        self.msg_label = VimMessageLabel("", self.main)
+        self.commandline = VimLineEdit(self, self.vim_status, self.vim_shortcut)
+        self.commandline.textChanged.connect(self.on_text_changed)
+        self.vim_status.change_label.connect(self.status_label.change_state)
+        self.vim_status.cmd_line = self.commandline
+        self.vim_shortcut.cmd_line = self.commandline
+        return True
+
     @Slot(object)
     def send_key_event(self, key_info: KeyInfo) -> None:
         event = key_info.to_event()

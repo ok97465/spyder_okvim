@@ -152,6 +152,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline,
         )
 
+        status_bar_widget.set_layout()
+
         statusbar_plugin = self.get_plugin(Plugins.StatusBar)
         self._statusbar_plugin = statusbar_plugin
         self._status_bar_widget = status_bar_widget
@@ -179,6 +181,15 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         esc.setContext(Qt.WidgetWithChildrenShortcut)
         self._esc_shortcuts[editorsplitter] = esc
 
+    def _refresh_shortcuts(self, vim_cmd):
+        """Update ESC shortcuts to point to the current command line."""
+        for shortcut in self._esc_shortcuts.values():
+            try:
+                shortcut.activated.disconnect()
+            except Exception:
+                pass
+            shortcut.activated.connect(vim_cmd.commandline.setFocus)
+
     def _on_editor_focus_changed(self):
         """Move Vim widgets when the focused editor changes."""
         vim_cmd = self.get_widget().vim_cmd
@@ -198,25 +209,29 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             else main_statusbar
         )
 
-        if new_statusbar is self._current_statusbar and not _widget_is_deleted(
-            self._status_bar_widget
+        recreated = vim_cmd.restore_status_widgets()
+        if recreated:
+            self._refresh_shortcuts(vim_cmd)
+
+        if new_statusbar is self._current_statusbar and not (
+            recreated or _widget_is_deleted(self._status_bar_widget)
         ):
             return
 
-        if _widget_is_deleted(self._status_bar_widget):
-            # The widget was destroyed (e.g. when an undocked window closed).
-            # Recreate it using the existing Vim command subwidgets.
+        if recreated or _widget_is_deleted(self._status_bar_widget):
             self._status_bar_widget = StatusBarVimWidget(
                 self._main,
                 vim_cmd.msg_label,
                 vim_cmd.status_label,
                 vim_cmd.commandline,
             )
+            self._status_bar_widget.set_layout()
 
         if (
             self._current_statusbar is not None
             and not _widget_is_deleted(self._current_statusbar)
             and not _widget_is_deleted(self._status_bar_widget)
+            and self._current_statusbar is not new_statusbar
         ):
             try:
                 self._current_statusbar.removeWidget(self._status_bar_widget)
