@@ -24,7 +24,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget, _widget_is_deleted
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -201,18 +201,24 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if new_statusbar is self._current_statusbar:
             return
 
-        if self._current_statusbar is main_statusbar:
-            if hasattr(self._statusbar_plugin, "remove_status_widget"):
-                try:
-                    self._statusbar_plugin.remove_status_widget(
-                        self._status_bar_widget.ID
+        if (
+            self._current_statusbar is not None
+            and not _widget_is_deleted(self._current_statusbar)
+        ):
+            if self._current_statusbar is main_statusbar:
+                if hasattr(self._statusbar_plugin, "remove_status_widget"):
+                    try:
+                        self._statusbar_plugin.remove_status_widget(
+                            self._status_bar_widget.ID
+                        )
+                    except Exception:
+                        pass
+                else:
+                    self._current_statusbar.removeWidget(
+                        self._status_bar_widget
                     )
-                except Exception:
-                    pass
             else:
                 self._current_statusbar.removeWidget(self._status_bar_widget)
-        elif self._current_statusbar is not None:
-            self._current_statusbar.removeWidget(self._status_bar_widget)
 
         if new_statusbar is main_statusbar and hasattr(self._statusbar_plugin, "add_status_widget"):
             try:
