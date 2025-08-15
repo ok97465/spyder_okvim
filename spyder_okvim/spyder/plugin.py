@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -109,7 +109,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     focus_changed = Signal()
     NAME = CONF_SECTION
     REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
-    OPTIONAL = []
+    OPTIONAL = [Plugins.Editor]
     WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
@@ -152,17 +152,69 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline,
         )
 
-        statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
+        statusbar_plugin = self.get_plugin(Plugins.StatusBar)
+        self._statusbar_plugin = statusbar_plugin
+        self._status_bar_widget = status_bar_widget
+        self._current_statusbar = getattr(statusbar_plugin, "_statusbar", statusbar_plugin)
+        statusbar_plugin.add_status_widget(self._status_bar_widget)
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        self._esc_shortcut = None
+        self._install_shortcut(editorsplitter)
 
-        esc_shortcut = QShortcut(
+        editor = self.get_plugin(Plugins.Editor, error=False)
+        if editor is not None and hasattr(editor, "sig_editor_focus_changed"):
+            editor.sig_editor_focus_changed.connect(self._on_editor_focus_changed)
+
+    # ---- Private helpers -------------------------------------------------
+    def _install_shortcut(self, editorsplitter):
+        """Install ESC shortcut on the given editor splitter."""
+        if self._esc_shortcut is not None:
+            self._esc_shortcut.setParent(None)
+        self._esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
-            vim_cmd.commandline.setFocus,
+            self.get_widget().vim_cmd.commandline.setFocus,
         )
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+    def _on_editor_focus_changed(self):
+        """Move Vim widgets when the focused editor changes."""
+        vim_cmd = self.get_widget().vim_cmd
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        editorstack = editor_widget.get_current_editorstack()
+        if editorstack is None:
+            return
+
+        editorsplitter = editorstack.parent()
+        window = editorsplitter.window()
+        main_statusbar = getattr(self._statusbar_plugin, "_statusbar", self._statusbar_plugin)
+        if isinstance(window, QMainWindow) and window is not self._main:
+            new_statusbar = window.statusBar()
+            if self._current_statusbar is main_statusbar:
+                if hasattr(self._statusbar_plugin, "remove_status_widget"):
+                    try:
+                        self._statusbar_plugin.remove_status_widget(
+                            self._status_bar_widget.ID
+                        )
+                    except Exception:
+                        pass
+                else:
+                    self._current_statusbar.layout.removeWidget(self._status_bar_widget)
+            else:
+                self._current_statusbar.removeWidget(self._status_bar_widget)
+            new_statusbar.addPermanentWidget(self._status_bar_widget)
+            self._current_statusbar = new_statusbar
+        else:
+            if self._current_statusbar is not main_statusbar:
+                self._current_statusbar.removeWidget(self._status_bar_widget)
+                if hasattr(self._statusbar_plugin, "add_status_widget"):
+                    self._statusbar_plugin.add_status_widget(self._status_bar_widget)
+                else:
+                    main_statusbar.layout.addWidget(self._status_bar_widget)
+                self._current_statusbar = main_statusbar
+
+        self._install_shortcut(editorsplitter)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
