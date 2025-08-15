@@ -52,25 +52,26 @@ class StatusBarVimWidget(StatusBarWidget):
         spacing_post = 12
         spacing = 5
 
+        # Ensure the labels are visible even when their size hints are 0
         self.msg_label.setMinimumWidth(90)
+        self.status_label.setMinimumWidth(60)
         self.cmd_line.setMinimumWidth(80)
-        width_msg = self.msg_label.sizeHint().width()
-        width_status = self.status_label.sizeHint().width()
-        width_cmd = self.cmd_line.sizeHint().width()
 
-        width_total = width_msg + width_status + width_cmd
+        width_msg = self.msg_label.minimumWidth()
+        width_status = self.status_label.minimumWidth()
+        width_cmd = self.cmd_line.minimumWidth()
+        width_total = width_msg + width_status + width_cmd + 2 * spacing + spacing_post
 
-        layout = QHBoxLayout(self)
+        layout = QHBoxLayout()
         layout.setSpacing(spacing)
-        layout.addWidget(self.msg_label, int(width_msg / width_total * 100))
-        layout.addWidget(self.status_label, int(width_status / width_total * 100))
-        layout.addWidget(self.cmd_line, int(width_cmd / width_total * 100))
+        layout.addWidget(self.msg_label)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.cmd_line)
         layout.addSpacing(spacing_post)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        width_total += 2 * spacing + spacing_post
-        self.setFixedWidth(width_total)
         self.setLayout(layout)
+        self.setFixedWidth(width_total)
 
     def set_layout(self):
         """Public entry point to apply the layout."""
@@ -171,19 +172,28 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     # ---- Private helpers -------------------------------------------------
     def _install_shortcut(self, editorsplitter):
         """Install ESC shortcut on the given editor splitter if needed."""
-        if editorsplitter in getattr(self, "_esc_shortcuts", {}):
+        shortcuts = getattr(self, "_esc_shortcuts", {})
+        esc = shortcuts.get(editorsplitter)
+        if esc is not None and not _widget_is_deleted(esc):
             return
+        if esc is not None:
+            # Remove stale reference to a deleted shortcut
+            shortcuts.pop(editorsplitter, None)
         esc = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
             self.get_widget().vim_cmd.commandline.setFocus,
         )
         esc.setContext(Qt.WidgetWithChildrenShortcut)
-        self._esc_shortcuts[editorsplitter] = esc
+        shortcuts[editorsplitter] = esc
+        self._esc_shortcuts = shortcuts
 
     def _refresh_shortcuts(self, vim_cmd):
         """Update ESC shortcuts to point to the current command line."""
-        for shortcut in self._esc_shortcuts.values():
+        for splitter, shortcut in list(self._esc_shortcuts.items()):
+            if _widget_is_deleted(shortcut):
+                self._esc_shortcuts.pop(splitter, None)
+                continue
             try:
                 shortcut.activated.disconnect()
             except Exception:
