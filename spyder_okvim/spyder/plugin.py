@@ -152,8 +152,17 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline,
         )
 
+        # Keep reference to status bar widget so it can be reparented to
+        # other editor windows (when the editor is undocked or a new window is
+        # created).
+        self._status_bar_widget = status_bar_widget
+
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
+
+        # Keep a reference to shortcuts installed on each editor window so they
+        # are not garbage collected.
+        self._esc_shortcuts = {}
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
@@ -163,6 +172,57 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._esc_shortcuts[editorsplitter.window()] = esc_shortcut
+
+        # Update status bar widget and shortcuts when editor focus changes so
+        # that floating editor windows are also handled.
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        if hasattr(editor_widget, "sig_editor_focus_changed"):
+            editor_widget.sig_editor_focus_changed.connect(self._update_editor_focus)
+
+    def _update_editor_focus(self) -> None:
+        """Update status bar widget and shortcuts for the active editor window."""
+        vim_cmd = self.get_widget().vim_cmd
+        editor_plugin = vim_cmd.editor_widget
+        editor_widget = editor_plugin.get_widget()
+        editorstack = editor_widget.get_current_editorstack()
+        if editorstack is None:
+            return
+
+        window = editorstack.window()
+
+        # Reparent the status bar widget to the window showing the editor
+        sb_widget = self._status_bar_widget
+        if hasattr(window, "status_bar") and hasattr(window.status_bar, "add_status_widget"):
+            statusbar = window.status_bar
+            if sb_widget.parent() is not statusbar:
+                statusbar.add_status_widget(sb_widget)
+                try:
+                    sb_widget.set_layout()
+                except Exception:
+                    pass
+        else:
+            statusbar = window.statusBar()
+            if sb_widget.parent() is not statusbar:
+                statusbar.addPermanentWidget(sb_widget)
+                try:
+                    sb_widget.set_layout()
+                except Exception:
+                    pass
+
+        # Ensure Esc shortcut works in the active editor window
+        if window not in self._esc_shortcuts:
+            if hasattr(window, "editorwidget"):
+                editorsplitter = window.editorwidget.editorsplitter
+            else:
+                editorsplitter = editor_widget.editorsplitter
+            esc_shortcut = QShortcut(
+                QKeySequence("Esc"),
+                editorsplitter,
+                vim_cmd.commandline.setFocus,
+            )
+            esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            self._esc_shortcuts[window] = esc_shortcut
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
