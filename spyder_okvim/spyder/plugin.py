@@ -198,35 +198,35 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             else main_statusbar
         )
 
-        if new_statusbar is self._current_statusbar:
+        if new_statusbar is self._current_statusbar and not _widget_is_deleted(
+            self._status_bar_widget
+        ):
             return
+
+        if _widget_is_deleted(self._status_bar_widget):
+            # The widget was destroyed (e.g. when an undocked window closed).
+            # Recreate it using the existing Vim command subwidgets.
+            self._status_bar_widget = StatusBarVimWidget(
+                self._main,
+                vim_cmd.msg_label,
+                vim_cmd.status_label,
+                vim_cmd.commandline,
+            )
 
         if (
             self._current_statusbar is not None
             and not _widget_is_deleted(self._current_statusbar)
+            and not _widget_is_deleted(self._status_bar_widget)
         ):
-            if self._current_statusbar is main_statusbar:
-                if hasattr(self._statusbar_plugin, "remove_status_widget"):
-                    try:
-                        self._statusbar_plugin.remove_status_widget(
-                            self._status_bar_widget.ID
-                        )
-                    except Exception:
-                        pass
-                else:
-                    self._current_statusbar.removeWidget(
-                        self._status_bar_widget
-                    )
-            else:
-                self._current_statusbar.removeWidget(self._status_bar_widget)
-
-        if new_statusbar is main_statusbar and hasattr(self._statusbar_plugin, "add_status_widget"):
             try:
-                self._statusbar_plugin.add_status_widget(self._status_bar_widget)
+                self._current_statusbar.removeWidget(self._status_bar_widget)
             except Exception:
-                new_statusbar.addPermanentWidget(self._status_bar_widget)
-        else:
+                pass
+
+        try:
             new_statusbar.addPermanentWidget(self._status_bar_widget)
+        except Exception:
+            pass
 
         self._current_statusbar = new_statusbar
 
