@@ -159,7 +159,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         statusbar_plugin.add_status_widget(self._status_bar_widget)
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
-        self._esc_shortcut = None
+        self._esc_shortcuts = {}
         self._install_shortcut(editorsplitter)
 
         editor = self.get_plugin(Plugins.Editor, error=False)
@@ -168,15 +168,16 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     # ---- Private helpers -------------------------------------------------
     def _install_shortcut(self, editorsplitter):
-        """Install ESC shortcut on the given editor splitter."""
-        if self._esc_shortcut is not None:
-            self._esc_shortcut.setParent(None)
-        self._esc_shortcut = QShortcut(
+        """Install ESC shortcut on the given editor splitter if needed."""
+        if editorsplitter in getattr(self, "_esc_shortcuts", {}):
+            return
+        esc = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
             self.get_widget().vim_cmd.commandline.setFocus,
         )
-        self._esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        esc.setContext(Qt.WidgetWithChildrenShortcut)
+        self._esc_shortcuts[editorsplitter] = esc
 
     def _on_editor_focus_changed(self):
         """Move Vim widgets when the focused editor changes."""
@@ -187,34 +188,41 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             return
 
         editorsplitter = editorstack.parent()
+        self._install_shortcut(editorsplitter)
+
         window = editorsplitter.window()
         main_statusbar = getattr(self._statusbar_plugin, "_statusbar", self._statusbar_plugin)
-        if isinstance(window, QMainWindow) and window is not self._main:
-            new_statusbar = window.statusBar()
-            if self._current_statusbar is main_statusbar:
-                if hasattr(self._statusbar_plugin, "remove_status_widget"):
-                    try:
-                        self._statusbar_plugin.remove_status_widget(
-                            self._status_bar_widget.ID
-                        )
-                    except Exception:
-                        pass
-                else:
-                    self._current_statusbar.layout.removeWidget(self._status_bar_widget)
+        new_statusbar = (
+            window.statusBar()
+            if isinstance(window, QMainWindow) and window is not self._main
+            else main_statusbar
+        )
+
+        if new_statusbar is self._current_statusbar:
+            return
+
+        if self._current_statusbar is main_statusbar:
+            if hasattr(self._statusbar_plugin, "remove_status_widget"):
+                try:
+                    self._statusbar_plugin.remove_status_widget(
+                        self._status_bar_widget.ID
+                    )
+                except Exception:
+                    pass
             else:
                 self._current_statusbar.removeWidget(self._status_bar_widget)
-            new_statusbar.addPermanentWidget(self._status_bar_widget)
-            self._current_statusbar = new_statusbar
-        else:
-            if self._current_statusbar is not main_statusbar:
-                self._current_statusbar.removeWidget(self._status_bar_widget)
-                if hasattr(self._statusbar_plugin, "add_status_widget"):
-                    self._statusbar_plugin.add_status_widget(self._status_bar_widget)
-                else:
-                    main_statusbar.layout.addWidget(self._status_bar_widget)
-                self._current_statusbar = main_statusbar
+        elif self._current_statusbar is not None:
+            self._current_statusbar.removeWidget(self._status_bar_widget)
 
-        self._install_shortcut(editorsplitter)
+        if new_statusbar is main_statusbar and hasattr(self._statusbar_plugin, "add_status_widget"):
+            try:
+                self._statusbar_plugin.add_status_widget(self._status_bar_widget)
+            except Exception:
+                new_statusbar.addPermanentWidget(self._status_bar_widget)
+        else:
+            new_statusbar.addPermanentWidget(self._status_bar_widget)
+
+        self._current_statusbar = new_statusbar
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
