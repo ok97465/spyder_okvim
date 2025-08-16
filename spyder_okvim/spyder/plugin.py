@@ -183,7 +183,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             if signal is not None:
                 signal.connect(self._update_cmdline_location)
 
-    def _update_cmdline_location(self) -> None:
+        # Ensure the command line follows focus changes across windows so that
+        # newly created editor windows get their extra command line and Esc
+        # shortcut before the user presses Esc for the first time.
+        QApplication.instance().focusChanged.connect(self._update_cmdline_location)
+
+    def _update_cmdline_location(self, *_args) -> None:
         """Add or remove extra command line based on editor window."""
         vim_cmd = self.get_widget().vim_cmd
 
