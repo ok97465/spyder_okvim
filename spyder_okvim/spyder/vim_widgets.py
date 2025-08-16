@@ -415,6 +415,8 @@ class VimLineEdit(QLineEdit):
         if self.vim_status.cursor.get_editor():
             self.to_normal()
         self.vim_status.set_message("")
+        self.vim_status.cmd_line = self
+        self.vim_shortcut.cmd_line = self
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
@@ -530,9 +532,8 @@ class VimWidget(QWidget):
             leader_key = leader_key2
         self.leader_key = leader_key
         self.executor_leader_key.set_easymotion_key(self.leader_key)
-
-    def on_text_changed(self, txt: str) -> None:
-        """Send input command to executor."""
+    def process_command(self, txt: str, cmd_line: QLineEdit) -> None:
+        """Process input command from a command line."""
         if not txt:
             return
 
@@ -548,11 +549,11 @@ class VimWidget(QWidget):
             else:
                 self.executor_leader_key.prev_executor = executor
                 self.vim_status.sub_mode = self.executor_leader_key
-                self.commandline.clear()
+                cmd_line.clear()
                 return
 
         if executor(txt):
-            self.commandline.clear()
+            cmd_line.clear()
 
         if self.vim_status.manager_macro.reg_name_for_execute:
             mm = self.vim_status.manager_macro
@@ -560,6 +561,10 @@ class VimWidget(QWidget):
             self.worker_macro.set_key_infos(mm.registers[ch], mm.num_execute)
             self.worker_macro.start()
             mm.set_info_for_execute("", 0)
+
+    def on_text_changed(self, txt: str) -> None:
+        """Send input command to executor from main command line."""
+        self.process_command(txt, self.commandline)
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
