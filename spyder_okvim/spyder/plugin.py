@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QApplication, QHBoxLayout, QShortcut
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -145,8 +145,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
-        # Keep track of extra command line widgets created for undocked or
-        # new editor windows.
+        # Mapping of additional top-level editor windows to their associated
+        # command line widgets and Escape shortcuts.  The main window command
+        # line is managed separately via the status bar.
         self._extra_cmdlines = {}
 
         status_bar_widget = StatusBarVimWidget(
@@ -187,8 +188,18 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
                 lambda _checked: self._ensure_cmdline_for_window()
             )
 
+        # Create command lines for newly focused editor windows even if they
+        # are created via "New Window" before the user presses Escape.
+        QApplication.instance().focusChanged.connect(
+            lambda _old, _new: self._ensure_cmdline_for_window()
+        )
+
     def _focus_cmdline(self) -> None:
         """Focus the command line for the active editor window."""
+        # Ensure focus events are processed so the correct editor stack is
+        # reported when switching between windows.
+        QCoreApplication.processEvents()
+
         self._ensure_cmdline_for_window()
 
         vim_cmd = self.get_widget().vim_cmd
@@ -200,7 +211,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if window is self._main:
             vim_cmd.commandline.setFocus()
         else:
-            cmd = self._extra_cmdlines.get(window)
+            cmd, _shortcut = self._extra_cmdlines.get(window, (None, None))
             if cmd is not None:
                 cmd.setFocus()
 
@@ -217,6 +228,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             return
 
         cmd = vim_cmd.create_cmd_line(window)
+        esc_sc = QShortcut(
+            QKeySequence("Esc"),
+            window,
+            self._focus_cmdline,
+        )
+        esc_sc.setContext(Qt.WidgetWithChildrenShortcut)
 
         # Try to place the command line in the window's status bar if
         # available; otherwise, add it to the window layout which covers
@@ -229,7 +246,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             if layout is not None:
                 layout.addWidget(cmd)
 
-        self._extra_cmdlines[window] = cmd
+        self._extra_cmdlines[window] = (cmd, esc_sc)
         window.destroyed.connect(
             lambda _obj=None, w=window: self._extra_cmdlines.pop(w, None)
         )
