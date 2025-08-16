@@ -12,6 +12,7 @@ import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QHBoxLayout, QShortcut, QVBoxLayout
+from spyder.plugins.editor.widgets.codeeditor import CodeEditor
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -169,12 +170,6 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             self._window_shortcuts = {self._main: esc_shortcut}
             app = QCoreApplication.instance()
             app.focusChanged.connect(self._on_app_focus_changed)
-            editor_widget = vim_cmd.editor_widget.get_widget()
-            if hasattr(editor_widget, "sig_editor_focus_changed"):
-                editor_widget.sig_editor_focus_changed.connect(
-                    self._on_editor_focus_changed
-                )
-                self._on_editor_focus_changed()
 
     def _create_cmdline_for_window(self, window):
         """Create a command line for a given editor window."""
@@ -240,21 +235,30 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if shortcut is not None:
             shortcut.deleteLater()
 
-    def _on_editor_focus_changed(self):
-        """Handle focus change between editors."""
-        vim_cmd = self.get_widget().vim_cmd
-        editor = vim_cmd.vim_status.get_editor()
-        if editor is None:
+    def _on_app_focus_changed(self, _old, new):
+        """React to application-wide focus changes."""
+        if new is None:
             return
-        window = editor.window()
+
+        widget = new
+        if isinstance(widget, VimLineEdit):
+            window = widget.window()
+            cmd_line = self._window_cmdlines.get(window)
+            if cmd_line is not None:
+                self._activate_cmdline(cmd_line)
+            return
+
+        while widget is not None and not isinstance(widget, CodeEditor):
+            widget = widget.parent()
+
+        if widget is None:
+            return
+
+        window = widget.window()
         cmd_line = self._window_cmdlines.get(window)
         if cmd_line is None:
             cmd_line = self._create_cmdline_for_window(window)
         self._activate_cmdline(cmd_line)
-
-    def _on_app_focus_changed(self, _old, _new):
-        """React to application-wide focus changes."""
-        self._on_editor_focus_changed()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
