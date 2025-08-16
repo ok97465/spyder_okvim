@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QApplication
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -145,24 +145,65 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
-        status_bar_widget = StatusBarVimWidget(
+        # Status bar widget used when the editor is docked in the main window
+        self._status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
             vim_cmd.status_label,
             vim_cmd.commandline,
         )
 
-        statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
+        self._statusbar = self.get_plugin(Plugins.StatusBar)
+        self._statusbar.add_status_widget(self._status_bar_widget)
+        self._cmdline_in_statusbar = True
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
-            vim_cmd.commandline.setFocus,
+            self._focus_cmdline,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        # Track undocking/docking of the Editor plugin to move the command
+        # line between the main status bar and the editor widget itself.
+        editor_plugin = vim_cmd.editor_widget
+        dockwidget = getattr(editor_plugin, "dockwidget", None)
+        if dockwidget is not None:
+            dockwidget.topLevelChanged.connect(self._update_cmdline_location)
+
+        for sig_name in (
+            "sig_update_ancestor_requested",
+            "sig_toggle_view_changed",
+            "sig_editor_focus_changed",
+        ):
+            signal = getattr(editor_plugin, sig_name, None)
+            if signal is not None:
+                signal.connect(self._update_cmdline_location)
+
+    def _update_cmdline_location(self) -> None:
+        """Move command line depending on editor window state."""
+        editor_widget = self.get_widget().vim_cmd.editor_widget.get_widget()
+        window = editor_widget.window()
+        if window is self._main:
+            if not self._cmdline_in_statusbar:
+                editor_widget.layout().removeWidget(self._status_bar_widget)
+                self._statusbar.add_status_widget(self._status_bar_widget)
+                self._cmdline_in_statusbar = True
+        else:
+            if self._cmdline_in_statusbar:
+                self._statusbar.remove_status_widget(self._status_bar_widget.ID)
+                editor_widget.layout().addWidget(self._status_bar_widget)
+                self._status_bar_widget.set_layout()
+                self._cmdline_in_statusbar = False
+
+    def _focus_cmdline(self) -> None:
+        """Focus command line only when an editor has focus."""
+        editor_widget = self.get_widget().vim_cmd.editor_widget.get_widget()
+        fw = QApplication.focusWidget()
+        if fw is not None and (fw is editor_widget or editor_widget.isAncestorOf(fw)):
+            self.get_widget().vim_cmd.commandline.setFocus()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
