@@ -10,8 +10,7 @@
 # Third Party Libraries
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
-from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -157,12 +156,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
-        esc_shortcut = QShortcut(
-            QKeySequence("Esc"),
-            editorsplitter,
-            vim_cmd.commandline.setFocus,
-        )
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        vim_cmd.set_esc_shortcut(editorsplitter)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:

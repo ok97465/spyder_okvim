@@ -15,9 +15,16 @@ from functools import wraps
 
 # Third Party Libraries
 from qtpy import PYSIDE2, PYSIDE6, PYQT5
-from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
+from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot, QEvent, QTimer
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
+from qtpy.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QWidget,
+    QVBoxLayout,
+    QShortcut,
+)
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
@@ -513,6 +520,12 @@ class VimWidget(QWidget):
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
 
+        # Manage command lines for docked/undocked editors
+        self._floating_cmdline = None
+        self._floating_esc_shortcut = None
+        self.esc_shortcut = None
+        self.editor_widget.installEventFilter(self)
+
     @Slot(object)
     def send_key_event(self, key_info: KeyInfo) -> None:
         event = key_info.to_event()
@@ -521,6 +534,63 @@ class VimWidget(QWidget):
         else:
             editor = self.vim_status.get_editor()
             editor.keyPressEvent(event)
+
+    def set_esc_shortcut(self, parent) -> None:
+        """Create ESC shortcut for given parent."""
+        if self.esc_shortcut is not None:
+            self.esc_shortcut.deleteLater()
+        self.esc_shortcut = QShortcut(QKeySequence("Esc"), parent, self.focus_cmd_line)
+        self.esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+    def focus_cmd_line(self) -> None:
+        """Focus the active command line."""
+        if self.vim_status.cmd_line is not None:
+            self.vim_status.cmd_line.setFocus()
+
+    def eventFilter(self, obj, event):
+        """Detect when the editor widget changes parent/window."""
+        if obj is self.editor_widget and event.type() in (QEvent.ParentChange, QEvent.Show):
+            QTimer.singleShot(0, self.ensure_cmdline)
+        return QWidget.eventFilter(self, obj, event)
+
+    def ensure_cmdline(self) -> None:
+        """Ensure appropriate command line exists for current editor state."""
+        if self.editor_widget.window() is self.main:
+            # Editor docked inside main window
+            if self._floating_cmdline is not None:
+                layout = self._floating_cmdline.parent().layout()
+                if layout is not None:
+                    layout.removeWidget(self._floating_cmdline)
+                self._floating_cmdline.deleteLater()
+                self._floating_cmdline = None
+            if self._floating_esc_shortcut is not None:
+                self._floating_esc_shortcut.setEnabled(False)
+            if self.esc_shortcut is not None:
+                self.esc_shortcut.setEnabled(True)
+            self.vim_status.cmd_line = self.commandline
+            self.vim_shortcut.cmd_line = self.commandline
+            return
+
+        # Editor is in its own window -> create simple command line
+        if self._floating_cmdline is None:
+            self._floating_cmdline = VimLineEdit(self, self.vim_status, self.vim_shortcut)
+            self._floating_cmdline.textChanged.connect(self.on_text_changed)
+            layout = self.editor_widget.layout()
+            if layout is None:
+                layout = QVBoxLayout(self.editor_widget)
+                self.editor_widget.setLayout(layout)
+            layout.addWidget(self._floating_cmdline)
+            self._floating_esc_shortcut = QShortcut(
+                QKeySequence("Esc"), self.editor_widget, self.focus_cmd_line
+            )
+            self._floating_esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        if self.esc_shortcut is not None:
+            self.esc_shortcut.setEnabled(False)
+        if self._floating_esc_shortcut is not None:
+            self._floating_esc_shortcut.setEnabled(True)
+        self.vim_status.cmd_line = self._floating_cmdline
+        self.vim_shortcut.cmd_line = self._floating_cmdline
 
     def set_leader_key(self) -> None:
         """Set leader key from CONF."""
@@ -575,5 +645,10 @@ class VimWidget(QWidget):
             self.commandline.deleteLater()
             self.status_label.deleteLater()
             self.msg_label.deleteLater()
-
+            if self._floating_cmdline is not None:
+                self._floating_cmdline.deleteLater()
+            if self._floating_esc_shortcut is not None:
+                self._floating_esc_shortcut.deleteLater()
+            if self.esc_shortcut is not None:
+                self.esc_shortcut.deleteLater()
 
