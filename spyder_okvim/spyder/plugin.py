@@ -157,12 +157,32 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
-        esc_shortcut = QShortcut(
-            QKeySequence("Esc"),
-            editorsplitter,
-            vim_cmd.commandline.setFocus,
-        )
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.esc_shortcut = QShortcut(QKeySequence("Esc"), editorsplitter)
+        self.esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.esc_shortcut.activated.connect(vim_cmd.commandline.setFocus)
+
+        # Keep reference to editor plugin for later use
+        self._editor_plugin = vim_cmd.editor_widget
+        self._window_vims = {}
+        self._floating_vim = None
+
+        # Handle undocking of the main editor pane if possible
+        if hasattr(self._editor_plugin, "dockwidget"):
+            dock = self._editor_plugin.dockwidget
+            dock.topLevelChanged.connect(self._on_editor_floating)
+
+        # Setup Vim widgets for additional editor windows
+        editor_widget = self._editor_plugin.get_widget()
+        if hasattr(editor_widget, "register_editorwindow"):
+            original_register = editor_widget.register_editorwindow
+
+            def register_editorwindow(window):
+                original_register(window)
+                self._add_window_vim(window)
+
+            editor_widget.register_editorwindow = register_editorwindow
+            for win in getattr(editor_widget, "editorwindows", []):
+                self._add_window_vim(win)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
@@ -188,6 +208,17 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             widget.close()
             if running_in_pytest():
                 widget.deleteLater()
+        for vim, shortcut in getattr(self, "_window_vims", {}).values():
+            vim.cleanup()
+            if running_in_pytest():
+                vim.commandline.deleteLater()
+            shortcut.setParent(None)
+        self._window_vims = {}
+        if getattr(self, "_floating_vim", None) is not None:
+            self._floating_vim.cleanup()
+            if running_in_pytest():
+                self._floating_vim.commandline.deleteLater()
+            self._floating_vim = None
         QCoreApplication.processEvents()
         return True
 
@@ -199,3 +230,47 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Internal helpers -------------------------------------------------
+    def _add_window_vim(self, window) -> None:
+        """Create a Vim command line for a new editor window."""
+        if window in self._window_vims:
+            return
+        vim = VimWidget(self._editor_plugin, self._main, editor_window=window, minimal=True)
+        editor_widgets = window.editorwidget.editorsplitter.parent()
+        editor_widgets.layout().addWidget(vim.commandline)
+        shortcut = QShortcut(QKeySequence("Esc"), window.editorwidget.editorsplitter)
+        shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        shortcut.activated.connect(vim.commandline.setFocus)
+        self._window_vims[window] = (vim, shortcut)
+
+    def _on_editor_floating(self, floating: bool) -> None:
+        """Handle undocking/docking of the main editor pane."""
+        if floating:
+            if self._floating_vim is None:
+                self._floating_vim = VimWidget(
+                    self._editor_plugin, self._main, minimal=True
+                )
+                editor_widget = self._editor_plugin.get_widget()
+                editor_widget.layout().addWidget(self._floating_vim.commandline)
+            try:
+                self.esc_shortcut.activated.disconnect()
+            except Exception:
+                pass
+            self.esc_shortcut.activated.connect(
+                self._floating_vim.commandline.setFocus
+            )
+        else:
+            if self._floating_vim is not None:
+                self._floating_vim.commandline.setParent(None)
+                self._floating_vim.cleanup()
+                if running_in_pytest():
+                    self._floating_vim.commandline.deleteLater()
+                self._floating_vim = None
+            try:
+                self.esc_shortcut.activated.disconnect()
+            except Exception:
+                pass
+            self.esc_shortcut.activated.connect(
+                self.get_widget().vim_cmd.commandline.setFocus
+            )

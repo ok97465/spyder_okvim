@@ -474,17 +474,21 @@ class MacroPlaybackWorker(QThread):
 class VimWidget(QWidget):
     """Vim widget."""
 
-    def __init__(self, editor_widget, main):
+    def __init__(self, editor_widget, main, editor_window=None, minimal=False):
         super().__init__(main)
         self.editor_widget = editor_widget
         self.main = main
-        self.status_label = VimStateLabel(main)
-        self.msg_label = VimMessageLabel("", main)
+        self.status_label = None
+        self.msg_label = None
+        if not minimal:
+            self.status_label = VimStateLabel(main)
+            self.msg_label = VimMessageLabel("", main)
 
-        self.vim_status = VimStatus(editor_widget, main, self.msg_label)
-        # # Avoid Qt crashes if the label is deleted by ignoring the signal
-        # self.vim_status.change_label.connect(lambda state: None)
-        self.vim_status.change_label.connect(self.status_label.change_state)
+        self.vim_status = VimStatus(
+            editor_widget, main, self.msg_label, editor_window
+        )
+        if self.status_label is not None:
+            self.vim_status.change_label.connect(self.status_label.change_state)
 
         self.vim_shortcut = VimShortcut(self.main, self.vim_status)
 
@@ -564,7 +568,10 @@ class VimWidget(QWidget):
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
         try:
-            self.vim_status.change_label.disconnect(self.status_label.change_state)
+            if self.status_label is not None:
+                self.vim_status.change_label.disconnect(
+                    self.status_label.change_state
+                )
         except Exception:
             pass
         if self.worker_macro.isRunning():
@@ -573,7 +580,9 @@ class VimWidget(QWidget):
         if running_in_pytest():
             self.worker_macro.deleteLater()
             self.commandline.deleteLater()
-            self.status_label.deleteLater()
-            self.msg_label.deleteLater()
+            if self.status_label is not None:
+                self.status_label.deleteLater()
+            if self.msg_label is not None:
+                self.msg_label.deleteLater()
 
 

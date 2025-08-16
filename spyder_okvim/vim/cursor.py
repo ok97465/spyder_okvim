@@ -16,8 +16,9 @@ from spyder_okvim.utils.motion import MotionInfo, MotionType
 class VimCursor:
     """Manage the Vim cursor."""
 
-    def __init__(self, editor_widget):
+    def __init__(self, editor_widget, editor_window=None):
         self.editor_widget = editor_widget
+        self.editor_window = editor_window
 
         self.vim_cursor = QTextEdit.ExtraSelection()
         self.vim_cursor.format.setForeground(QBrush(QColor("#000000")))
@@ -63,11 +64,18 @@ class VimCursor:
 
     def get_editor(self):
         """Get the editor focused."""
-        editorstack = self.editor_widget.get_current_editorstack()
+        editorstack = self.get_editorstack()
         return editorstack.get_current_editor()
 
     def get_editorstack(self):
         """Get the editorstack."""
+        if self.editor_window is not None:
+            try:
+                return self.editor_widget.get_current_editorstack(
+                    self.editor_window
+                )
+            except TypeError:
+                pass
         return self.editor_widget.get_current_editorstack()
 
     def get_cursor(self):
