@@ -9,8 +9,8 @@
 
 # Third Party Libraries
 import qtawesome as qta
-from qtpy.QtCore import Qt, Signal, QCoreApplication
-from qtpy.QtGui import QKeySequence
+from qtpy.QtCore import Qt, Signal, QCoreApplication, QEvent
+from qtpy.QtGui import QKeySequence, QKeyEvent
 from qtpy.QtWidgets import QHBoxLayout, QShortcut, QApplication
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
@@ -191,8 +191,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Add or remove extra command line based on editor window."""
         vim_cmd = self.get_widget().vim_cmd
 
-        editorstack = vim_cmd.vim_status.get_editorstack()
-        window = editorstack.window()
+        window = QApplication.activeWindow()
+        if window is None:
+            return
 
         if window is self._main:
             editor_widget = vim_cmd.editor_widget.get_widget()
@@ -234,6 +235,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def _handle_escape(self) -> None:
         """Focus the appropriate command line when Esc is pressed."""
         vim_cmd = self.get_widget().vim_cmd
+        self._update_cmdline_location()
         editorstack = vim_cmd.vim_status.get_editorstack()
         if editorstack is None:
             return
@@ -241,11 +243,18 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         focus = QApplication.focusWidget()
         if editor is None or focus is None:
             return
+        if isinstance(focus, VimLineEdit):
+            self._esc_shortcut.setEnabled(False)
+            try:
+                event = QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier)
+                QApplication.sendEvent(focus, event)
+            finally:
+                self._esc_shortcut.setEnabled(True)
+            return
         # Only handle Esc when the focus is inside the editor stack
         if focus is not editor and not editor.isAncestorOf(focus):
             return
-        self._update_cmdline_location()
-        window = editorstack.window()
+        window = QApplication.activeWindow()
         if window is self._main:
             editor_widget = vim_cmd.editor_widget.get_widget()
         elif hasattr(window, "editorwidget"):
