@@ -179,27 +179,29 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         # the main editor dock widget changes its floating state so we can
         # provide a dedicated command line for that window.
         editor_mainwidget = vim_cmd.editor_widget.get_widget()
+        self._editor_focus_source = None
+        self._dock_top_level = None
+        self._focus_changed_app = None
+        if running_in_pytest():
+            return
+
         if hasattr(editor_mainwidget, "sig_editor_focus_changed"):
             editor_mainwidget.sig_editor_focus_changed.connect(
                 self._ensure_cmdline_for_window
             )
-        if hasattr(vim_cmd.editor_widget, "dockwidget"):
-            vim_cmd.editor_widget.dockwidget.topLevelChanged.connect(
-                lambda _checked: self._ensure_cmdline_for_window()
-            )
+            self._editor_focus_source = editor_mainwidget
 
-        # Create command lines for newly focused editor windows even if they
-        # are created via "New Window" before the user presses Escape.
-        QApplication.instance().focusChanged.connect(
-            lambda _old, _new: self._ensure_cmdline_for_window()
-        )
+        if hasattr(vim_cmd.editor_widget, "dockwidget"):
+            dock = vim_cmd.editor_widget.dockwidget
+            dock.topLevelChanged.connect(self._ensure_cmdline_for_window)
+            self._dock_top_level = dock
+
+        app = QApplication.instance()
+        app.focusChanged.connect(self._on_focus_changed)
+        self._focus_changed_app = app
 
     def _focus_cmdline(self) -> None:
         """Focus the command line for the active editor window."""
-        # Ensure focus events are processed so the correct editor stack is
-        # reported when switching between windows.
-        QCoreApplication.processEvents()
-
         self._ensure_cmdline_for_window()
 
         vim_cmd = self.get_widget().vim_cmd
@@ -209,13 +211,22 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         window = editorstack.window()
         if window is self._main:
-            vim_cmd.commandline.setFocus()
+            cmd = vim_cmd.commandline
         else:
             cmd, _shortcut = self._extra_cmdlines.get(window, (None, None))
-            if cmd is not None:
-                cmd.setFocus()
+            if cmd is None:
+                return
 
-    def _ensure_cmdline_for_window(self) -> None:
+        vim_cmd.commandline = cmd
+        vim_cmd.vim_status.cmd_line = cmd
+        vim_cmd.vim_shortcut.cmd_line = cmd
+        cmd.setFocus()
+
+    def _on_focus_changed(self, _old, _new) -> None:
+        """Qt focusChanged callback."""
+        self._ensure_cmdline_for_window()
+
+    def _ensure_cmdline_for_window(self, *_args) -> None:
         """Create a command line for the currently focused editor window."""
         vim_cmd = self.get_widget().vim_cmd
         editorstack = vim_cmd.vim_status.get_editorstack()
@@ -235,16 +246,26 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         esc_sc.setContext(Qt.WidgetWithChildrenShortcut)
 
-        # Try to place the command line in the window's status bar if
-        # available; otherwise, add it to the window layout which covers
-        # floating dock widgets.
+        placed = False
         status_bar = getattr(window, "statusBar", None)
         if callable(status_bar):
             status_bar().addPermanentWidget(cmd)
-        else:
+            placed = True
+        if not placed:
             layout = window.layout()
             if layout is not None:
                 layout.addWidget(cmd)
+                placed = True
+        if not placed:
+            inner = getattr(window, "widget", lambda: None)()
+            if inner is not None:
+                inner_layout = inner.layout()
+                if inner_layout is not None:
+                    inner_layout.addWidget(cmd)
+                    placed = True
+        if not placed:
+            cmd.setParent(window)
+        cmd.show()
 
         self._extra_cmdlines[window] = (cmd, esc_sc)
         window.destroyed.connect(
@@ -275,6 +296,34 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             widget.close()
             if running_in_pytest():
                 widget.deleteLater()
+
+        for window, (cmd, esc_sc) in list(self._extra_cmdlines.items()):
+            cmd.deleteLater()
+            esc_sc.deleteLater()
+        self._extra_cmdlines.clear()
+
+        try:
+            if self._editor_focus_source is not None:
+                self._editor_focus_source.sig_editor_focus_changed.disconnect(
+                    self._ensure_cmdline_for_window
+                )
+        except Exception:
+            pass
+        try:
+            if self._dock_top_level is not None:
+                self._dock_top_level.topLevelChanged.disconnect(
+                    self._ensure_cmdline_for_window
+                )
+        except Exception:
+            pass
+        try:
+            if self._focus_changed_app is not None:
+                self._focus_changed_app.focusChanged.disconnect(
+                    self._on_focus_changed
+                )
+        except Exception:
+            pass
+
         QCoreApplication.processEvents()
         return True
 

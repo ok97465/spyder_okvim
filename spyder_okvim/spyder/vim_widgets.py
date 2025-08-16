@@ -411,15 +411,6 @@ class VimLineEdit(QLineEdit):
     def focusInEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
-        # When multiple command line widgets are present (e.g. undocked
-        # editor windows), make sure that the focused line edit is the one
-        # used by the Vim status and shortcut objects.  This mirrors the
-        # previous behaviour where a single command line was always used but
-        # allows us to create one per window without keeping extra state in the
-        # plugin.
-        self.vim_widget.commandline = self
-        self.vim_status.cmd_line = self
-        self.vim_shortcut.cmd_line = self
         super().focusInEvent(event)
         if self.vim_status.cursor.get_editor():
             self.to_normal()
