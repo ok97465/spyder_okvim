@@ -185,19 +185,36 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _update_cmdline_location(self) -> None:
         """Add or remove extra command line based on editor window."""
-        editor_widget = self.get_widget().vim_cmd.editor_widget.get_widget()
-        # Ensure this editor widget has an Esc shortcut installed
-        self._ensure_shortcut(editor_widget)
+        vim_cmd = self.get_widget().vim_cmd
 
-        window = editor_widget.window()
+        editorstack = vim_cmd.vim_status.get_editorstack()
+        window = editorstack.window()
+
         if window is self._main:
+            editor_widget = vim_cmd.editor_widget.get_widget()
+            self._ensure_shortcut(editor_widget)
             extra = self._extra_cmdlines.pop(editor_widget, None)
             if extra is not None:
                 editor_widget.layout().removeWidget(extra)
                 extra.deleteLater()
-        else:
+            return
+
+        if hasattr(window, "editorwidget"):
+            editor_widget = window.editorwidget
+            self._ensure_shortcut(editor_widget)
             if editor_widget not in self._extra_cmdlines:
-                vim_cmd = self.get_widget().vim_cmd
+                extra_cmd = VimLineEdit(
+                    vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut
+                )
+                extra_cmd.textChanged.connect(
+                    lambda txt, cmd=extra_cmd: vim_cmd.process_command(txt, cmd)
+                )
+                window.statusBar().addPermanentWidget(extra_cmd)
+                self._extra_cmdlines[editor_widget] = extra_cmd
+        else:
+            editor_widget = vim_cmd.editor_widget.get_widget()
+            self._ensure_shortcut(editor_widget)
+            if editor_widget not in self._extra_cmdlines:
                 extra_cmd = VimLineEdit(
                     vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut
                 )
@@ -225,6 +242,14 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             )
             esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
             self._esc_shortcuts[editor_widget] = esc_shortcut
+            editor_widget.destroyed.connect(
+                lambda _=None, ew=editor_widget: self._cleanup_editor_widget(ew)
+            )
+
+    def _cleanup_editor_widget(self, editor_widget):
+        """Remove shortcuts and command lines for a destroyed editor widget."""
+        self._esc_shortcuts.pop(editor_widget, None)
+        self._extra_cmdlines.pop(editor_widget, None)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
