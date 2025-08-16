@@ -164,6 +164,17 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
+        # Store status bar widget and shortcuts for main window
+        self._status_bar_widget = status_bar_widget
+        self._cmd_lines = {self._main: vim_cmd.commandline}
+        self._esc_shortcuts = {self._main: esc_shortcut}
+
+        editor_plugin = vim_cmd.editor_widget
+        if hasattr(editor_plugin, "sig_editor_focus_changed"):
+            editor_plugin.sig_editor_focus_changed.connect(
+                self._on_editor_focus_changed
+            )
+
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
         """Connect when preferences available."""
@@ -199,3 +210,30 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Private helpers -------------------------------------------------
+    def _on_editor_focus_changed(self):
+        """Create or switch command lines when editor focus changes."""
+        vim_cmd = self.get_widget().vim_cmd
+        editor = vim_cmd.vim_status.get_editor()
+        if editor is None:
+            return
+        window = editor.window()
+        if window not in self._cmd_lines:
+            cmd_line = vim_cmd.create_cmd_line(window)
+            window.statusBar().addPermanentWidget(cmd_line)
+            if hasattr(window, "editorwidget"):
+                editorsplitter = window.editorwidget.editorsplitter
+            elif hasattr(window, "plugin"):
+                editorsplitter = window.plugin.get_widget().editorsplitter
+            else:
+                editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+            esc_shortcut = QShortcut(
+                QKeySequence("Esc"),
+                editorsplitter,
+                cmd_line.setFocus,
+            )
+            esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            self._cmd_lines[window] = cmd_line
+            self._esc_shortcuts[window] = esc_shortcut
+        vim_cmd.switch_commandline(self._cmd_lines[window])

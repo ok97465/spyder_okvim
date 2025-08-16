@@ -488,11 +488,8 @@ class VimWidget(QWidget):
 
         self.vim_shortcut = VimShortcut(self.main, self.vim_status)
 
-        self.commandline = VimLineEdit(self, self.vim_status, self.vim_shortcut)
-        self.commandline.textChanged.connect(self.on_text_changed)
-
-        self.vim_status.cmd_line = self.commandline
-        self.vim_shortcut.cmd_line = self.commandline
+        cmd_line = self._create_cmd_line(self)
+        self.switch_commandline(cmd_line)
 
         self.executor_normal_cmd = ExecutorNormalCmd(self.vim_status)
         self.executor_visual_cmd = ExecutorVisualCmd(self.vim_status)
@@ -575,5 +572,23 @@ class VimWidget(QWidget):
             self.commandline.deleteLater()
             self.status_label.deleteLater()
             self.msg_label.deleteLater()
+
+    def _create_cmd_line(self, parent):
+        """Create a Vim command line for the given parent widget."""
+        cmd_line = VimLineEdit(parent, self.vim_status, self.vim_shortcut)
+        cmd_line.textChanged.connect(self.on_text_changed)
+        return cmd_line
+
+    def switch_commandline(self, cmd_line):
+        """Switch to use a different command line widget."""
+        if hasattr(self, "worker_macro"):
+            try:
+                self.worker_macro.sig_focus_vim.disconnect()
+            except TypeError:
+                pass
+            self.worker_macro.sig_focus_vim.connect(cmd_line.setFocus)
+        self.commandline = cmd_line
+        self.vim_status.cmd_line = cmd_line
+        self.vim_shortcut.cmd_line = cmd_line
 
 
