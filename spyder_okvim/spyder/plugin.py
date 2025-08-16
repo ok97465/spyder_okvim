@@ -24,7 +24,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget, VimLineEdit
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -163,6 +163,83 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        if not running_in_pytest():
+            self._window_cmdlines = {self._main: vim_cmd.commandline}
+            self._window_shortcuts = {self._main: esc_shortcut}
+            editor_widget = vim_cmd.editor_widget.get_widget()
+            if hasattr(editor_widget, "sig_editor_focus_changed"):
+                editor_widget.sig_editor_focus_changed.connect(
+                    self._on_editor_focus_changed
+                )
+                self._on_editor_focus_changed()
+
+    def _create_cmdline_for_window(self, window):
+        """Create a command line for a given editor window."""
+        vim_cmd = self.get_widget().vim_cmd
+        cmd_line = VimLineEdit(vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut)
+        cmd_line.textChanged.connect(vim_cmd.on_text_changed)
+        statusbar = window.statusBar()
+        statusbar.addPermanentWidget(cmd_line)
+        editorsplitter = window.editorwidget.editorsplitter
+        esc_shortcut = QShortcut(
+            QKeySequence("Esc"),
+            editorsplitter,
+            cmd_line.setFocus,
+        )
+        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._window_cmdlines[window] = cmd_line
+        self._window_shortcuts[window] = esc_shortcut
+        window.destroyed.connect(lambda _=None, w=window: self._cleanup_window(w))
+        return cmd_line
+
+    def _activate_cmdline(self, cmd_line):
+        """Activate *cmd_line* as the current command line."""
+        vim_cmd = self.get_widget().vim_cmd
+        old_cmd = vim_cmd.vim_status.cmd_line
+        if old_cmd is cmd_line:
+            return
+        if old_cmd is not None:
+            try:
+                vim_cmd.vim_shortcut.signal_cmd.disconnect(old_cmd.setText)
+            except TypeError:
+                pass
+        try:
+            vim_cmd.vim_shortcut.signal_cmd.disconnect(cmd_line.setText)
+        except TypeError:
+            pass
+        vim_cmd.vim_shortcut.signal_cmd.connect(cmd_line.setText)
+        vim_cmd.vim_status.cmd_line = cmd_line
+        vim_cmd.vim_shortcut.cmd_line = cmd_line
+
+    def _cleanup_window(self, window):
+        """Remove references for a closed window."""
+        vim_cmd = self.get_widget().vim_cmd
+        cmd_line = self._window_cmdlines.pop(window, None)
+        shortcut = self._window_shortcuts.pop(window, None)
+        if cmd_line is not None:
+            try:
+                vim_cmd.vim_shortcut.signal_cmd.disconnect(cmd_line.setText)
+            except TypeError:
+                pass
+            cmd_line.deleteLater()
+        if shortcut is not None:
+            shortcut.deleteLater()
+
+    def _on_editor_focus_changed(self):
+        """Handle focus change between editors."""
+        vim_cmd = self.get_widget().vim_cmd
+        editor = vim_cmd.vim_status.get_editor()
+        if editor is None:
+            return
+        window = editor.window()
+        if not hasattr(window, "statusBar") or not hasattr(window, "editorwidget"):
+            self._activate_cmdline(self._window_cmdlines[self._main])
+            return
+        cmd_line = self._window_cmdlines.get(window)
+        if cmd_line is None:
+            cmd_line = self._create_cmdline_for_window(window)
+        self._activate_cmdline(cmd_line)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
