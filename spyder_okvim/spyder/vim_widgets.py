@@ -349,11 +349,19 @@ class VimStateLabel(QLabel):
 class VimLineEdit(QLineEdit):
     """Vim Command input."""
 
-    def __init__(self, vim_widget, vim_status: VimStatus, vim_shortcut: VimShortcut):
+    def __init__(
+        self,
+        vim_widget,
+        vim_status: VimStatus,
+        vim_shortcut: VimShortcut,
+        msg_label: "QLabel | None" = None,
+    ):
         super().__init__(vim_widget)
         self.vim_widget = vim_widget
         self.vim_status = vim_status
         self.vim_shortcut = vim_shortcut
+        # Label used to display messages when this command line has focus.
+        self._msg_label = msg_label
 
         # Set size
         tw = self.fontMetrics().width(" :%s/international/internationl/g ")
@@ -412,6 +420,12 @@ class VimLineEdit(QLineEdit):
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
+        # Update references so that global state points to the active
+        # command line and message label.
+        self.vim_status.cmd_line = self
+        self.vim_shortcut.cmd_line = self
+        if self._msg_label is not None:
+            self.vim_status.msg_label = self._msg_label
         if self.vim_status.cursor.get_editor():
             self.to_normal()
         self.vim_status.set_message("")
@@ -488,7 +502,9 @@ class VimWidget(QWidget):
 
         self.vim_shortcut = VimShortcut(self.main, self.vim_status)
 
-        self.commandline = VimLineEdit(self, self.vim_status, self.vim_shortcut)
+        self.commandline = VimLineEdit(
+            self, self.vim_status, self.vim_shortcut, self.msg_label
+        )
         self.commandline.textChanged.connect(self.on_text_changed)
 
         self.vim_status.cmd_line = self.commandline

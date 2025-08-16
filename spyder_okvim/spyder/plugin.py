@@ -24,7 +24,13 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import (
+    VimPane,
+    VimWidget,
+    VimLineEdit,
+    VimStateLabel,
+    VimMessageLabel,
+)
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -154,8 +160,16 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
+        status_bar_widget.set_layout()
 
-        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        self._statusbar = statusbar
+        self._statusbar_widget = status_bar_widget
+        self._window_cmd_widgets = {}
+        self._esc_shortcuts = {}
+
+        editor_plugin = vim_cmd.editor_widget
+        editor_widget = editor_plugin.get_widget()
+        editorsplitter = editor_widget.editorsplitter
 
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
@@ -163,6 +177,23 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._esc_shortcuts[editor_widget] = esc_shortcut
+
+        # Track docking state changes
+        if hasattr(editor_plugin, "dockwidget"):
+            editor_plugin.dockwidget.topLevelChanged.connect(
+                self._on_top_level_changed
+            )
+
+        # Track creation of new editor windows
+        if hasattr(editor_widget, "register_editorwindow"):
+            orig_register = editor_widget.register_editorwindow
+
+            def register_editorwindow(window, orig=orig_register):
+                orig(window)
+                self._add_editor_window(window)
+
+            editor_widget.register_editorwindow = register_editorwindow
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
@@ -199,3 +230,70 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Private helpers -------------------------------------------------
+    def _create_cmd_widget(self, parent):
+        """Create a command line widget for a given parent window."""
+        vim_cmd = self.get_widget().vim_cmd
+
+        msg_label = VimMessageLabel("", parent)
+        status_label = VimStateLabel(parent)
+        vim_cmd.vim_status.change_label.connect(status_label.change_state)
+
+        cmd_line = VimLineEdit(
+            parent, vim_cmd.vim_status, vim_cmd.vim_shortcut, msg_label
+        )
+        cmd_line.textChanged.connect(vim_cmd.on_text_changed)
+
+        widget = StatusBarVimWidget(parent, msg_label, status_label, cmd_line)
+        widget.set_layout()
+        return widget, cmd_line
+
+    def _add_editor_window(self, window):
+        """Add command line widgets to a new editor window."""
+        widget, cmd_line = self._create_cmd_widget(window)
+        window.statusBar().addPermanentWidget(widget)
+        shortcut = QShortcut(QKeySequence("Esc"), window.editorwidget.editorsplitter, cmd_line.setFocus)
+        shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._window_cmd_widgets[window] = widget
+        self._esc_shortcuts[window] = shortcut
+        window.destroyed.connect(lambda: self._remove_window(window))
+
+    def _remove_window(self, window):
+        """Remove command line widgets from a closed editor window."""
+        widget = self._window_cmd_widgets.pop(window, None)
+        esc = self._esc_shortcuts.pop(window, None)
+        if widget is not None:
+            widget.setParent(None)
+            widget.deleteLater()
+        if esc is not None:
+            esc.setParent(None)
+
+    def _on_top_level_changed(self, floating):
+        """Handle docking state changes of the main editor dockwidget."""
+        editor_widget = self.get_widget().vim_cmd.editor_widget.get_widget()
+        if floating:
+            # Move command line from status bar to the floating window
+            self._statusbar.remove_status_widget(self._statusbar_widget.ID)
+            widget, cmd_line = self._create_cmd_widget(editor_widget)
+            editor_widget.layout().addWidget(widget)
+            shortcut = QShortcut(
+                QKeySequence("Esc"),
+                editor_widget.editorsplitter,
+                cmd_line.setFocus,
+            )
+            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            self._window_cmd_widgets[editor_widget] = widget
+            self._esc_shortcuts[editor_widget] = shortcut
+        else:
+            # Restore command line to main status bar
+            widget = self._window_cmd_widgets.pop(editor_widget, None)
+            esc = self._esc_shortcuts.get(editor_widget)
+            if widget is not None:
+                editor_widget.layout().removeWidget(widget)
+                widget.setParent(None)
+                widget.deleteLater()
+            if esc is not None:
+                esc.setParent(None)
+            self._statusbar.add_status_widget(self._statusbar_widget)
+            self._statusbar_widget.set_layout()
