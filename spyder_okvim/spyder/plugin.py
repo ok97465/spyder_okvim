@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QVBoxLayout
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -167,6 +167,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if not running_in_pytest():
             self._window_cmdlines = {self._main: vim_cmd.commandline}
             self._window_shortcuts = {self._main: esc_shortcut}
+            app = QCoreApplication.instance()
+            app.focusChanged.connect(self._on_app_focus_changed)
             editor_widget = vim_cmd.editor_widget.get_widget()
             if hasattr(editor_widget, "sig_editor_focus_changed"):
                 editor_widget.sig_editor_focus_changed.connect(
@@ -179,12 +181,24 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         vim_cmd = self.get_widget().vim_cmd
         cmd_line = VimLineEdit(vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut)
         cmd_line.textChanged.connect(vim_cmd.on_text_changed)
-        statusbar = window.statusBar()
-        statusbar.addPermanentWidget(cmd_line)
-        editorsplitter = window.editorwidget.editorsplitter
+
+        if hasattr(window, "statusBar") and window.statusBar() is not None:
+            window.statusBar().addPermanentWidget(cmd_line)
+            esc_parent = getattr(
+                getattr(window, "editorwidget", None), "editorsplitter", window
+            )
+        else:
+            parent = window.widget() if hasattr(window, "widget") and window.widget() else window
+            layout = parent.layout()
+            if layout is None:
+                layout = QVBoxLayout(parent)
+                parent.setLayout(layout)
+            layout.addWidget(cmd_line)
+            esc_parent = parent
+
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
-            editorsplitter,
+            esc_parent,
             cmd_line.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
@@ -233,13 +247,14 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if editor is None:
             return
         window = editor.window()
-        if not hasattr(window, "statusBar") or not hasattr(window, "editorwidget"):
-            self._activate_cmdline(self._window_cmdlines[self._main])
-            return
         cmd_line = self._window_cmdlines.get(window)
         if cmd_line is None:
             cmd_line = self._create_cmdline_for_window(window)
         self._activate_cmdline(cmd_line)
+
+    def _on_app_focus_changed(self, _old, _new):
+        """React to application-wide focus changes."""
+        self._on_editor_focus_changed()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
