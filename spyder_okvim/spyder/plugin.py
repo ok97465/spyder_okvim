@@ -161,10 +161,16 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
+        # Install a single shortcut on the editor splitter.  This shortcut is
+        # reparented by Qt when the editor window is undocked or moved to a new
+        # window so we can use it to trigger the appropriate command line in
+        # any window that hosts the editors.  The actual focus handling is
+        # performed by :meth:`_focus_cmdline` which creates per-window command
+        # line widgets on demand.
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
-            vim_cmd.commandline.setFocus,
+            self._focus_cmdline,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
@@ -180,6 +186,23 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.editor_widget.dockwidget.topLevelChanged.connect(
                 lambda _checked: self._ensure_cmdline_for_window()
             )
+
+    def _focus_cmdline(self) -> None:
+        """Focus the command line for the active editor window."""
+        self._ensure_cmdline_for_window()
+
+        vim_cmd = self.get_widget().vim_cmd
+        editorstack = vim_cmd.vim_status.get_editorstack()
+        if editorstack is None:
+            return
+
+        window = editorstack.window()
+        if window is self._main:
+            vim_cmd.commandline.setFocus()
+        else:
+            cmd = self._extra_cmdlines.get(window)
+            if cmd is not None:
+                cmd.setFocus()
 
     def _ensure_cmdline_for_window(self) -> None:
         """Create a command line for the currently focused editor window."""
@@ -206,10 +229,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             if layout is not None:
                 layout.addWidget(cmd)
 
-        esc_shortcut = QShortcut(QKeySequence("Esc"), window, cmd.setFocus)
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-
-        self._extra_cmdlines[window] = (cmd, esc_shortcut)
+        self._extra_cmdlines[window] = cmd
         window.destroyed.connect(
             lambda _obj=None, w=window: self._extra_cmdlines.pop(w, None)
         )
