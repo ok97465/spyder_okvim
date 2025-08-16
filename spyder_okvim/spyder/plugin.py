@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QApplication
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -24,7 +24,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget, VimLineEdit
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -145,24 +145,70 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
-        status_bar_widget = StatusBarVimWidget(
+        # Status bar widget used when the editor is docked in the main window
+        self._status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
             vim_cmd.status_label,
             vim_cmd.commandline,
         )
 
-        statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
+        self._statusbar = self.get_plugin(Plugins.StatusBar)
+        self._statusbar.add_status_widget(self._status_bar_widget)
+        self._extra_cmdlines = {}
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
-            vim_cmd.commandline.setFocus,
+            self._focus_cmdline,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        # Track undocking/docking of the Editor plugin and new windows to
+        # create or remove additional command lines.
+        editor_plugin = vim_cmd.editor_widget
+        dockwidget = getattr(editor_plugin, "dockwidget", None)
+        if dockwidget is not None:
+            dockwidget.topLevelChanged.connect(self._update_cmdline_location)
+
+        for sig_name in (
+            "sig_update_ancestor_requested",
+            "sig_toggle_view_changed",
+            "sig_editor_focus_changed",
+        ):
+            signal = getattr(editor_plugin, sig_name, None)
+            if signal is not None:
+                signal.connect(self._update_cmdline_location)
+
+    def _update_cmdline_location(self) -> None:
+        """Add or remove extra command line based on editor window."""
+        editor_widget = self.get_widget().vim_cmd.editor_widget.get_widget()
+        window = editor_widget.window()
+        if window is self._main:
+            extra = self._extra_cmdlines.pop(editor_widget, None)
+            if extra is not None:
+                editor_widget.layout().removeWidget(extra)
+                extra.deleteLater()
+        else:
+            if editor_widget not in self._extra_cmdlines:
+                vim_cmd = self.get_widget().vim_cmd
+                extra_cmd = VimLineEdit(vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut)
+                extra_cmd.textChanged.connect(
+                    lambda txt, cmd=extra_cmd: vim_cmd.process_command(txt, cmd)
+                )
+                editor_widget.layout().addWidget(extra_cmd)
+                self._extra_cmdlines[editor_widget] = extra_cmd
+
+    def _focus_cmdline(self) -> None:
+        """Focus command line only when an editor has focus."""
+        vim_cmd = self.get_widget().vim_cmd
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        fw = QApplication.focusWidget()
+        if fw is not None and (fw is editor_widget or editor_widget.isAncestorOf(fw)):
+            cmd_line = self._extra_cmdlines.get(editor_widget, vim_cmd.commandline)
+            cmd_line.setFocus()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
