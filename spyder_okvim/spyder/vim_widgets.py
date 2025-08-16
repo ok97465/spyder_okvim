@@ -415,6 +415,8 @@ class VimLineEdit(QLineEdit):
         if self.vim_status.cursor.get_editor():
             self.to_normal()
         self.vim_status.set_message("")
+        # Keep track of the command line currently receiving focus so that
+        # helpers know where to send output or shortcuts.
         self.vim_status.cmd_line = self
         self.vim_shortcut.cmd_line = self
 
@@ -533,7 +535,15 @@ class VimWidget(QWidget):
         self.leader_key = leader_key
         self.executor_leader_key.set_easymotion_key(self.leader_key)
     def process_command(self, txt: str, cmd_line: QLineEdit) -> None:
-        """Process input command from a command line."""
+        """Process an input command coming from a command line widget.
+
+        Parameters
+        ----------
+        txt: str
+            Text entered by the user.
+        cmd_line: QLineEdit
+            Command line that emitted the text change.
+        """
         if not txt:
             return
 

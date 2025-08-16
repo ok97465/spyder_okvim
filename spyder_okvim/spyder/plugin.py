@@ -9,9 +9,9 @@
 
 # Third Party Libraries
 import qtawesome as qta
-from qtpy.QtCore import Qt, Signal, QCoreApplication, QEvent
-from qtpy.QtGui import QKeySequence, QKeyEvent
-from qtpy.QtWidgets import QHBoxLayout, QShortcut, QApplication
+from qtpy.QtCore import Qt, Signal, QCoreApplication
+from qtpy.QtGui import QKeySequence
+from qtpy.QtWidgets import QHBoxLayout, QShortcut
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -24,7 +24,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget, VimLineEdit
+from spyder_okvim.spyder.vim_widgets import VimPane, VimLineEdit
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -145,82 +145,48 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
-        # Status bar widget used when the editor is docked in the main window
+        # Status bar widget used when the editor is docked in the main window.
         self._status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
             vim_cmd.status_label,
             vim_cmd.commandline,
         )
+        statusbar = self.get_plugin(Plugins.StatusBar)
+        statusbar.add_status_widget(self._status_bar_widget)
 
-        self._statusbar = self.get_plugin(Plugins.StatusBar)
-        self._statusbar.add_status_widget(self._status_bar_widget)
+        # Extra command line shown when the editor is undocked from the main
+        # window. It is created on demand and removed when the editor is
+        # docked again.
+        self._undocked_cmdline = None
 
-        # Mapping of editor widgets to their extra command line
-        self._extra_cmdlines = {}
-
-        # Global Esc shortcut only focuses the command line when an editor has
-        # focus. This avoids having to install shortcuts on every editor
-        # widget and ensures that new windows work on the first Esc press.
+        # Shortcut to focus the active command line.  The shortcut is installed
+        # on the editor splitter so it continues to work when the editor is
+        # undocked.  This keeps Esc behaviour local to the editor and avoids
+        # interfering with other panes.
+        editor_splitter = vim_cmd.editor_widget.get_widget().editorsplitter
         self._esc_shortcut = QShortcut(
-            QKeySequence("Esc"), self._main, self._handle_escape
+            QKeySequence("Esc"), editor_splitter, self._focus_cmdline
         )
-        self._esc_shortcut.setContext(Qt.ApplicationShortcut)
+        self._esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
-        # Track undocking/docking of the Editor plugin and new windows to
-        # create or remove additional command lines.
-        editor_plugin = vim_cmd.editor_widget
-        dockwidget = getattr(editor_plugin, "dockwidget", None)
+        # Monitor the docking state of the editor to create or remove the
+        # additional command line for undocked windows.
+        dockwidget = getattr(vim_cmd.editor_widget, "dockwidget", None)
         if dockwidget is not None:
-            dockwidget.topLevelChanged.connect(self._update_cmdline_location)
+            dockwidget.topLevelChanged.connect(self._update_cmdline_for_undock)
 
-        for sig_name in (
-            "sig_update_ancestor_requested",
-            "sig_toggle_view_changed",
-            "sig_editor_focus_changed",
-        ):
-            signal = getattr(editor_plugin, sig_name, None)
-            if signal is not None:
-                signal.connect(self._update_cmdline_location)
+    def _focus_cmdline(self) -> None:
+        """Focus the active Vim command line."""
+        cmd_line = self._undocked_cmdline or self.get_widget().vim_cmd.commandline
+        cmd_line.setFocus()
 
-        # Ensure the command line follows focus changes across windows so that
-        # newly created editor windows get their extra command line.
-        QApplication.instance().focusChanged.connect(self._update_cmdline_location)
-
-    def _update_cmdline_location(self, *_args) -> None:
-        """Add or remove extra command line based on editor window."""
+    def _update_cmdline_for_undock(self, top_level: bool) -> None:
+        """Create or remove the extra command line when undocking the editor."""
         vim_cmd = self.get_widget().vim_cmd
-
-        focus = QApplication.focusWidget()
-        window = focus.window() if focus is not None else QApplication.activeWindow()
-        if window is None:
-            return
-
-        if window is self._main:
-            editor_widget = vim_cmd.editor_widget.get_widget()
-            extra = self._extra_cmdlines.pop(editor_widget, None)
-            if extra is not None:
-                editor_widget.layout().removeWidget(extra)
-                extra.deleteLater()
-            return
-
-        if hasattr(window, "editorwidget"):
-            editor_widget = window.editorwidget
-            if editor_widget not in self._extra_cmdlines:
-                extra_cmd = VimLineEdit(
-                    vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut
-                )
-                extra_cmd.textChanged.connect(
-                    lambda txt, cmd=extra_cmd: vim_cmd.process_command(txt, cmd)
-                )
-                window.statusBar().addPermanentWidget(extra_cmd)
-                self._extra_cmdlines[editor_widget] = extra_cmd
-                editor_widget.destroyed.connect(
-                    lambda _=None, ew=editor_widget: self._cleanup_editor_widget(ew)
-                )
-        else:
-            editor_widget = vim_cmd.editor_widget.get_widget()
-            if editor_widget not in self._extra_cmdlines:
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        if top_level:
+            if self._undocked_cmdline is None:
                 extra_cmd = VimLineEdit(
                     vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut
                 )
@@ -228,46 +194,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
                     lambda txt, cmd=extra_cmd: vim_cmd.process_command(txt, cmd)
                 )
                 editor_widget.layout().addWidget(extra_cmd)
-                self._extra_cmdlines[editor_widget] = extra_cmd
-                editor_widget.destroyed.connect(
-                    lambda _=None, ew=editor_widget: self._cleanup_editor_widget(ew)
-                )
-
-    def _handle_escape(self) -> None:
-        """Focus the appropriate command line when Esc is pressed."""
-        vim_cmd = self.get_widget().vim_cmd
-        self._update_cmdline_location()
-        editorstack = vim_cmd.vim_status.get_editorstack()
-        if editorstack is None:
-            return
-        editor = editorstack.get_current_editor()
-        focus = QApplication.focusWidget()
-        if editor is None or focus is None:
-            return
-        if isinstance(focus, VimLineEdit):
-            self._esc_shortcut.setEnabled(False)
-            try:
-                event = QKeyEvent(QEvent.KeyPress, Qt.Key_Escape, Qt.NoModifier)
-                QApplication.sendEvent(focus, event)
-            finally:
-                self._esc_shortcut.setEnabled(True)
-            return
-        # Only handle Esc when the focus is inside the editor stack
-        if focus is not editor and not editor.isAncestorOf(focus):
-            return
-        window = focus.window()
-        if window is self._main:
-            editor_widget = vim_cmd.editor_widget.get_widget()
-        elif hasattr(window, "editorwidget"):
-            editor_widget = window.editorwidget
+                self._undocked_cmdline = extra_cmd
         else:
-            editor_widget = vim_cmd.editor_widget.get_widget()
-        cmd_line = self._extra_cmdlines.get(editor_widget, vim_cmd.commandline)
-        cmd_line.setFocus()
-
-    def _cleanup_editor_widget(self, editor_widget):
-        """Remove shortcuts and command lines for a destroyed editor widget."""
-        self._extra_cmdlines.pop(editor_widget, None)
+            if self._undocked_cmdline is not None:
+                editor_widget.layout().removeWidget(self._undocked_cmdline)
+                self._undocked_cmdline.deleteLater()
+                self._undocked_cmdline = None
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
