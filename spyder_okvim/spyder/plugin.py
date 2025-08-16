@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QWidget
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -24,7 +24,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget, VimLineEdit
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -145,24 +145,108 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
-        status_bar_widget = StatusBarVimWidget(
+        # Status bar widget used when the editor is docked in the main window
+        self.status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
             vim_cmd.status_label,
             vim_cmd.commandline,
         )
-
         statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
+        statusbar.add_status_widget(self.status_bar_widget)
 
+        # Shortcut to focus the command line when pressing Esc inside the
+        # editor. Limit the shortcut scope to the editor stack so other panes
+        # receive the Esc key normally.
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
-
-        esc_shortcut = QShortcut(
+        self.esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
             vim_cmd.commandline.setFocus,
         )
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        # Keep a reference to the default command line for docked mode
+        self._docked_cmdline = vim_cmd.commandline
+
+        # Handle undocking and creation of new editor windows
+        editor = vim_cmd.editor_widget
+        dockwidget = getattr(editor, "dockwidget", None)
+        if dockwidget is not None:
+            dockwidget.topLevelChanged.connect(self._handle_dock_state)
+        if hasattr(editor, "create_new_window"):
+            self._orig_create_new_window = editor.create_new_window
+            editor.create_new_window = self._create_new_window_with_vim
+        else:
+            self._orig_create_new_window = None
+
+        # Containers for dynamically created widgets
+        self._floating_cmdline = None
+        self._floating_esc = None
+        self._extra_windows = {}
+
+    # ---- Helpers ------------------------------------------------------------
+    def _handle_dock_state(self, floating: bool) -> None:
+        """Create or remove a standalone command line for floating editor."""
+        vim_cmd = self.get_widget().vim_cmd
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        if floating:
+            # Hide status bar widget and create a new command line in the
+            # floating editor window.
+            self.status_bar_widget.setVisible(False)
+            cmd = VimLineEdit(vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut)
+            cmd.textChanged.connect(vim_cmd.on_text_changed)
+            container = QWidget(editor_widget)
+            layout = QHBoxLayout(container)
+            layout.setContentsMargins(5, 0, 5, 5)
+            layout.addWidget(cmd)
+            container.setLayout(layout)
+            editor_widget.layout().addWidget(container)
+            vim_cmd.commandline = cmd
+            vim_cmd.vim_status.cmd_line = cmd
+            vim_cmd.vim_shortcut.cmd_line = cmd
+            self._floating_cmdline = container
+            self._floating_esc = QShortcut(
+                QKeySequence("Esc"),
+                editor_widget.editorsplitter,
+                cmd.setFocus,
+            )
+            self._floating_esc.setContext(Qt.WidgetWithChildrenShortcut)
+        else:
+            # Restore status bar widget and remove floating command line.
+            if self._floating_cmdline:
+                self._floating_cmdline.setParent(None)
+                self._floating_cmdline.deleteLater()
+                self._floating_cmdline = None
+            if self._floating_esc:
+                self._floating_esc.setParent(None)
+                self._floating_esc = None
+            vim_cmd.commandline = self._docked_cmdline
+            vim_cmd.vim_status.cmd_line = self._docked_cmdline
+            vim_cmd.vim_shortcut.cmd_line = self._docked_cmdline
+            self.status_bar_widget.setVisible(True)
+
+    def _create_new_window_with_vim(self, *args, **kwargs):
+        """Wrapper around Editor.create_new_window to add a command line."""
+        win = self._orig_create_new_window(*args, **kwargs)
+        vim_cmd = VimWidget(self.get_plugin(Plugins.Editor), self._main)
+        vim_cmd.setParent(win)
+        cmd = vim_cmd.commandline
+        container = QWidget(win.editorwidget)
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(5, 0, 5, 5)
+        layout.addWidget(cmd)
+        container.setLayout(layout)
+        win.editorwidget.layout().addWidget(container)
+        esc = QShortcut(
+            QKeySequence("Esc"),
+            win.editorwidget.editorsplitter,
+            cmd.setFocus,
+        )
+        esc.setContext(Qt.WidgetWithChildrenShortcut)
+        self._extra_windows[win] = (vim_cmd, esc, container)
+        win.destroyed.connect(lambda: self._extra_windows.pop(win, None))
+        return win
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
