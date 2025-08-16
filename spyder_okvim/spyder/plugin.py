@@ -191,7 +191,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Add or remove extra command line based on editor window."""
         vim_cmd = self.get_widget().vim_cmd
 
-        window = QApplication.activeWindow()
+        focus = QApplication.focusWidget()
+        window = focus.window() if focus is not None else QApplication.activeWindow()
         if window is None:
             return
 
@@ -254,7 +255,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         # Only handle Esc when the focus is inside the editor stack
         if focus is not editor and not editor.isAncestorOf(focus):
             return
-        window = QApplication.activeWindow()
+        window = focus.window()
         if window is self._main:
             editor_widget = vim_cmd.editor_widget.get_widget()
         elif hasattr(window, "editorwidget"):
