@@ -474,17 +474,17 @@ class MacroPlaybackWorker(QThread):
 class VimWidget(QWidget):
     """Vim widget."""
 
-    def __init__(self, editor_widget, main):
+    def __init__(self, editor_widget, main, with_labels: bool = True):
         super().__init__(main)
         self.editor_widget = editor_widget
         self.main = main
-        self.status_label = VimStateLabel(main)
-        self.msg_label = VimMessageLabel("", main)
+        self.status_label = VimStateLabel(main) if with_labels else None
+        self.msg_label = VimMessageLabel("", main) if with_labels else None
 
         self.vim_status = VimStatus(editor_widget, main, self.msg_label)
-        # # Avoid Qt crashes if the label is deleted by ignoring the signal
-        # self.vim_status.change_label.connect(lambda state: None)
-        self.vim_status.change_label.connect(self.status_label.change_state)
+        if self.status_label is not None:
+            # self.vim_status.change_label.connect(lambda state: None)
+            self.vim_status.change_label.connect(self.status_label.change_state)
 
         self.vim_shortcut = VimShortcut(self.main, self.vim_status)
 

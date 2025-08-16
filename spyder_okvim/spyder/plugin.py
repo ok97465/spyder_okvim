@@ -108,7 +108,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     focus_changed = Signal()
     NAME = CONF_SECTION
-    REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
+    REQUIRES = [Plugins.StatusBar, Plugins.Preferences, Plugins.Editor]
     OPTIONAL = []
     WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION
@@ -144,16 +144,23 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def on_initialize(self) -> None:
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
+        self._vim_cmd = vim_cmd
 
-        status_bar_widget = StatusBarVimWidget(
-            self._main,
-            vim_cmd.msg_label,
-            vim_cmd.status_label,
-            vim_cmd.commandline,
-        )
+        if vim_cmd.msg_label is not None and vim_cmd.status_label is not None:
+            status_bar_widget = StatusBarVimWidget(
+                self._main,
+                vim_cmd.msg_label,
+                vim_cmd.status_label,
+                vim_cmd.commandline,
+            )
 
-        statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
+            statusbar = self.get_plugin(Plugins.StatusBar)
+            statusbar.add_status_widget(status_bar_widget)
+            self.status_bar_widget = status_bar_widget
+            self.statusbar = statusbar
+        else:
+            self.status_bar_widget = None
+            self.statusbar = None
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
@@ -163,6 +170,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        if not running_in_pytest():
+            self._setup_window_hooks()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
@@ -199,3 +208,75 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Private helpers -------------------------------------------------
+    def _setup_window_hooks(self) -> None:
+        """Install hooks to handle undocked and new editor windows."""
+        editor = self.get_plugin(Plugins.Editor, error=False)
+        if editor is None or not hasattr(editor, "create_window"):
+            return
+
+        # Patch editor.create_window for undock action
+        orig_create_window = editor.create_window
+
+        def create_window_wrapper(*args, **kwargs):
+            res = orig_create_window(*args, **kwargs)
+            window = getattr(editor, "_undocked_window", None)
+            if window is not None:
+                self._add_cmd_to_window(window)
+            return res
+
+        editor.create_window = create_window_wrapper
+
+        # Patch editor.close_window to restore status bar command line
+        orig_close_window = editor.close_window
+
+        def close_window_wrapper(*args, **kwargs):
+            res = orig_close_window(*args, **kwargs)
+            self._restore_statusbar_cmd()
+            return res
+
+        editor.close_window = close_window_wrapper
+
+        # Patch creation of additional editor windows (New Window)
+        main_widget = editor.get_widget()
+        orig_new_window = main_widget.create_new_window
+
+        def create_new_window_wrapper(*args, **kwargs):
+            window = orig_new_window(*args, **kwargs)
+            self._setup_new_editor_window(window)
+            return window
+
+        main_widget.create_new_window = create_new_window_wrapper
+
+        self._extra_vim_cmds = []
+
+    def _add_cmd_to_window(self, window) -> None:
+        """Move main command line to an undocked editor window."""
+        try:
+            self.statusbar.remove_status_widget(self.status_bar_widget.ID)
+        except Exception:
+            pass
+
+        window.statusBar().addPermanentWidget(self._vim_cmd.commandline)
+
+    def _restore_statusbar_cmd(self) -> None:
+        """Restore command line to main window status bar."""
+        self.status_bar_widget.cmd_line = self._vim_cmd.commandline
+        self.status_bar_widget.set_layout()
+        try:
+            self.statusbar.add_status_widget(self.status_bar_widget)
+        except Exception:
+            pass
+
+    def _setup_new_editor_window(self, window) -> None:
+        """Create a command line for a new editor window."""
+        vim_cmd = VimWidget(self._vim_cmd.editor_widget, self._main, with_labels=False)
+        window.statusBar().addPermanentWidget(vim_cmd.commandline)
+        shortcut = QShortcut(
+            QKeySequence("Esc"),
+            window.editorwidget.editorsplitter,
+            vim_cmd.commandline.setFocus,
+        )
+        shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._extra_vim_cmds.append((vim_cmd, shortcut))

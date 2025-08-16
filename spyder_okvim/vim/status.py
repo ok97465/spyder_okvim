@@ -31,14 +31,14 @@ class VimStatus(QObject):
     change_label = Signal(int)
 
     def __init__(
-        self, editor_widget: QWidget, main: QWidget, msg_label: QLabel
+        self, editor_widget: QWidget, main: QWidget, msg_label: QLabel | None
     ) -> None:
         """Initialize the status object.
 
         Args:
             editor_widget: Editor plugin used to access the current editor.
             main: Main Spyder window.
-            msg_label: Label widget used to display status messages.
+            msg_label: Label widget used to display status messages, if any.
         """
         super().__init__()
         self.is_visual_mode = False
@@ -169,7 +169,8 @@ class VimStatus(QObject):
         # Macro
         self.manager_macro = MacroManager()
 
-        self.msg_label.setText("")
+        if self.msg_label is not None:
+            self.msg_label.setText("")
 
         # bookmarks
         self.bookmark_manager.clear()
@@ -436,7 +437,8 @@ class VimStatus(QObject):
 
     def set_message(self, msg, duration_ms=-1):
         """Display ``msg`` in the status bar."""
-        self.msg_label.setText(f"{self.msg_prefix}{msg}")
+        if self.msg_label is not None:
+            self.msg_label.setText(f"{self.msg_prefix}{msg}")
 
     def start_recording_macro(self, reg_name):
         """Start recording macro."""
