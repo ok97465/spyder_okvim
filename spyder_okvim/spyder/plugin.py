@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QWidget
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -103,6 +103,20 @@ class StatusBarVimWidget(StatusBarWidget):
         return None
 
 
+class EditorVimWidget(QWidget):
+    """Widget to host Vim controls when the editor is undocked."""
+
+    def __init__(self, msg_label, status_label, cmd_line, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 0, 5, 5)
+        layout.setSpacing(5)
+        layout.addWidget(msg_label)
+        layout.addWidget(status_label)
+        layout.addWidget(cmd_line)
+        self.setLayout(layout)
+
+
 class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     """Implements a Vim-like command mode."""
 
@@ -145,17 +159,25 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
-        status_bar_widget = StatusBarVimWidget(
+        self.status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
             vim_cmd.status_label,
             vim_cmd.commandline,
         )
+        self.status_bar_widget.set_layout()
 
         statusbar = self.get_plugin(Plugins.StatusBar)
-        statusbar.add_status_widget(status_bar_widget)
+        statusbar.add_status_widget(self.status_bar_widget)
 
-        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        self.editor_cmd_widget = None
+
+        editor_plugin = vim_cmd.editor_widget
+        editor_plugin.dockwidget.topLevelChanged.connect(
+            self._on_editor_top_level_changed
+        )
+
+        editorsplitter = editor_plugin.get_widget().editorsplitter
 
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
@@ -163,6 +185,39 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+    def _on_editor_top_level_changed(self, floating):
+        """Switch command line widget depending on editor docking state."""
+        statusbar = self.get_plugin(Plugins.StatusBar)
+        editor_widget = self.vim_cmd.editor_widget.get_widget()
+
+        if floating:
+            try:
+                statusbar.remove_status_widget(self.status_bar_widget)
+            except Exception:
+                self.status_bar_widget.setParent(None)
+
+            self.editor_cmd_widget = EditorVimWidget(
+                self.vim_cmd.msg_label,
+                self.vim_cmd.status_label,
+                self.vim_cmd.commandline,
+                editor_widget,
+            )
+            editor_widget.layout().addWidget(self.editor_cmd_widget)
+        else:
+            if self.editor_cmd_widget is not None:
+                self.editor_cmd_widget.setParent(None)
+                self.editor_cmd_widget.deleteLater()
+                self.editor_cmd_widget = None
+
+            self.status_bar_widget = StatusBarVimWidget(
+                self._main,
+                self.vim_cmd.msg_label,
+                self.vim_cmd.status_label,
+                self.vim_cmd.commandline,
+            )
+            self.status_bar_widget.set_layout()
+            statusbar.add_status_widget(self.status_bar_widget)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
