@@ -156,20 +156,16 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._statusbar = self.get_plugin(Plugins.StatusBar)
         self._statusbar.add_status_widget(self._status_bar_widget)
 
-        # Mapping of editor widgets to their extra command line and ESC shortcut
+        # Mapping of editor widgets to their extra command line
         self._extra_cmdlines = {}
+        # Track Esc shortcuts per editor widget
+        self._esc_shortcuts = {}
 
         editor_widget = vim_cmd.editor_widget.get_widget()
-        editorsplitter = editor_widget.editorsplitter
-
-        # Ensure the main editor window installs an Esc shortcut to focus the
-        # shared command line.
-        esc_shortcut = QShortcut(
-            QKeySequence("Esc"),
-            editorsplitter,
-            lambda ew=editor_widget: self._focus_cmdline(ew),
-        )
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        # Ensure the main editor installs an Esc shortcut to focus its command
+        # line. Additional editor windows will get their own shortcuts on
+        # demand when they trigger a location update.
+        self._ensure_shortcut(editor_widget)
 
         # Track undocking/docking of the Editor plugin and new windows to
         # create or remove additional command lines.
@@ -190,14 +186,15 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def _update_cmdline_location(self) -> None:
         """Add or remove extra command line based on editor window."""
         editor_widget = self.get_widget().vim_cmd.editor_widget.get_widget()
+        # Ensure this editor widget has an Esc shortcut installed
+        self._ensure_shortcut(editor_widget)
+
         window = editor_widget.window()
         if window is self._main:
             extra = self._extra_cmdlines.pop(editor_widget, None)
             if extra is not None:
-                cmd_line, esc_shortcut = extra
-                editor_widget.layout().removeWidget(cmd_line)
-                cmd_line.deleteLater()
-                esc_shortcut.deleteLater()
+                editor_widget.layout().removeWidget(extra)
+                extra.deleteLater()
         else:
             if editor_widget not in self._extra_cmdlines:
                 vim_cmd = self.get_widget().vim_cmd
@@ -208,21 +205,26 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
                     lambda txt, cmd=extra_cmd: vim_cmd.process_command(txt, cmd)
                 )
                 editor_widget.layout().addWidget(extra_cmd)
-                esc_shortcut = QShortcut(
-                    QKeySequence("Esc"),
-                    editor_widget.editorsplitter,
-                    lambda ew=editor_widget: self._focus_cmdline(ew),
-                )
-                esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-                self._extra_cmdlines[editor_widget] = (extra_cmd, esc_shortcut)
+                self._extra_cmdlines[editor_widget] = extra_cmd
 
     def _focus_cmdline(self, editor_widget=None) -> None:
         """Focus the command line for the given editor widget."""
         vim_cmd = self.get_widget().vim_cmd
         if editor_widget is None:
             editor_widget = vim_cmd.editor_widget.get_widget()
-        cmd_line = self._extra_cmdlines.get(editor_widget, (vim_cmd.commandline,))[0]
+        cmd_line = self._extra_cmdlines.get(editor_widget, vim_cmd.commandline)
         cmd_line.setFocus()
+
+    def _ensure_shortcut(self, editor_widget) -> None:
+        """Install an Esc shortcut for the given editor widget if needed."""
+        if editor_widget not in self._esc_shortcuts:
+            esc_shortcut = QShortcut(
+                QKeySequence("Esc"),
+                editor_widget.editorsplitter,
+                lambda ew=editor_widget: self._focus_cmdline(ew),
+            )
+            esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            self._esc_shortcuts[editor_widget] = esc_shortcut
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
