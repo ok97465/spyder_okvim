@@ -155,14 +155,19 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         self._statusbar = self.get_plugin(Plugins.StatusBar)
         self._statusbar.add_status_widget(self._status_bar_widget)
+
+        # Mapping of editor widgets to their extra command line and ESC shortcut
         self._extra_cmdlines = {}
 
-        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        editorsplitter = editor_widget.editorsplitter
 
+        # Ensure the main editor window installs an Esc shortcut to focus the
+        # shared command line.
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
             editorsplitter,
-            self._focus_cmdline,
+            lambda ew=editor_widget: self._focus_cmdline(ew),
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
@@ -189,26 +194,35 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if window is self._main:
             extra = self._extra_cmdlines.pop(editor_widget, None)
             if extra is not None:
-                editor_widget.layout().removeWidget(extra)
-                extra.deleteLater()
+                cmd_line, esc_shortcut = extra
+                editor_widget.layout().removeWidget(cmd_line)
+                cmd_line.deleteLater()
+                esc_shortcut.deleteLater()
         else:
             if editor_widget not in self._extra_cmdlines:
                 vim_cmd = self.get_widget().vim_cmd
-                extra_cmd = VimLineEdit(vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut)
+                extra_cmd = VimLineEdit(
+                    vim_cmd, vim_cmd.vim_status, vim_cmd.vim_shortcut
+                )
                 extra_cmd.textChanged.connect(
                     lambda txt, cmd=extra_cmd: vim_cmd.process_command(txt, cmd)
                 )
                 editor_widget.layout().addWidget(extra_cmd)
-                self._extra_cmdlines[editor_widget] = extra_cmd
+                esc_shortcut = QShortcut(
+                    QKeySequence("Esc"),
+                    editor_widget.editorsplitter,
+                    lambda ew=editor_widget: self._focus_cmdline(ew),
+                )
+                esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+                self._extra_cmdlines[editor_widget] = (extra_cmd, esc_shortcut)
 
-    def _focus_cmdline(self) -> None:
-        """Focus command line only when an editor has focus."""
+    def _focus_cmdline(self, editor_widget=None) -> None:
+        """Focus the command line for the given editor widget."""
         vim_cmd = self.get_widget().vim_cmd
-        editor_widget = vim_cmd.editor_widget.get_widget()
-        fw = QApplication.focusWidget()
-        if fw is not None and (fw is editor_widget or editor_widget.isAncestorOf(fw)):
-            cmd_line = self._extra_cmdlines.get(editor_widget, vim_cmd.commandline)
-            cmd_line.setFocus()
+        if editor_widget is None:
+            editor_widget = vim_cmd.editor_widget.get_widget()
+        cmd_line = self._extra_cmdlines.get(editor_widget, (vim_cmd.commandline,))[0]
+        cmd_line.setFocus()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
