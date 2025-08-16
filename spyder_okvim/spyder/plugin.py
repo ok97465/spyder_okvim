@@ -145,6 +145,10 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
+        # Keep track of extra command line widgets created for undocked or
+        # new editor windows.
+        self._extra_cmdlines = {}
+
         status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
@@ -163,6 +167,52 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        # Detect when focus moves to an editor in a different window or when
+        # the main editor dock widget changes its floating state so we can
+        # provide a dedicated command line for that window.
+        editor_mainwidget = vim_cmd.editor_widget.get_widget()
+        if hasattr(editor_mainwidget, "sig_editor_focus_changed"):
+            editor_mainwidget.sig_editor_focus_changed.connect(
+                self._ensure_cmdline_for_window
+            )
+        if hasattr(vim_cmd.editor_widget, "dockwidget"):
+            vim_cmd.editor_widget.dockwidget.topLevelChanged.connect(
+                lambda _checked: self._ensure_cmdline_for_window()
+            )
+
+    def _ensure_cmdline_for_window(self) -> None:
+        """Create a command line for the currently focused editor window."""
+        vim_cmd = self.get_widget().vim_cmd
+        editorstack = vim_cmd.vim_status.get_editorstack()
+        if editorstack is None:
+            return
+
+        window = editorstack.window()
+        # The main window already hosts a command line in its status bar.
+        if window is self._main or window in self._extra_cmdlines:
+            return
+
+        cmd = vim_cmd.create_cmd_line(window)
+
+        # Try to place the command line in the window's status bar if
+        # available; otherwise, add it to the window layout which covers
+        # floating dock widgets.
+        status_bar = getattr(window, "statusBar", None)
+        if callable(status_bar):
+            status_bar().addPermanentWidget(cmd)
+        else:
+            layout = window.layout()
+            if layout is not None:
+                layout.addWidget(cmd)
+
+        esc_shortcut = QShortcut(QKeySequence("Esc"), window, cmd.setFocus)
+        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        self._extra_cmdlines[window] = (cmd, esc_shortcut)
+        window.destroyed.connect(
+            lambda _obj=None, w=window: self._extra_cmdlines.pop(w, None)
+        )
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:

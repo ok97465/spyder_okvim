@@ -411,6 +411,15 @@ class VimLineEdit(QLineEdit):
     def focusInEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
+        # When multiple command line widgets are present (e.g. undocked
+        # editor windows), make sure that the focused line edit is the one
+        # used by the Vim status and shortcut objects.  This mirrors the
+        # previous behaviour where a single command line was always used but
+        # allows us to create one per window without keeping extra state in the
+        # plugin.
+        self.vim_widget.commandline = self
+        self.vim_status.cmd_line = self
+        self.vim_shortcut.cmd_line = self
         super().focusInEvent(event)
         if self.vim_status.cursor.get_editor():
             self.to_normal()
@@ -512,6 +521,32 @@ class VimWidget(QWidget):
         self.worker_macro = MacroPlaybackWorker(main)
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
+
+    def create_cmd_line(self, parent) -> VimLineEdit:
+        """Create an additional command line widget.
+
+        The returned widget behaves like the main command line used when the
+        editor is docked in Spyder's main window but it does not include any
+        message or status labels.  It is intended to be embedded in auxiliary
+        editor windows when they are undocked or created through *New
+        Window*.
+
+        Parameters
+        ----------
+        parent: QWidget
+            Parent widget that will own the line edit.
+
+        Returns
+        -------
+        VimLineEdit
+            A new command line widget connected to the shared Vim status and
+            shortcut objects.
+        """
+
+        cmd = VimLineEdit(self, self.vim_status, self.vim_shortcut)
+        cmd.setParent(parent)
+        cmd.textChanged.connect(self.on_text_changed)
+        return cmd
 
     @Slot(object)
     def send_key_event(self, key_info: KeyInfo) -> None:
