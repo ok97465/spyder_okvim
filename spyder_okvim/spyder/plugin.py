@@ -145,6 +145,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
 
+        # Create status bar widget to host Vim's command line
         status_bar_widget = StatusBarVimWidget(
             self._main,
             vim_cmd.msg_label,
@@ -155,7 +156,19 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
 
-        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        # Save references for later use when the editor is undocked
+        self._status_bar_widget = status_bar_widget
+        self._statusbar = statusbar
+        editor_widget = vim_cmd.editor_widget.get_widget()
+        self._editor_widget = editor_widget
+
+        # When the editor dockwidget is floated, move the command line to the
+        # editor layout so it remains usable in undocked windows.
+        dockwidget = getattr(editor_widget, "dockwidget", None)
+        if dockwidget is not None:
+            dockwidget.topLevelChanged.connect(self._on_editor_top_level_changed)
+
+        editorsplitter = editor_widget.editorsplitter
 
         esc_shortcut = QShortcut(
             QKeySequence("Esc"),
@@ -163,6 +176,29 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+    def _on_editor_top_level_changed(self, floating: bool) -> None:
+        """Handle moving the command line when the editor is undocked.
+
+        Parameters
+        ----------
+        floating: bool
+            Whether the editor dockwidget is floating (undocked).
+        """
+        editor_layout = getattr(self._editor_widget, "layout", lambda: None)()
+        if floating:
+            # Detach from status bar and place inside the editor window.
+            if self._status_bar_widget is not None:
+                self._status_bar_widget.setParent(None)
+            if editor_layout is not None:
+                editor_layout.addWidget(self._status_bar_widget)
+                self._status_bar_widget.set_layout()
+        else:
+            # Return to status bar when docked back to the main window.
+            if self._status_bar_widget is not None:
+                self._status_bar_widget.setParent(None)
+                self._statusbar.add_status_widget(self._status_bar_widget)
+                self._status_bar_widget.set_layout()
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
