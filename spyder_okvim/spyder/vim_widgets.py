@@ -621,29 +621,51 @@ class VimWidget(QWidget):
     def _ensure_cmdline(self, window: QWidget, editorstack) -> None:
         """Create a command line for ``window`` if missing."""
         if window in self.extra_cmdlines:
+            # Ensure an Esc shortcut exists even if the command line was
+            # created before the editorstack was available.
+            if window not in self.esc_shortcuts:
+                cmd_line = self.extra_cmdlines[window]
+                esc = QShortcut(QKeySequence("Esc"), window, cmd_line.setFocus)
+                esc.setContext(Qt.WidgetWithChildrenShortcut)
+                self.esc_shortcuts[window] = esc
             return
 
-        if isinstance(window, QMainWindow) and window.centralWidget() is not None:
-            parent = window.centralWidget()
+        if isinstance(window, QMainWindow):
+            parent = window
+            layout = None
         elif isinstance(window, QDockWidget) and window.widget() is not None:
             parent = window.widget()
+            layout = parent.layout()
+            if layout is None:
+                layout = QVBoxLayout(parent)
+                layout.setContentsMargins(0, 0, 0, 0)
+                parent.setLayout(layout)
         else:
             parent = window
-
-        layout = parent.layout()
-        if layout is None:
-            layout = QVBoxLayout(parent)
-            layout.setContentsMargins(0, 0, 0, 0)
-            parent.setLayout(layout)
+            layout = parent.layout()
+            if layout is None:
+                layout = QVBoxLayout(parent)
+                layout.setContentsMargins(0, 0, 0, 0)
+                parent.setLayout(layout)
 
         shortcut = VimShortcut(self.main, self.vim_status)
         cmd_line = VimLineEdit(self, self.vim_status, shortcut, parent=parent)
         cmd_line.textChanged.connect(self.on_text_changed)
-        layout.addWidget(cmd_line)
+
+        if isinstance(window, QMainWindow):
+            statusbar = window.statusBar()
+            statusbar.addWidget(cmd_line)
+            statusbar.show()
+        else:
+            layout.addWidget(cmd_line)
+            # Make existing editor widget take the remaining space
+            if layout.count() > 1:
+                layout.setStretch(layout.count() - 2, 1)
+
         shortcut.cmd_line = cmd_line
         self.extra_cmdlines[window] = cmd_line
 
-        esc = QShortcut(QKeySequence("Esc"), editorstack, cmd_line.setFocus)
+        esc = QShortcut(QKeySequence("Esc"), window, cmd_line.setFocus)
         esc.setContext(Qt.WidgetWithChildrenShortcut)
         self.esc_shortcuts[window] = esc
 
@@ -652,10 +674,10 @@ class VimWidget(QWidget):
     def _remove_cmdline(self, window: QWidget) -> None:
         """Remove command line associated with ``window``."""
         cmd = self.extra_cmdlines.pop(window, None)
-        if cmd is not None:
+        if cmd is not None and not _widget_is_deleted(cmd):
             cmd.deleteLater()
         esc = self.esc_shortcuts.pop(window, None)
-        if esc is not None:
+        if esc is not None and not _widget_is_deleted(esc):
             esc.deleteLater()
 
     def cleanup(self) -> None:
