@@ -17,7 +17,16 @@ from functools import wraps
 from qtpy import PYSIDE2, PYSIDE6, PYQT5
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
+from qtpy.QtWidgets import (
+    QDockWidget,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QShortcut,
+    QVBoxLayout,
+    QWidget,
+)
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
@@ -349,8 +358,28 @@ class VimStateLabel(QLabel):
 class VimLineEdit(QLineEdit):
     """Vim Command input."""
 
-    def __init__(self, vim_widget, vim_status: VimStatus, vim_shortcut: VimShortcut):
-        super().__init__(vim_widget)
+    def __init__(
+        self,
+        vim_widget,
+        vim_status: VimStatus,
+        vim_shortcut: VimShortcut,
+        parent: QWidget | None = None,
+    ):
+        """Create a command line widget.
+
+        Parameters
+        ----------
+        vim_widget: VimWidget
+            Parent Vim widget handling the state.
+        vim_status: VimStatus
+            Global Vim status object.
+        vim_shortcut: VimShortcut
+            Shortcut helper instance for this line edit.
+        parent: QWidget | None
+            Qt parent widget. Defaults to ``vim_widget`` to keep
+            backwards compatibility.
+        """
+        super().__init__(parent or vim_widget)
         self.vim_widget = vim_widget
         self.vim_status = vim_status
         self.vim_shortcut = vim_shortcut
@@ -411,6 +440,9 @@ class VimLineEdit(QLineEdit):
     def focusInEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
+        # Ensure the global status uses this command line
+        self.vim_status.cmd_line = self
+        self.vim_widget.vim_shortcut.cmd_line = self
         super().focusInEvent(event)
         if self.vim_status.cursor.get_editor():
             self.to_normal()
@@ -513,6 +545,10 @@ class VimWidget(QWidget):
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
 
+        # Additional command lines for floating or undocked editors
+        self.extra_cmdlines: dict[QWidget, VimLineEdit] = {}
+        self.esc_shortcuts: dict[QWidget, QShortcut] = {}
+
     @Slot(object)
     def send_key_event(self, key_info: KeyInfo) -> None:
         event = key_info.to_event()
@@ -561,6 +597,67 @@ class VimWidget(QWidget):
             self.worker_macro.start()
             mm.set_info_for_execute("", 0)
 
+    # ---- Window management -------------------------------------------------
+    def on_editor_focus_changed(self) -> None:
+        """Ensure a command line exists for the focused editor window."""
+        editorstack = self.vim_status.get_editorstack()
+        if editorstack is None:
+            return
+        window = editorstack.window()
+        if window is self.main:
+            # Status bar already provides the command line
+            return
+        self._ensure_cmdline(window, editorstack)
+
+    def on_top_level_changed(self, top_level: bool) -> None:
+        """Handle dock widget floating state changes."""
+        dock = self.editor_widget.dockwidget
+        if top_level:
+            editorstack = self.vim_status.get_editorstack()
+            self._ensure_cmdline(dock, editorstack)
+        else:
+            self._remove_cmdline(dock)
+
+    def _ensure_cmdline(self, window: QWidget, editorstack) -> None:
+        """Create a command line for ``window`` if missing."""
+        if window in self.extra_cmdlines:
+            return
+
+        if isinstance(window, QMainWindow) and window.centralWidget() is not None:
+            parent = window.centralWidget()
+        elif isinstance(window, QDockWidget) and window.widget() is not None:
+            parent = window.widget()
+        else:
+            parent = window
+
+        layout = parent.layout()
+        if layout is None:
+            layout = QVBoxLayout(parent)
+            layout.setContentsMargins(0, 0, 0, 0)
+            parent.setLayout(layout)
+
+        shortcut = VimShortcut(self.main, self.vim_status)
+        cmd_line = VimLineEdit(self, self.vim_status, shortcut, parent=parent)
+        cmd_line.textChanged.connect(self.on_text_changed)
+        layout.addWidget(cmd_line)
+        shortcut.cmd_line = cmd_line
+        self.extra_cmdlines[window] = cmd_line
+
+        esc = QShortcut(QKeySequence("Esc"), editorstack, cmd_line.setFocus)
+        esc.setContext(Qt.WidgetWithChildrenShortcut)
+        self.esc_shortcuts[window] = esc
+
+        window.destroyed.connect(lambda: self._remove_cmdline(window))
+
+    def _remove_cmdline(self, window: QWidget) -> None:
+        """Remove command line associated with ``window``."""
+        cmd = self.extra_cmdlines.pop(window, None)
+        if cmd is not None:
+            cmd.deleteLater()
+        esc = self.esc_shortcuts.pop(window, None)
+        if esc is not None:
+            esc.deleteLater()
+
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
         try:
@@ -575,5 +672,9 @@ class VimWidget(QWidget):
             self.commandline.deleteLater()
             self.status_label.deleteLater()
             self.msg_label.deleteLater()
+            for cmd in self.extra_cmdlines.values():
+                cmd.deleteLater()
+            for esc in self.esc_shortcuts.values():
+                esc.deleteLater()
 
 

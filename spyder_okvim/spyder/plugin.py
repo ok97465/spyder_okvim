@@ -164,6 +164,18 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
 
+        editor_plugin = vim_cmd.editor_widget
+        if hasattr(editor_plugin, "sig_editor_focus_changed"):
+            editor_plugin.sig_editor_focus_changed.connect(
+                vim_cmd.on_editor_focus_changed
+            )
+        if hasattr(editor_plugin, "dockwidget") and hasattr(
+            editor_plugin.dockwidget, "topLevelChanged"
+        ):
+            editor_plugin.dockwidget.topLevelChanged.connect(
+                vim_cmd.on_top_level_changed
+            )
+
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
         """Connect when preferences available."""
