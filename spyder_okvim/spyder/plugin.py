@@ -11,7 +11,7 @@
 import qtawesome as qta
 from qtpy.QtCore import Qt, Signal, QCoreApplication
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QShortcut, QVBoxLayout, QWidget
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -154,6 +154,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
+        self._statusbar = statusbar
+        self._status_widget = status_bar_widget
 
         editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
 
@@ -163,6 +165,28 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             vim_cmd.commandline.setFocus,
         )
         esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+
+        # Track floating editor panes and creation of new windows
+        if hasattr(self._main.editor, "dockwidget"):
+            editor_dock = self._main.editor.dockwidget
+            editor_dock.topLevelChanged.connect(self._handle_editor_floating)
+
+        editor_main = self._main.editor.get_widget()
+        if hasattr(editor_main, "register_editorwindow"):
+            orig_register = editor_main.register_editorwindow
+
+            def register_editorwindow(window, *args, **kwargs):
+                result = orig_register(window, *args, **kwargs)
+                self._add_cmdline_to_window(window)
+                return result
+
+            editor_main.register_editorwindow = register_editorwindow.__get__(
+                editor_main, type(editor_main)
+            )
+
+        self._editor_main_widget = editor_main
+        self._window_cmdlines = {}
+        self._floating_container = None
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
@@ -199,3 +223,33 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def apply_plugin_settings(self, options) -> None:
         """Apply the config settings."""
         self.get_widget().apply_plugin_settings(options)
+
+    # ---- Private helpers -------------------------------------------------
+    def _add_cmdline_to_window(self, window):
+        """Add a command line to a new editor window."""
+        cmd_line = self.get_widget().vim_cmd.create_cmd_line(window.statusBar())
+        window.statusBar().addPermanentWidget(cmd_line)
+        self._window_cmdlines[window] = cmd_line
+        window.destroyed.connect(lambda: self._window_cmdlines.pop(window, None))
+
+    def _handle_editor_floating(self, floating):
+        """Create or remove a command line when the editor dock floats."""
+        dock = self._main.editor.dockwidget
+        if floating:
+            inner = dock.widget()
+            container = QWidget()
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(inner)
+            cmd_line = self.get_widget().vim_cmd.create_cmd_line(container)
+            layout.addWidget(cmd_line)
+            dock.setWidget(container)
+            self._floating_container = container
+        else:
+            container = self._floating_container
+            if container is not None:
+                inner = container.layout().itemAt(0).widget()
+                dock.setWidget(inner)
+                container.deleteLater()
+                self._floating_container = None

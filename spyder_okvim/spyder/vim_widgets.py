@@ -412,6 +412,9 @@ class VimLineEdit(QLineEdit):
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
+        # Ensure the active command line is always the focused one
+        self.vim_status.cmd_line = self
+        self.vim_shortcut.cmd_line = self
         if self.vim_status.cursor.get_editor():
             self.to_normal()
         self.vim_status.set_message("")
@@ -512,6 +515,12 @@ class VimWidget(QWidget):
         self.worker_macro = MacroPlaybackWorker(main)
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
+
+    def create_cmd_line(self, parent):
+        """Create an additional command line tied to this Vim widget."""
+        cmd_line = VimLineEdit(self, self.vim_status, self.vim_shortcut)
+        cmd_line.setParent(parent)
+        return cmd_line
 
     @Slot(object)
     def send_key_event(self, key_info: KeyInfo) -> None:
