@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spyder-okvim"
-version = "0.10.4"
+version = "0.10.5"
 description = "Spyder Vim plugin"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 authors = [{ name = "ok97465", email = "ok97465@kakao.com" }]
 dependencies = [
-    "spyder>=6",
+    "spyder>=6.1.0",
     "qtpy",
 ]
 classifiers = [

@@ -72,7 +72,7 @@ class ExecutorColon(ExecutorSubBase):
 
     def w(self, arg=""):
         """Save current file."""
-        self.editor_widget.get_widget().save_action.trigger()
+        self.save_current_file()
         self.vim_status.cursor.draw_vim_cursor()
 
     def q(self, arg=""):
@@ -93,7 +93,7 @@ class ExecutorColon(ExecutorSubBase):
 
     def n(self, args=""):
         """Create new file."""
-        self.editor_widget.get_widget().new_action.trigger()
+        self.create_new_file()
         self.vim_status.set_focus_to_vim()
 
     def marks(self, arg=""):

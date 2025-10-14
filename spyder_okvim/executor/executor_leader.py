@@ -65,7 +65,8 @@ class ExecutorLeaderKey(ExecutorBase):
 
     def run_cell_and_advance(self, num=1, num_str=""):
         """Run cell and advance."""
-        self.get_editorstack().sig_trigger_run_action.emit("run cell and advance")
+        editor_stack = self.get_editorstack()
+        editor_stack.sig_trigger_action.emit("run cell and advance", Plugins.Run)
         self.vim_status.set_focus_to_vim()
 
     def run_selection(self, num=1, num_str=""):
@@ -73,7 +74,7 @@ class ExecutorLeaderKey(ExecutorBase):
         editor_stack = self.get_editorstack()
         editor = self.get_editor()
         old_cursor = self.set_selection_to_editor_using_vim_selection()
-        editor_stack.sig_trigger_run_action.emit("run selection and advance")
+        editor_stack.sig_trigger_action.emit("run selection and advance", Plugins.Run)
         if old_cursor:
             editor.setTextCursor(old_cursor)
         self.vim_status.set_focus_to_vim()

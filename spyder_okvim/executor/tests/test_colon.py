@@ -63,8 +63,8 @@ def test_colon_w_command(vim_bot):
     qtbot.keyClicks(cmd_line, ":")
     qtbot.keyClicks(cmd_line, "w")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.save_action.trigger.assert_called_once_with()
-    main.editor.save_action.trigger.reset_mock()
+    main.editor.save.assert_called_once_with()
+    main.editor.save.reset_mock()
 
 
 def test_colon_q_command(vim_bot):
@@ -108,9 +108,9 @@ def test_colon_wq_command(vim_bot):
     qtbot.keyClicks(cmd_line, "w")
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.save_action.trigger.assert_called_once_with()
+    main.editor.save.assert_called_once_with()
     main.editor.close_file.assert_called_once_with()
-    main.editor.save_action.trigger.reset_mock()
+    main.editor.save.reset_mock()
     main.editor.close_file.reset_mock()
 
 
@@ -121,7 +121,7 @@ def test_colon_n_command(vim_bot):
     qtbot.keyClicks(cmd_line, ":")
     qtbot.keyClicks(cmd_line, "n")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.new_action.trigger.assert_called_once_with()
+    main.editor.new.assert_called_once_with()
 
 
 def test_colon_backspace_command(vim_bot):

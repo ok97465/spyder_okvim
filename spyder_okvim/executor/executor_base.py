@@ -183,5 +183,12 @@ class ExecutorSubBase(ExecutorBase):
     # ------------------------------------------------------------------
     def close_current_file(self) -> None:
         """Close the current file using Spyder's editor API."""
-        widget = self.vim_status.editor_widget.get_widget()
-        widget.close_file()
+        self.vim_status.editor_widget.close_file()
+
+    def save_current_file(self) -> None:
+        """Save the active file through Spyder's editor plugin."""
+        self.vim_status.editor_widget.save()
+
+    def create_new_file(self) -> None:
+        """Create a new file using Spyder's editor plugin."""
+        self.vim_status.editor_widget.new()

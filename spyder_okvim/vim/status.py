@@ -6,9 +6,10 @@ import os.path as osp
 from collections import defaultdict
 
 # Third Party Libraries
-from qtpy.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal, Slot
+from qtpy.QtCore import QCoreApplication, QObject, QTimer, Signal, Slot
 from qtpy.QtGui import QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication, QLabel, QWidget
+from spyder.api.plugins import Plugins
 from spyder.config.manager import CONF
 
 # Project Libraries
@@ -16,7 +17,6 @@ from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
 from spyder_okvim.utils.jump_list import JumpList
-from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 from .cursor import VimCursor
 from .label import InlineLabel
@@ -90,9 +90,10 @@ class VimStatus(QObject):
         bookmarks_file = osp.join(
             CONF.get_plugin_config_path(CONF_SECTION), "bookmarks.json"
         )
+        self._application_plugin = None
         self.bookmark_manager = BookmarkManager(
             bookmarks_file,
-            self.main.open_file,
+            self._open_file_in_application,
             self.get_editorstack,
             self.get_editor,
             self.cursor.set_cursor_pos,
@@ -341,6 +342,27 @@ class VimStatus(QObject):
         else:
             return self.register_dict[name]
 
+    # ---- Application helpers ----------------------------------------
+    def _get_application_plugin(self):
+        """Return and cache Spyder's application plugin."""
+        plugin = getattr(self, "_application_plugin", None)
+        if plugin is None:
+            try:
+                plugin = self.main.get_plugin(Plugins.Application)
+            except Exception:
+                return None
+            self._application_plugin = plugin
+        return plugin
+
+    def _open_file_in_application(self, file_path: str) -> None:
+        """Open *file_path* through the application plugin when available."""
+        if not file_path:
+            return
+        application = self._get_application_plugin()
+        open_file = getattr(application, "open_file_in_plugin", None)
+        if callable(open_file):
+            open_file(file_path)
+
     # ---- Bookmarks ----------------------------------------------------
     def _load_persistent_bookmarks(self) -> None:
         """Load persistent bookmarks from disk."""
@@ -420,7 +442,7 @@ class VimStatus(QObject):
         if not jump:
             return
         if self.get_editorstack().is_file_opened(jump.file) is None:
-            self.main.open_file(jump.file)
+            self._open_file_in_application(jump.file)
         self.get_editorstack().set_current_filename(jump.file)
         self.cursor.set_cursor_pos(jump.pos)
 
@@ -430,7 +452,7 @@ class VimStatus(QObject):
         if not jump:
             return
         if self.get_editorstack().is_file_opened(jump.file) is None:
-            self.main.open_file(jump.file)
+            self._open_file_in_application(jump.file)
         self.get_editorstack().set_current_filename(jump.file)
         self.cursor.set_cursor_pos(jump.pos)
 

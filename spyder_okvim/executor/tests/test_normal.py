@@ -1072,9 +1072,9 @@ def test_ZZ_cmd(vim_bot):
     main, editor_stack, editor, vim, qtbot = vim_bot
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ZZ")
-    main.editor.save_action.trigger.assert_called_once_with()
+    main.editor.save.assert_called_once_with()
     main.editor.close_file.assert_called_once_with()
-    main.editor.save_action.trigger.reset_mock()
+    main.editor.save.reset_mock()
     main.editor.close_file.reset_mock()
 
 
