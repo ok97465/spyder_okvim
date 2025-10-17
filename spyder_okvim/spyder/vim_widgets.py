@@ -14,11 +14,12 @@ import threading
 from functools import wraps
 
 # Third Party Libraries
-from qtpy import PYSIDE2, PYSIDE6, PYQT5
+from qtpy import PYSIDE2, PYSIDE6
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
 from spyder.api.config.decorators import on_conf_change
+from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
 
@@ -31,8 +32,8 @@ from spyder_okvim.executor import (
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.utils.file_search import FileSearchDialog
-from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 from spyder_okvim.utils.testing_env import running_in_pytest
+from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 
 running_coverage = "coverage" in sys.modules
 
@@ -47,6 +48,7 @@ if PYSIDE2 or PYSIDE6:
             from shiboken2 import isValid as _sbk_is_valid  # PySide2
         except Exception:
             _sbk_is_valid = None
+
     def _widget_is_deleted(obj):
         if _sbk_is_valid is None:
             return False
@@ -57,6 +59,7 @@ else:  # PYQT5
         from PyQt5 import sip
     except Exception:  # pragma: no cover - fallback for standalone sip module
         try:
+            # Third Party Libraries
             import sip  # type: ignore
         except Exception:
             sip = None
@@ -284,7 +287,8 @@ class VimShortcut(QObject):
 
         if osp.isfile(path):
             self.vim_status.push_jump()
-            self.main.open_file(path)
+            application = self.main.get_plugin(Plugins.Application)
+            application.open_file_in_plugin(path)
             self.vim_status.jump_list.push(path, 0)
             self.vim_status.set_focus_to_vim()
 
@@ -575,5 +579,3 @@ class VimWidget(QWidget):
             self.commandline.deleteLater()
             self.status_label.deleteLater()
             self.msg_label.deleteLater()
-
-

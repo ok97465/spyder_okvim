@@ -2,7 +2,6 @@
 """Tests for the file search dialog."""
 
 # Third Party Libraries
-import pytest
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent
 
@@ -21,7 +20,7 @@ def test_open_file_search(vim_bot, monkeypatch, tmpdir):
     monkeypatch.setattr(FileSearchDialog, "exec_", lambda x: x)
     monkeypatch.setattr(FileSearchDialog, "get_selected_path", lambda x: str(fn))
 
-    monkeypatch.setattr(main, "open_file", lambda path: None)
+    monkeypatch.setattr(main, "load_edit", lambda path: None)
 
     vs = vim.vim_cmd.vim_status
     vs.cursor.set_cursor_pos(0)

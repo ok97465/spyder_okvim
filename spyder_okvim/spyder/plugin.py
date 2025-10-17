@@ -24,7 +24,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, VimWidget
+from spyder_okvim.spyder.vim_widgets import VimPane
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -108,7 +108,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     focus_changed = Signal()
     NAME = CONF_SECTION
-    REQUIRES = [Plugins.StatusBar, Plugins.Preferences]
+    REQUIRES = [Plugins.StatusBar, Plugins.Preferences, Plugins.Application]
     OPTIONAL = []
     WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION

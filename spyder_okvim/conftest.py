@@ -9,11 +9,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 # Third Party Libraries
 import pytest
-import requests
 from pytestqt.plugin import QtBot
 from qtpy.QtCore import QCoreApplication
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QVBoxLayout, QWidget
+from spyder.api.plugins import Plugins
 from spyder.config.manager import CONF
 from spyder.plugins.editor.widgets.editorstack import EditorStack
 
@@ -39,7 +39,9 @@ class EditorMock(QWidget):
         self.editorsplitter = self.editor_stack
         self.open_action = Mock()
         self.new_action = Mock()
+        self.new = Mock()
         self.save_action = Mock()
+        self.save = Mock()
         self.close_action = Mock()
         self.close_file = Mock()
 
@@ -78,8 +80,10 @@ class MainMock(QWidget):
         self.plugin_focus_changed = Mock()
         self.editor = EditorMock(editor_stack)
         self.status_bar = StatusBarMock()
+        self.application = Mock()
+        self.application.open_file_in_plugin = Mock()
         self.projects = Mock()
-        self.open_file = Mock()
+        self.load_edit = Mock()
         self.projects.get_active_project_path = lambda: None
         layout = QVBoxLayout()
         layout.addWidget(self.editor)
@@ -101,7 +105,11 @@ class MainMock(QWidget):
         qtbot_module.add_widget(self.editor)
         qtbot_module.add_widget(self.status_bar)
 
-    def get_plugin(self, dummy, error=True):
+    def get_plugin(self, plugin, error=True):
+        if plugin == Plugins.StatusBar:
+            return self.status_bar
+        if plugin == Plugins.Application:
+            return self.application
         return self.status_bar
 
 
@@ -128,7 +136,8 @@ def vim_bot(qtbot_module):
     editor_stack.setMinimumHeight(400)
 
     editor_stack.set_find_widget(Mock())
-    editor_stack.set_io_actions(Mock(), Mock(), Mock(), Mock())
+    if hasattr(editor_stack, "set_io_actions"):
+        editor_stack.set_io_actions(Mock(), Mock(), Mock(), Mock())
     finfo0 = editor_stack.new(osp.join(LOCATION, "foo.py"), "utf-8", text)
     finfo1 = editor_stack.new(osp.join(LOCATION, "foo1.py"), "utf-8", text)
     finfo2 = editor_stack.new(osp.join(LOCATION, "foo2.py"), "utf-8", text)

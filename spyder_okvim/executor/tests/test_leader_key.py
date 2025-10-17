@@ -7,6 +7,7 @@ from unittest.mock import Mock
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
+from spyder.api.plugins import Plugins
 
 
 def test_auto_import(vim_bot):
@@ -47,13 +48,15 @@ def test_run_cell_and_advance(vim_bot):
     vim.vim_cmd.vim_status.to_normal()
 
     cmd_line = vim.vim_cmd.commandline
-    with qtbot.waitSignal(editor_stack.sig_trigger_run_action, timeout=1000) as blocker:
+    signal = editor_stack.sig_trigger_action
+    expected_args = ("run cell and advance", Plugins.Run)
+    with qtbot.waitSignal(signal, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyPress(cmd_line, Qt.Key_Enter)
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
-    assert blocker.args == ["run cell and advance"]
+    assert tuple(blocker.args) == expected_args
 
 
 def test_run_selection(vim_bot):
@@ -64,22 +67,24 @@ def test_run_selection(vim_bot):
     vim.vim_cmd.vim_status.to_normal()
 
     cmd_line = vim.vim_cmd.commandline
-    with qtbot.waitSignal(editor_stack.sig_trigger_run_action, timeout=1000) as blocker:
+    signal = editor_stack.sig_trigger_action
+    expected_args = ("run selection and advance", Plugins.Run)
+    with qtbot.waitSignal(signal, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyClicks(cmd_line, "r")
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
-    assert blocker.args == ["run selection and advance"]
+    assert tuple(blocker.args) == expected_args
 
     qtbot.keyClicks(cmd_line, "Vj")
-    with qtbot.waitSignal(editor_stack.sig_trigger_run_action, timeout=1000) as blocker:
+    with qtbot.waitSignal(signal, timeout=1000) as blocker:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
         qtbot.keyClicks(cmd_line, "r")
 
     assert cmd_line.text() == ""
     assert blocker.signal_triggered
-    assert blocker.args == ["run selection and advance"]
+    assert tuple(blocker.args) == expected_args
 
 
 def test_formatting(vim_bot):

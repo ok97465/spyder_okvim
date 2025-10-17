@@ -742,7 +742,7 @@ class ExecutorSubCmd_Z(ExecutorSubBase):
 
     def Z(self, num=1, num_str=""):
         """Save and close current file."""
-        self.editor_widget.get_widget().save_action.trigger()
+        self.save_current_file()
         self.close_current_file()
         self.vim_status.set_focus_to_vim()
 
