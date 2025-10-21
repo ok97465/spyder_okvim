@@ -174,6 +174,43 @@ class MotionHelper:
             motion_type=MotionType.LineWise,
         )
 
+    def i_cell(self, num: int = 1) -> MotionInfo:
+        """Return motion info covering the current cell and subsequent cells."""
+        cells = self.vim_status.get_cells()
+        if not cells:
+            return self._set_motion_info(None)
+
+        cursor = self.get_cursor()
+        cursor_pos = cursor.position()
+        current_idx = self._locate_cell_index(cells, cursor_pos)
+        if current_idx is None:
+            return self._set_motion_info(None)
+
+        count = max(1, num)
+        end_idx = min(len(cells) - 1, current_idx + count - 1)
+
+        document = cursor.document()
+        start_cell = cells[current_idx]
+        start_block = document.findBlockByNumber(start_cell.start_line)
+        if not start_block.isValid():
+            start_block = document.firstBlock()
+        sel_start = start_block.position()
+
+        end_cell = cells[end_idx]
+        end_block = document.findBlockByNumber(end_cell.end_line)
+        if not end_block.isValid():
+            end_block = document.lastBlock()
+        sel_end = end_block.position() + end_block.length() - 1
+        if sel_end < sel_start:
+            sel_end = sel_start
+
+        return self._set_motion_info(
+            sel_start,
+            sel_start=sel_start,
+            sel_end=sel_end,
+            motion_type=MotionType.LineWise,
+        )
+
     def _get_ch(self, pos):
         """Get character of position."""
         if pos >= self.vim_status.cursor.get_end_position():

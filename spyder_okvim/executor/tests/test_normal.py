@@ -2730,6 +2730,156 @@ def test_cell_navigation_delete(vim_bot):
     )
 
 
+@pytest.mark.parametrize("block_number", [0, 3, 5])
+def test_inner_cell_yank(vim_bot, block_number):
+    """Ensure yic yanks the full current cell linewise."""
+    _, _, editor, vim, qtbot = vim_bot
+    _prepare_editor_with_cells(editor, qtbot)
+    vim_status = vim.vim_cmd.vim_status
+    doc = editor.document()
+
+    block = doc.findBlockByNumber(block_number)
+    header_line = block.text()
+    other_headers = [
+        doc.findBlockByNumber(no).text() for no in (0, 3, 5) if no != block_number
+    ]
+
+    vim_status.reset_for_test()
+    vim_status.cursor.set_cursor_pos(block.position())
+
+    helper_motion = vim.vim_cmd.executor_normal_cmd.helper_motion
+    helper_action = vim.vim_cmd.executor_normal_cmd.helper_action
+    motion_info = helper_motion.i_cell(1)
+    sel_start, sel_end, is_linewise = helper_action._get_selection_range(motion_info)
+    assert is_linewise
+
+    cursor = editor.textCursor()
+    cursor.setPosition(sel_start)
+    cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
+    expected_selection = cursor.selectedText().replace("\u2029", "\n")
+    cursor.clearSelection()
+    editor.setTextCursor(cursor)
+    expected_register = expected_selection + "\n"
+
+    vim_status.cursor.set_cursor_pos(block.position())
+
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.setFocus()
+    qtbot.keyClicks(cmd_line, "yic")
+
+    assert cmd_line.text() == ""
+    register = vim_status.get_register()
+    assert register.type == VimState.VLINE
+    assert register.content == expected_register
+    assert header_line in register.content
+    for other_header in other_headers:
+        assert other_header not in register.content
+
+
+@pytest.mark.parametrize("block_number", [0, 3, 5])
+def test_inner_cell_delete(vim_bot, block_number):
+    """Verify dic removes the current cell and updates the unnamed register."""
+    _, _, editor, vim, qtbot = vim_bot
+    _prepare_editor_with_cells(editor, qtbot)
+    vim_status = vim.vim_cmd.vim_status
+    doc = editor.document()
+
+    block = doc.findBlockByNumber(block_number)
+    header_line = block.text()
+    other_headers = [
+        doc.findBlockByNumber(no).text() for no in (0, 3, 5) if no != block_number
+    ]
+
+    initial_text = editor.toPlainText()
+
+    vim_status.reset_for_test()
+    vim_status.cursor.set_cursor_pos(block.position())
+
+    helper_motion = vim.vim_cmd.executor_normal_cmd.helper_motion
+    helper_action = vim.vim_cmd.executor_normal_cmd.helper_action
+    motion_info = helper_motion.i_cell(1)
+    sel_start, sel_end, is_linewise = helper_action._get_selection_range(motion_info)
+    assert is_linewise
+
+    cursor = editor.textCursor()
+    cursor.setPosition(sel_start)
+    cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
+    expected_selection = cursor.selectedText().replace("\u2029", "\n")
+    cursor.clearSelection()
+    editor.setTextCursor(cursor)
+    expected_register = expected_selection + "\n"
+
+    vim_status.cursor.set_cursor_pos(block.position())
+
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.setFocus()
+    qtbot.keyClicks(cmd_line, "dic")
+
+    assert cmd_line.text() == ""
+    register = vim_status.get_register()
+    assert register.type == VimState.VLINE
+    assert register.content == expected_register
+    remaining_text = editor.toPlainText()
+    assert header_line not in remaining_text
+    assert expected_selection not in remaining_text
+    for other_header in other_headers:
+        assert other_header in remaining_text
+    assert initial_text.count(header_line) == 1
+
+
+@pytest.mark.parametrize("block_number", [0, 3, 5])
+def test_inner_cell_change(vim_bot, block_number):
+    """Check cic deletes the cell and enters insert context with linewise yank."""
+    _, _, editor, vim, qtbot = vim_bot
+    _prepare_editor_with_cells(editor, qtbot)
+    vim_status = vim.vim_cmd.vim_status
+    doc = editor.document()
+
+    block = doc.findBlockByNumber(block_number)
+    header_line = block.text()
+    other_headers = [
+        doc.findBlockByNumber(no).text() for no in (0, 3, 5) if no != block_number
+    ]
+
+    initial_text = editor.toPlainText()
+
+    vim_status.reset_for_test()
+    vim_status.cursor.set_cursor_pos(block.position())
+
+    helper_motion = vim.vim_cmd.executor_normal_cmd.helper_motion
+    helper_action = vim.vim_cmd.executor_normal_cmd.helper_action
+    motion_info = helper_motion.i_cell(1)
+    sel_start, sel_end, is_linewise = helper_action._get_selection_range(motion_info)
+    assert is_linewise
+
+    cursor = editor.textCursor()
+    cursor.setPosition(sel_start)
+    cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
+    expected_selection = cursor.selectedText().replace("\u2029", "\n")
+    cursor.clearSelection()
+    editor.setTextCursor(cursor)
+    expected_register = expected_selection + "\n"
+
+    vim_status.cursor.set_cursor_pos(block.position())
+
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.setFocus()
+    qtbot.keyClicks(cmd_line, "cic")
+
+    assert cmd_line.text() == ""
+    assert editor.hasFocus()
+
+    register = vim_status.get_register()
+    assert register.type == VimState.VLINE
+    assert register.content == expected_register
+    remaining_text = editor.toPlainText()
+    assert header_line not in remaining_text
+    assert expected_selection not in remaining_text
+    for other_header in other_headers:
+        assert other_header in remaining_text
+    assert initial_text.count(header_line) == 1
+
+
 @pytest.mark.parametrize(
     "start_line, cmd, expected",
     [

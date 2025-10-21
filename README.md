@@ -139,6 +139,7 @@ seconds, that temporary entry is discarded.
 - gc{motion} : toggle comments (works in visual mode)
   - gcc : toggle the comment for the current line
 - [c, ]c : go to previousr/next cell
+- yic, dic, cid : Operate on the entire current cell (yank, delete, or change respectively)
 
 ## Vim Surround
 
