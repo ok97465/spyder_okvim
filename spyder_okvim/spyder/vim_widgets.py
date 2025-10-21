@@ -17,7 +17,7 @@ from functools import wraps
 from qtpy import PYSIDE2, PYSIDE6
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget, QStyle
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
@@ -323,7 +323,7 @@ class VimStateLabel(QLabel):
 
         self.setAlignment(Qt.AlignCenter)
         tw = self.fontMetrics().width(" NORMAL ")
-        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
     @Slot(int)
@@ -361,7 +361,7 @@ class VimLineEdit(QLineEdit):
 
         # Set size
         tw = self.fontMetrics().width(" :%s/international/internationl/g ")
-        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
         # Todo: Move setting shortcut to config file.
@@ -438,7 +438,7 @@ class VimMessageLabel(QLabel):
         super().__init__(txt, parent)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         tw = self.fontMetrics().width(" recording @q... 0000 fewers lines ")
-        fw = self.style().pixelMetric(self.style().PM_DefaultFrameWidth)
+        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
 

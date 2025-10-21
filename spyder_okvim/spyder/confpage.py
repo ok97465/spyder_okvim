@@ -5,8 +5,8 @@
 """Spyder okvim configuration page."""
 
 # Third Party Libraries
-from qtpy.QtCore import QRegExp, Qt
-from qtpy.QtGui import QKeySequence, QRegExpValidator
+from qtpy.QtCore import QRegularExpression, Qt
+from qtpy.QtGui import QKeySequence, QRegularExpressionValidator
 from qtpy.QtWidgets import QGridLayout, QGroupBox, QHBoxLayout, QLineEdit, QVBoxLayout
 from spyder.api.preferences import PluginConfigPage
 
@@ -39,7 +39,7 @@ class OkvimConfigPage(PluginConfigPage):
             label, clayout = newce(name, option_name, without_layout=True)
             label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             clayout.lineedit.setValidator(
-                QRegExpValidator(QRegExp(r"#[0-9abcdefABCDEF]{6}"))
+                QRegularExpressionValidator(QRegularExpression(r"#[0-9abcdefABCDEF]{6}"))
             )
             color_layout.addWidget(label, idx_row, idx_col)
             color_layout.addLayout(clayout, idx_row, idx_col + 1)
