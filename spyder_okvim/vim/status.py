@@ -17,6 +17,7 @@ from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
 from spyder_okvim.utils.jump_list import JumpList
+from spyder_okvim.utils.cell_helpers import CellRegion, get_document_cells
 
 from .cursor import VimCursor
 from .label import InlineLabel
@@ -142,6 +143,11 @@ class VimStatus(QObject):
             self.change_label.emit(VimState.NORMAL)
         except RuntimeError:
             pass
+
+    def get_cells(self) -> list[CellRegion]:
+        """Return the cell regions for the active editor."""
+        editor = self.get_editor()
+        return get_document_cells(editor)
 
     def reset_for_test(self):
         """Reset status for test."""

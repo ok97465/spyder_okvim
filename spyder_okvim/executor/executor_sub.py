@@ -96,7 +96,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
         self.has_zero_cmd = True
 
-        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;,`' \b\r*#z"
+        self.cmds = "/nNailhkjHML$^wWbBegG%fFtT;,`' \b\r*#z[]"
         cmds = "".join(re.escape(c) for c in self.cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_sub_g = ExecutorSubSubCmd_g(vim_status)
@@ -107,6 +107,12 @@ class ExecutorSubMotion(ExecutorSubBase):
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
         self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
+        self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
+            vim_status
+        )
+        self.executor_sub_closesquarebracekt = ExecutorSubCmd_closesquarebracket(
+            vim_status
+        )
 
     def __call__(self, txt):
         """Parse command and execute."""
@@ -227,6 +233,26 @@ class ExecutorSubMotion(ExecutorSubBase):
     def g(self, num=1, num_str=""):
         """Execute submode of g."""
         executor_sub = self.executor_sub_sub_g
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(
+            self.func_list_deferred, self.return_deferred
+        )
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def opensquarebracket(self, num=1, num_str=""):
+        """Enter [ submode."""
+        executor_sub = self.executor_sub_opensquarebracekt
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(
+            self.func_list_deferred, self.return_deferred
+        )
+
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def closesquarebracket(self, num=1, num_str=""):
+        """Enter ] submode."""
+        executor_sub = self.executor_sub_closesquarebracekt
         self.set_parent_info_to_submode(executor_sub, num, num_str)
         executor_sub.set_func_list_deferred(
             self.func_list_deferred, self.return_deferred
@@ -426,7 +452,8 @@ class ExecutorSubMotion_d(ExecutorSubMotion):
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.cmds += "s"
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
+        cmds = "".join(re.escape(c) for c in self.cmds)
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_delete_surround = ExecutorDeleteSurround(vim_status)
 
     def w(self, num=1, num_str=""):
@@ -454,7 +481,8 @@ class ExecutorSubMotion_c(ExecutorSubMotion):
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.cmds += "s"
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
+        cmds = "".join(re.escape(c) for c in self.cmds)
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_change_surround = ExecutorChangeSurround(vim_status)
 
     def w(self, num=1, num_str=""):
@@ -483,7 +511,8 @@ class ExecutorSubMotion_y(ExecutorSubMotion_d):
         """Extend yank motions with surround support."""
         super().__init__(vim_status)
         self.cmds += "s"
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(self.cmds))
+        cmds = "".join(re.escape(c) for c in self.cmds)
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
         self.executor_sub_motion_c = ExecutorSubMotion_c(vim_status)
         self.executor_sub_surround = ExecutorAddSurround(vim_status)
@@ -820,7 +849,7 @@ class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
 
         self.has_zero_cmd = False
 
-        cmds = ''.join(re.escape(c) for c in "d[")
+        cmds = "".join(re.escape(c) for c in "dc[")
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def d(self, num=1, num_str=""):
@@ -837,6 +866,12 @@ class ExecutorSubCmd_opensquarebracket(ExecutorSubBase):
         motion_info = self.helper_motion.prev_pydef(num)
         return self.execute_func_deferred(motion_info)
 
+    def c(self, num=1, num_str=""):
+        """Move to the previous cell header."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.prev_cell(num)
+        return self.execute_func_deferred(motion_info)
+
 
 class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
     """submode of ]"""
@@ -848,7 +883,7 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
 
         self.has_zero_cmd = False
 
-        cmds = ''.join(re.escape(c) for c in "d]")
+        cmds = "".join(re.escape(c) for c in "dc]")
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def d(self, num=1, num_str=""):
@@ -863,6 +898,12 @@ class ExecutorSubCmd_closesquarebracket(ExecutorSubBase):
         """Jump to next Python definition."""
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.next_pydef(num)
+        return self.execute_func_deferred(motion_info)
+
+    def c(self, num=1, num_str=""):
+        """Move to the next cell header."""
+        num = num * self.parent_num[0]
+        motion_info = self.helper_motion.next_cell(num)
         return self.execute_func_deferred(motion_info)
 
 

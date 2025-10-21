@@ -5,6 +5,7 @@
 import ast
 import re
 from bisect import bisect_left, bisect_right
+from typing import TYPE_CHECKING
 
 # Third Party Libraries
 from qtpy.QtCore import QPoint, QRegularExpression
@@ -17,6 +18,9 @@ from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.utils.search_helpers import SearchHelper
 from spyder_okvim.utils.text_constants import BRACKET_PAIR
+
+if TYPE_CHECKING:  # pragma: no cover - typing helpers
+    from spyder_okvim.utils.cell_helpers import CellRegion
 
 WHITE_SPACE = " \t"
 
@@ -72,6 +76,102 @@ class MotionHelper:
             sel_start=sel_start,
             sel_end=sel_end,
             motion_type=motion_type,
+        )
+
+    # ------------------------------------------------------------------
+    # Cell navigation helpers
+    # ------------------------------------------------------------------
+    def _locate_cell_index(
+        self, cells: list["CellRegion"], cursor_pos: int
+    ) -> int | None:
+        """Return the index of the cell containing ``cursor_pos``."""
+        if not cells:
+            return None
+
+        for idx, cell in enumerate(cells):
+            if cell.start_position <= cursor_pos < cell.end_position:
+                return idx
+
+        if cursor_pos < cells[0].start_position:
+            return 0
+
+        for idx in range(len(cells) - 1, -1, -1):
+            if cursor_pos >= cells[idx].start_position:
+                return idx
+
+        return None
+
+    def prev_cell(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Return motion info for the previous code cell."""
+        cells = self.vim_status.get_cells()
+        if len(cells) <= 1:
+            return self._set_motion_info(None)
+
+        cursor = self.get_cursor()
+        cursor_pos = cursor.position()
+        current_idx = self._locate_cell_index(cells, cursor_pos)
+        if current_idx is None:
+            return self._set_motion_info(None)
+
+        target_idx = current_idx - num
+        if target_idx < 0:
+            return self._set_motion_info(None)
+
+        target_cell = cells[target_idx]
+        target_pos = target_cell.start_position
+
+        current_cell = cells[current_idx]
+        current_header_block = cursor.document().findBlock(current_cell.start_position)
+        sel_end_block = current_header_block.previous()
+        if sel_end_block.isValid():
+            sel_end = sel_end_block.position() + sel_end_block.length() - 1
+        else:
+            sel_end = target_pos
+
+        return self._set_motion_info(
+            target_pos,
+            sel_start=target_pos,
+            sel_end=sel_end,
+            motion_type=MotionType.LineWise,
+        )
+
+    def next_cell(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Return motion info for the next code cell."""
+        cells = self.vim_status.get_cells()
+        if len(cells) <= 1:
+            return self._set_motion_info(None)
+
+        cursor = self.get_cursor()
+        cursor_pos = cursor.position()
+        current_idx = self._locate_cell_index(cells, cursor_pos)
+        if current_idx is None:
+            return self._set_motion_info(None)
+
+        target_idx = current_idx + num
+        if target_idx >= len(cells):
+            return self._set_motion_info(None)
+
+        target_cell = cells[target_idx]
+        target_pos = target_cell.start_position
+
+        target_block = cursor.document().findBlock(target_pos)
+        prev_block = target_block.previous()
+        if prev_block.isValid():
+            sel_end = prev_block.position() + prev_block.length() - 1
+        else:
+            sel_end = target_block.position()
+
+        sel_start_block = cursor.block()
+        sel_start = sel_start_block.position()
+
+        if sel_end < sel_start:
+            sel_end = sel_start
+
+        return self._set_motion_info(
+            target_pos,
+            sel_start=sel_start,
+            sel_end=sel_end,
+            motion_type=MotionType.LineWise,
         )
 
     def _get_ch(self, pos):

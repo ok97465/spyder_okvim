@@ -35,7 +35,8 @@ def submode(
             executor_sub = func(self, num, num_str)
             self.set_parent_info_to_submode(executor_sub, num, num_str)
             func_list = func_list_getter(self) if func_list_getter else []
-            executor_sub.set_func_list_deferred(func_list)
+            if not executor_sub.func_list_deferred:
+                executor_sub.set_func_list_deferred(func_list)
             return RETURN_EXECUTOR_METHOD_INFO(executor_sub, clear_command_line)
 
         return wrapper

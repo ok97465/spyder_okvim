@@ -73,6 +73,12 @@ class ActionHelper:
 
         if motion_info.motion_type == MotionType.BlockWise:
             return motion_info.sel_start, motion_info.sel_end, False
+        if (
+            motion_info.motion_type == MotionType.LineWise
+            and motion_info.sel_start is not None
+            and motion_info.sel_end is not None
+        ):
+            return motion_info.sel_start, motion_info.sel_end, True
 
         cursor = self.get_cursor()
         cur_pos = cursor.position()

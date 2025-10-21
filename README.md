@@ -138,6 +138,7 @@ seconds, that temporary entry is discarded.
 - ]d : go to next warning/error
 - gc{motion} : toggle comments (works in visual mode)
   - gcc : toggle the comment for the current line
+- [c, ]c : go to previousr/next cell
 
 ## Vim Surround
 
@@ -189,4 +190,3 @@ For operators use `z` because `s` belongs to vim-surround.
 
 When there are matches in another group, hints appear around the group.
 ![sneak](https://github.com/ok97465/spyder_okvim/raw/main/doc/sneak.gif)
-

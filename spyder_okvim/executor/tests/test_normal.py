@@ -14,6 +14,8 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.vim_widgets import enable_coverage_tracing
+from spyder_okvim.utils.motion import MotionInfo
+from spyder_okvim.vim.state import VimState
 
 
 def test_unknown_cmd(vim_bot):
@@ -2549,6 +2551,183 @@ def test_squarebracket_d_cmd(vim_bot):
     assert cmd_line.text() == ""
     assert editor.go_to_next_warning.called
     assert editor.go_to_previous_warning.called
+
+
+CELL_SAMPLE = (
+    "# %% Cell 1\n"
+    "print('a')\n"
+    "\n"
+    "# %% Cell 2\n"
+    "print('b')\n"
+    "# %% Cell 3\n"
+    "print('c')\n"
+)
+
+
+def _prepare_editor_with_cells(editor, qtbot, text=CELL_SAMPLE, expected=3):
+    """Populate editor with cell markers and wait for highlighting."""
+    editor.set_text(text)
+    editor.highlighter.rehighlight()
+
+    def _cells_ready():
+        return len(editor.get_cell_list()) == expected
+
+    qtbot.waitUntil(_cells_ready, timeout=2000)
+
+
+@pytest.mark.parametrize(
+    "start_block, command, expected_block",
+    [
+        (0, "[c", 0),
+        (0, "]c", 3),
+        (4, "[c", 0),
+        (4, "]c", 5),
+        (5, "[c", 3),
+        (5, "]c", 5),
+        (0, "2]c", 5),
+        (5, "2[c", 0),
+    ],
+)
+def test_cell_navigation_motion(vim_bot, start_block, command, expected_block):
+    """Verify [c and ]c move between cell headers with counts."""
+    _, _, editor, vim, qtbot = vim_bot
+    _prepare_editor_with_cells(editor, qtbot)
+
+    block = editor.document().findBlockByNumber(start_block)
+    vim_status = vim.vim_cmd.vim_status
+    vim_status.cursor.set_cursor_pos(block.position())
+    vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.setFocus()
+    qtbot.keyClicks(cmd_line, command)
+
+    assert cmd_line.text() == ""
+    assert editor.textCursor().blockNumber() == expected_block
+
+
+def test_cell_navigation_yank(vim_bot, monkeypatch):
+    """Ensure y]c and y[c operate on cell ranges linewise."""
+    _, _, editor, vim, qtbot = vim_bot
+    _prepare_editor_with_cells(editor, qtbot)
+    vim_status = vim.vim_cmd.vim_status
+
+    block = editor.document().findBlockByNumber(0)
+    vim_status.cursor.set_cursor_pos(block.position())
+    vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.setFocus()
+
+    executor_normal = vim.vim_cmd.executor_normal_cmd
+    helper_motion = executor_normal.helper_motion
+    helper_action = executor_normal.helper_action
+    original_yank = helper_action.yank
+    captured_motion: dict[str, MotionInfo] = {}
+
+    def _wrapped_yank(motion_info, is_explicit=False):
+        captured_motion["info"] = motion_info
+        return original_yank(motion_info, is_explicit)
+
+    monkeypatch.setattr(helper_action, "yank", _wrapped_yank)
+    motion_info_preview = helper_motion.next_cell(1)
+    prev_block = editor.document().findBlockByNumber(2)
+    expected_end = prev_block.position() + prev_block.length() - 1
+    assert expected_end >= block.position()
+    assert motion_info_preview.sel_start == block.position()
+    assert motion_info_preview.sel_end == expected_end
+    sel_start, sel_end, is_linewise = helper_action._get_selection_range(
+        motion_info_preview
+    )
+    assert is_linewise
+    assert sel_start == block.position()
+    assert sel_end == expected_end
+
+    original_yank(motion_info_preview, is_explicit=True)
+    reg_preview = vim_status.get_register()
+    assert reg_preview.content == "# %% Cell 1\nprint('a')\n\n"
+    assert reg_preview.type == VimState.VLINE
+
+    vim_status.reset_for_test()
+    assert len(editor.get_cell_list()) == 3
+    vim_status.cursor.set_cursor_pos(block.position())
+    cmd_line.setFocus()
+
+    motion_info_after_reset = helper_motion.next_cell(1)
+    assert motion_info_after_reset.cursor_pos is not None
+    assert vim_status.is_normal()
+
+    qtbot.keyClicks(cmd_line, "y]c")
+
+    assert cmd_line.text() == ""
+
+    assert "info" in captured_motion
+    captured_info = captured_motion["info"]
+
+    reg = vim_status.get_register()
+    expected_forward = "# %% Cell 1\nprint('a')\n\n"
+    assert vim_status.get_register_name() == '"'
+    assert captured_info.cursor_pos is not None
+    assert reg.content == expected_forward
+    assert reg.type == VimState.VLINE
+
+    block_last = editor.document().findBlockByNumber(5)
+    vim_status.cursor.set_cursor_pos(block_last.position())
+    vim_status.reset_for_test()
+
+    cmd_line.setFocus()
+
+    motion_info_prev = helper_motion.prev_cell(1)
+    target_block = editor.document().findBlockByNumber(3)
+    before_current = editor.document().findBlockByNumber(4)
+    expected_prev_end = before_current.position() + before_current.length() - 1
+    assert motion_info_prev.sel_start == target_block.position()
+    assert motion_info_prev.sel_end == expected_prev_end
+    sel_start, sel_end, is_linewise = helper_action._get_selection_range(
+        motion_info_prev
+    )
+    assert is_linewise
+    assert sel_start == target_block.position()
+    assert sel_end == expected_prev_end
+
+    qtbot.keyClicks(cmd_line, "y[c")
+
+    reg = vim_status.get_register()
+    assert reg.type == VimState.VLINE
+    assert reg.content == "# %% Cell 2\nprint('b')\n"
+
+
+def test_cell_navigation_delete(vim_bot):
+    """Check d]c and d[c delete the expected cell content."""
+    _, _, editor, vim, qtbot = vim_bot
+    _prepare_editor_with_cells(editor, qtbot)
+    vim_status = vim.vim_cmd.vim_status
+
+    block = editor.document().findBlockByNumber(0)
+    vim_status.cursor.set_cursor_pos(block.position())
+    vim_status.reset_for_test()
+
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.setFocus()
+    qtbot.keyClicks(cmd_line, "d]c")
+
+    assert (
+        editor.toPlainText()
+        == "# %% Cell 2\nprint('b')\n# %% Cell 3\nprint('c')\n"
+    )
+
+    _prepare_editor_with_cells(editor, qtbot)
+    block_last = editor.document().findBlockByNumber(5)
+    vim_status.cursor.set_cursor_pos(block_last.position())
+    vim_status.reset_for_test()
+
+    cmd_line.setFocus()
+    qtbot.keyClicks(cmd_line, "d[c")
+
+    assert (
+        editor.toPlainText()
+        == "# %% Cell 1\nprint('a')\n\n# %% Cell 3\nprint('c')\n"
+    )
 
 
 @pytest.mark.parametrize(
