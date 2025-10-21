@@ -108,7 +108,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     focus_changed = Signal()
     NAME = CONF_SECTION
-    REQUIRES = [Plugins.StatusBar, Plugins.Preferences, Plugins.Application]
+    REQUIRES = [
+        Plugins.StatusBar,
+        Plugins.Preferences,
+        Plugins.Application,
+        Plugins.Editor,
+    ]
     OPTIONAL = []
     WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION
