@@ -32,6 +32,7 @@ from spyder_okvim.executor import (
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.utils.file_search import FileSearchDialog
+from spyder_okvim.utils.qtcompat import exec_dialog, text_width
 from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 
@@ -282,7 +283,7 @@ class VimShortcut(QObject):
         root_folder = self.main.projects.get_active_project_path()
 
         dlg = FileSearchDialog(root_folder, self.main)
-        dlg.exec_()
+        exec_dialog(dlg)
         path = dlg.get_selected_path()
 
         if osp.isfile(path):
@@ -322,7 +323,7 @@ class VimStateLabel(QLabel):
         self.change_state(VimState.INSERT)
 
         self.setAlignment(Qt.AlignCenter)
-        tw = self.fontMetrics().width(" NORMAL ")
+        tw = text_width(self.fontMetrics(), " NORMAL ")
         fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
@@ -360,7 +361,7 @@ class VimLineEdit(QLineEdit):
         self.vim_shortcut = vim_shortcut
 
         # Set size
-        tw = self.fontMetrics().width(" :%s/international/internationl/g ")
+        tw = text_width(self.fontMetrics(), " :%s/international/internationl/g ")
         fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
@@ -437,7 +438,7 @@ class VimMessageLabel(QLabel):
     def __init__(self, txt, parent):
         super().__init__(txt, parent)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        tw = self.fontMetrics().width(" recording @q... 0000 fewers lines ")
+        tw = text_width(self.fontMetrics(), " recording @q... 0000 fewers lines ")
         fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.setFixedWidth(tw + (2 * fw) + 4)
 
@@ -529,7 +530,15 @@ class VimWidget(QWidget):
     def set_leader_key(self) -> None:
         """Set leader key from CONF."""
         leader_key = CONF.get(CONF_SECTION, "leader_key")
-        leader_key2 = KEYCODE2STR.get(QKeySequence.fromString(leader_key)[0], None)
+        key_sequence = QKeySequence.fromString(leader_key)
+        try:
+            key = key_sequence[0]
+        except (IndexError, TypeError):
+            key = None
+        if hasattr(key, "key"):
+            # PySide6 returns QKeyCombination objects; extract the raw key.
+            key = key.key()
+        leader_key2 = KEYCODE2STR.get(key, None)
         if leader_key2:
             leader_key = leader_key2
         self.leader_key = leader_key

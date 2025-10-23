@@ -7,6 +7,7 @@ from qtpy.QtWidgets import QDialog
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
 from spyder_okvim.utils.jump_dialog import JumpListDialog
+from spyder_okvim.utils.qtcompat import exec_dialog
 from spyder_okvim.utils.mark_dialog import MarkListDialog
 from spyder_okvim.vim import VimState
 
@@ -102,11 +103,9 @@ class ExecutorColon(ExecutorSubBase):
         marks = vs.bookmark_manager.list_bookmarks()
 
         dlg = MarkListDialog(marks, vs.main)
-        result = dlg.exec_()
-        # When running tests ``exec_`` is patched to return ``None`` so the
-        # selected mark must be retrieved regardless of the returned value.
-        # Only reject the action explicitly when ``QDialog.Rejected`` (0) is
-        # returned.
+        result = exec_dialog(dlg)
+        # Tests patch ``exec_`` to return ``None``; ``exec_dialog`` keeps that
+        # behaviour so only an explicit ``QDialog.Rejected`` (0) cancels.
         mark = (
             dlg.get_selected_mark()
             if result is None or result == QDialog.Accepted
@@ -124,7 +123,7 @@ class ExecutorColon(ExecutorSubBase):
         vs = self.vim_status
 
         dlg = JumpListDialog(vs, vs.main)
-        dlg.exec_()
+        exec_dialog(dlg)
 
         vs.set_focus_to_vim()
 
