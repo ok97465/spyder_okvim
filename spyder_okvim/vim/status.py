@@ -15,9 +15,10 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
+from spyder_okvim.utils.cell_helpers import CellRegion, get_document_cells
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
 from spyder_okvim.utils.jump_list import JumpList
-from spyder_okvim.utils.cell_helpers import CellRegion, get_document_cells
+from spyder_okvim.utils.qtcompat import text_width
 
 from .cursor import VimCursor
 from .label import InlineLabel
@@ -548,7 +549,7 @@ class VimStatus(QObject):
         tc = editor.textCursor()
         font = editor.viewport().font()
         fm = editor.fontMetrics()
-        ch_width = fm.width("H")
+        ch_width = text_width(fm, "H")
         ch_height = fm.height()
 
         for idx, (pos, data) in enumerate(info.items()):

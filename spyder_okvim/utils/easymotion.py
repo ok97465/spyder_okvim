@@ -9,6 +9,9 @@ from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt
 from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import QPlainTextEdit, QWidget
 
+# Project Libraries
+from spyder_okvim.utils.qtcompat import text_width
+
 
 class EasyMotionMarkerManager:
     """Manage overlay marker assignments."""
@@ -92,7 +95,7 @@ class EasyMotionPainter(QObject):
             painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
             painter.setBrush(QColor(57, 34, 79, 255))
             painter.setFont(editor.font())
-            ch_width = fm.width(" ")
+            ch_width = text_width(fm, " ")
 
             for pos_ch, marker_name in zip(self.positions, self.names):
                 tc.setPosition(pos_ch)
