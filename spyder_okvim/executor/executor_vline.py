@@ -27,7 +27,7 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubCmd_openbrace,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
-    ExecutorSubCmdSneak,
+    ExecutorSubCmdLeap,
 )
 from spyder_okvim.executor.mixins import MovementMixin, SelectionMixin
 from spyder_okvim.spyder.config import CONF_SECTION
@@ -58,7 +58,7 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
-        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
+        self.executor_sub_leap = ExecutorSubCmdLeap(vim_status)
         self.executor_colon = ExecutorColon(vim_status)
         self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
             vim_status
@@ -207,9 +207,9 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
 
     def S(self, num=1, num_str=""):
         """Delete text and start insert."""
-        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
-        if use_sneak:
-            executor_sub = self.executor_sub_sneak
+        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        if use_leap:
+            executor_sub = self.executor_sub_leap
 
             self.set_parent_info_to_submode(executor_sub, num, num_str)
 
@@ -217,7 +217,7 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
                 [
                     FUNC_INFO(self.apply_motion_info_in_vline, True),
                     FUNC_INFO(
-                        self.helper_motion.display_another_group_after_rsneak, False
+                        self.helper_motion.display_additional_reverse_leap_targets, False
                     ),
                 ]
             )

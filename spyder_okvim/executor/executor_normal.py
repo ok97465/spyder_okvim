@@ -37,7 +37,7 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubCmd_register,
     ExecutorSubCmd_z,
     ExecutorSubCmd_Z,
-    ExecutorSubCmdSneak,
+    ExecutorSubCmdLeap,
     ExecutorSubMotion,
     ExecutorSubMotion_c,
     ExecutorSubMotion_d,
@@ -84,7 +84,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
-        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
+        self.executor_sub_leap = ExecutorSubCmdLeap(vim_status)
         self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
             vim_status
         )
@@ -382,9 +382,9 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def s(self, num=1, num_str=""):
         """Delete characters and start insert."""
-        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
-        if use_sneak:
-            executor_sub = self.executor_sub_sneak
+        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        if use_leap:
+            executor_sub = self.executor_sub_leap
 
             self.set_parent_info_to_submode(executor_sub, num, num_str)
 
@@ -392,7 +392,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
                 [
                     FUNC_INFO(self.apply_motion_info_in_normal, True),
                     FUNC_INFO(
-                        self.helper_motion.display_another_group_after_sneak, False
+                        self.helper_motion.display_additional_leap_targets, False
                     ),
                 ]
             )
@@ -405,9 +405,9 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def S(self, num=1, num_str=""):
         """Delete characters and start insert."""
-        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
-        if use_sneak:
-            executor_sub = self.executor_sub_sneak
+        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        if use_leap:
+            executor_sub = self.executor_sub_leap
 
             self.set_parent_info_to_submode(executor_sub, num, num_str)
 
@@ -415,7 +415,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
                 [
                     FUNC_INFO(self.apply_motion_info_in_normal, True),
                     FUNC_INFO(
-                        self.helper_motion.display_another_group_after_rsneak, False
+                        self.helper_motion.display_additional_reverse_leap_targets, False
                     ),
                 ]
             )

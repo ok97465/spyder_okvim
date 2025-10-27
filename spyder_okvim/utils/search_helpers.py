@@ -3,7 +3,7 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from typing import Callable
 
-from qtpy.QtCore import QPoint, QRegularExpression
+from qtpy.QtCore import QRegularExpression
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
@@ -20,88 +20,6 @@ class SearchHelper:
         self.get_editor = vim_status.get_editor
         self.get_cursor = vim_status.get_cursor
         self._set_motion_info = set_motion_info
-
-    # ------------------------------------------------------------------
-    # Viewport helpers
-    # ------------------------------------------------------------------
-    def get_viewport_positions(self) -> tuple[int, int]:
-        """Return start and end character positions of the visible viewport."""
-        editor = self.get_editor()
-        start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
-        bottom_right = QPoint(
-            editor.viewport().width() - 1, editor.viewport().height() - 1
-        )
-        end_pos = editor.cursorForPosition(bottom_right).position()
-        return start_pos, end_pos
-
-    def search_forward_in_view(self, text: str) -> list[int]:
-        """Return cursor positions of ``text`` inside the viewport."""
-        editor = self.get_editor()
-        cur_pos = editor.textCursor().position()
-        view_start, view_end = self.get_viewport_positions()
-        start_pos = min(view_end, cur_pos) + 1
-        positions: list[int] = []
-        while view_start <= start_pos <= view_end:
-            cursor = editor.document().find(text, start_pos, QTextDocument.FindCaseSensitively)
-            if cursor.isNull() or cursor.position() > view_end:
-                break
-            positions.append(cursor.position() - len(text))
-            start_pos = cursor.position()
-        return positions
-
-    def search_backward_in_view(self, text: str) -> list[int]:
-        """Return positions of ``text`` when searching backward in the viewport."""
-        editor = self.get_editor()
-        cur_pos = editor.textCursor().position()
-        view_start, view_end = self.get_viewport_positions()
-        start_pos = min(view_end, cur_pos)
-        positions: list[int] = []
-        while view_start <= start_pos <= view_end:
-            cursor = editor.document().find(
-                text,
-                start_pos,
-                QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
-            )
-            if cursor.isNull() or cursor.position() < view_start:
-                break
-            positions.append(cursor.position() - len(text))
-            start_pos = cursor.position() - len(text) - 1
-        return positions
-
-    # ------------------------------------------------------------------
-    # Sneak motions
-    # ------------------------------------------------------------------
-    def sneak(self, chars: str, num: int = 1, by_repeat_cmd: bool = False) -> MotionInfo:
-        """Jump forward to the given two-character sequence within the viewport."""
-        if not by_repeat_cmd:
-            self.vim_status.find_info.set("s", chars)
-        pos = None
-        positions = self.search_forward_in_view(chars)
-        if positions:
-            pos = positions[(num - 1) % len(positions)]
-        return self._set_motion_info(pos, motion_type=MotionType.CharWise)
-
-    def display_another_group_after_sneak(self) -> None:
-        """Show annotations for additional sneak targets."""
-        positions = self.search_forward_in_view(self.vim_status.find_info.ch)
-        info_group = {pos + 1: f"{idx};" if idx != 1 else ";" for idx, pos in enumerate(positions, 1)}
-        self.vim_status.annotate_on_txt(info_group, timeout=1500)
-
-    def rsneak(self, chars: str, num: int = 1, by_repeat_cmd: bool = False) -> MotionInfo:
-        """Jump backward to the given two-character sequence within the viewport."""
-        if not by_repeat_cmd:
-            self.vim_status.find_info.set("S", chars)
-        pos = None
-        positions = self.search_backward_in_view(chars)
-        if positions:
-            pos = positions[(num - 1) % len(positions)]
-        return self._set_motion_info(pos, motion_type=MotionType.CharWise)
-
-    def display_another_group_after_rsneak(self) -> None:
-        """Show annotations for additional reverse sneak targets."""
-        positions = self.search_backward_in_view(self.vim_status.find_info.ch)
-        info_group = {pos + 1: f"{idx};" if idx != 1 else ";" for idx, pos in enumerate(positions, 1)}
-        self.vim_status.annotate_on_txt(info_group, timeout=1500)
 
     # ------------------------------------------------------------------
     # Search in document

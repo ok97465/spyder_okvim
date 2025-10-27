@@ -33,7 +33,7 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubCmd_openbrace,
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
-    ExecutorSubCmdSneak,
+    ExecutorSubCmdLeap,
     ExecutorSubMotion_a,
     ExecutorSubMotion_i,
 )
@@ -73,7 +73,7 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
-        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
+        self.executor_sub_leap = ExecutorSubCmdLeap(vim_status)
         self.executor_sub_surround = ExecutorAddSurround(vim_status)
         self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
             vim_status

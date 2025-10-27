@@ -180,7 +180,7 @@ EasyMotion commands work with any operator that accepts a motion.
 | `<leader><leader> f <char>`         | Find character forwards                                                                                        |
 | `<leader><leader> F <char>`         | Find character backwards                                                                                       |
 
-## Search two characters (like vim-sneak)
+## Search two characters (like leap.nvim)
 
 Jump to any location specified by two characters.
 
@@ -190,4 +190,4 @@ Press `s` followed by two characters.
 For operators use `z` because `s` belongs to vim-surround.
 
 When there are matches in another group, hints appear around the group.
-![sneak](https://github.com/ok97465/spyder_okvim/raw/main/doc/sneak.gif)
+![leap](https://github.com/ok97465/spyder_okvim/raw/main/doc/leap.gif)

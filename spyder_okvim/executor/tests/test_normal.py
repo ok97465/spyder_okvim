@@ -904,14 +904,14 @@ def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
         ("d\ndhr Dhr dhr", ["sdh"], 2),
         ("d\ndhr Dhr dhr", ["sdh", ";"], 10),
         ("d\ndhr Dhr dhr", ["sdh", ";,"], 2),
-        ("d\ndhr Dhr dhr", ["j$" "Sdh"], 10),
-        ("d\ndhr Dhr dhr", ["j$" "Sdh", ";"], 2),
-        ("d\ndhr Dhr dhr", ["j$" "Sdh", ";,"], 10),
+        ("d\ndhr Dhr dhr", ["j$", "Sdh"], 10),
+        ("d\ndhr Dhr dhr", ["j$", "Sdh", ";"], 2),
+        ("d\ndhr Dhr dhr", ["j$", "Sdh", ";,"], 10),
     ],
 )
-def test_sneak_cmd(vim_bot, text, cmd_list, cursor_pos):
-    """Test sneak command."""
-    CONF.set(CONF_SECTION, "use_sneak", True)
+def test_leap_cmd(vim_bot, text, cmd_list, cursor_pos):
+    """Test leap command."""
+    CONF.set(CONF_SECTION, "use_leap", True)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
@@ -1591,7 +1591,7 @@ def test_y_cmd_in_normal(
     _, _, editor, vim, qtbot = vim_bot
 
     CONF.set(CONF_SECTION, "leader_key", "F1")
-    CONF.set(CONF_SECTION, "use_sneak", True)
+    CONF.set(CONF_SECTION, "use_leap", True)
     vim.apply_plugin_settings("")
 
     editor.set_text(text)
@@ -1723,7 +1723,7 @@ def test_s_cmd_in_normal(
     vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked
 ):
     """Test s command in normal."""
-    CONF.set(CONF_SECTION, "use_sneak", False)
+    CONF.set(CONF_SECTION, "use_leap", False)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
@@ -1752,7 +1752,7 @@ def test_S_cmd_in_normal(
     vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked
 ):
     """Test S command in normal."""
-    CONF.set(CONF_SECTION, "use_sneak", False)
+    CONF.set(CONF_SECTION, "use_leap", False)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
@@ -1981,7 +1981,7 @@ def test_dot_cmd_with_insert(
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     vim.vim_cmd.vim_status.reset_for_test()
-    CONF.set(CONF_SECTION, "use_sneak", False)
+    CONF.set(CONF_SECTION, "use_leap", False)
     vim.apply_plugin_settings("")
 
     cmd_line = vim.vim_cmd.commandline

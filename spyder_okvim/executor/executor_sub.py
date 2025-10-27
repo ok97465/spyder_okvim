@@ -108,7 +108,7 @@ class ExecutorSubMotion(ExecutorSubBase):
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)
         self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
-        self.executor_sub_sneak = ExecutorSubCmdSneak(vim_status)
+        self.executor_sub_leap = ExecutorSubCmdLeap(vim_status)
         self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
             vim_status
         )
@@ -435,10 +435,10 @@ class ExecutorSubMotion(ExecutorSubBase):
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def z(self, num=1, num_str=""):
-        """Execute sneak."""
-        use_sneak = CONF.get(CONF_SECTION, "use_sneak")
-        if use_sneak:
-            executor_sub = self.executor_sub_sneak
+        """Execute leap."""
+        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        if use_leap:
+            executor_sub = self.executor_sub_leap
 
             self.set_parent_info_to_submode(executor_sub, num, num_str)
             executor_sub.set_func_list_deferred(
@@ -702,15 +702,15 @@ class ExecutorSubCmd_f_t(ExecutorSubBase):
         return True
 
 
-class ExecutorSubCmdSneak(ExecutorSubBase):
-    """Submode of sneak"""
+class ExecutorSubCmdLeap(ExecutorSubBase):
+    """Submode for Leap-style two-character motions."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
     def __call__(self, ch2: str):
-        """Go to the occurrence of character and execute."""
+        """Jump to the matching two-character sequence and execute."""
         if len(ch2) < 2:
             return False
         ch_previous = self.vim_status.input_cmd.cmd[-1]

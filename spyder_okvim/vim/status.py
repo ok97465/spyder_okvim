@@ -113,7 +113,7 @@ class VimStatus(QObject):
         self.manager_marker_easymotion = EasyMotionMarkerManager()
         self.editor_connected_easymotion = None
 
-        # Sneak
+        # Leap
         self.n_annotate_max = 50
         self.labels_for_annotate = [
             InlineLabel(self.main) for _ in range(self.n_annotate_max)

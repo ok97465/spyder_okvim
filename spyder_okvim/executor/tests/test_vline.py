@@ -565,9 +565,9 @@ def test_F_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         ("d\ndhr Dhr dhr", ["V", "j$" "Sdh", ";,"], 10, [0, 13]),
     ],
 )
-def test_sneak_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
-    """Test sneak command in visual."""
-    CONF.set(CONF_SECTION, "use_sneak", True)
+def test_leap_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
+    """Test leap command in visual."""
+    CONF.set(CONF_SECTION, "use_leap", True)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
@@ -1044,7 +1044,7 @@ def test_s_cmd_in_vline(
     vim_bot, text, cmd_list, cursor_pos, text_expected, reg_name, text_yanked
 ):
     """Test s command in vline."""
-    CONF.set(CONF_SECTION, "use_sneak", False)
+    CONF.set(CONF_SECTION, "use_leap", False)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)

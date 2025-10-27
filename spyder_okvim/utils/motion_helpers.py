@@ -15,6 +15,7 @@ from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.leap_helpers import LeapHelper
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.utils.search_helpers import SearchHelper
 from spyder_okvim.utils.text_constants import BRACKET_PAIR
@@ -41,16 +42,19 @@ class MotionHelper:
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
 
         self.search_helper = SearchHelper(vim_status, self._set_motion_info)
+        self.leap_helper = LeapHelper(vim_status, self._set_motion_info)
 
         self.find_cmd_map = {
             "f": self.find_ch,
             "F": self.rfind_ch,
             "t": self.t,
             "T": self.T,
-            "s": self.search_helper.sneak,
-            "S": self.search_helper.rsneak,
-            "z": self.search_helper.sneak,
-            "Z": self.search_helper.rsneak,
+            "l": self.leap_helper.leap,
+            "L": self.leap_helper.reverse_leap,
+            "s": self.leap_helper.leap,
+            "S": self.leap_helper.reverse_leap,
+            "z": self.leap_helper.leap,
+            "Z": self.leap_helper.reverse_leap,
         }
 
     def _set_motion_info(
@@ -683,31 +687,31 @@ class MotionHelper:
 
     def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
         """Return start and end positions of the visible viewport."""
-        return self.search_helper.get_viewport_positions()
+        return self.leap_helper.get_viewport_positions()
 
     def search_forward_in_view(self, txt: str) -> list[int]:
         """Return positions of ``txt`` within the visible viewport."""
-        return self.search_helper.search_forward_in_view(txt)
+        return self.leap_helper.search_forward_in_view(txt)
 
-    def sneak(self, ch2, num=1, by_repeat_cmd=False):
-        """Delegate to :class:`SearchHelper`."""
-        return self.search_helper.sneak(ch2, num, by_repeat_cmd)
+    def leap(self, ch2, num=1, by_repeat_cmd=False):
+        """Delegate to :class:`LeapHelper`."""
+        return self.leap_helper.leap(ch2, num, by_repeat_cmd)
 
-    def display_another_group_after_sneak(self):
-        """Show annotations for additional sneak targets."""
-        self.search_helper.display_another_group_after_sneak()
+    def display_additional_leap_targets(self):
+        """Show annotations for additional Leap targets."""
+        self.leap_helper.display_additional_leap_targets()
 
     def search_backward_in_view(self, txt: str) -> list[int]:
         """Return positions of ``txt`` when searching backward in the viewport."""
-        return self.search_helper.search_backward_in_view(txt)
+        return self.leap_helper.search_backward_in_view(txt)
 
-    def rsneak(self, ch2, num=1, by_repeat_cmd=False):
-        """Delegate to :class:`SearchHelper`."""
-        return self.search_helper.rsneak(ch2, num, by_repeat_cmd)
+    def reverse_leap(self, ch2, num=1, by_repeat_cmd=False):
+        """Delegate to :class:`LeapHelper`."""
+        return self.leap_helper.reverse_leap(ch2, num, by_repeat_cmd)
 
-    def display_another_group_after_rsneak(self):
-        """Show annotations for additional reverse sneak targets."""
-        self.search_helper.display_another_group_after_rsneak()
+    def display_additional_reverse_leap_targets(self):
+        """Show annotations for reverse Leap targets."""
+        self.leap_helper.display_additional_reverse_leap_targets()
 
     def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, F or T."""

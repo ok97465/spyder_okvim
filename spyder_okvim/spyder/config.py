@@ -23,7 +23,7 @@ CONF_DEFAULTS = [
         {
             "ignorecase": True,
             "smartcase": True,
-            "use_sneak": True,
+            "use_leap": True,
             "highlight_yank": True,
             "highlight_yank_duration": 400,
             "cursor_fg_color": "#000000",

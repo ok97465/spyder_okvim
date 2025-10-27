@@ -49,7 +49,7 @@ class OkvimConfigPage(PluginConfigPage):
         options_layout = QVBoxLayout()
         options_layout.addWidget(newcb("ignorecase", "ignorecase"))
         options_layout.addWidget(newcb("smartcase", "smartcase"))
-        options_layout.addWidget(newcb("use s for searching 2ch", "use_sneak"))
+        options_layout.addWidget(newcb("enable Leap two-char search (s/z)", "use_leap"))
 
         hl_yank_layout = QHBoxLayout()
         hl_yank_layout.addWidget(newcb("highlight after yank", "highlight_yank"))
