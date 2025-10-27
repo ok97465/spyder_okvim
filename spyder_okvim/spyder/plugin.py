@@ -31,6 +31,7 @@ class StatusBarVimWidget(StatusBarWidget):
     """Status bar widget for okvim."""
 
     ID = f"{CONF_SECTION}_status_bar"
+    CONF_SECTION = CONF_SECTION  # Ensure Qt mixins see the configuration section
 
     def __init__(self, parent, msg_label, status_label, cmd_line):
         """Initialize status bar widget.
