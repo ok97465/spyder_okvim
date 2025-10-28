@@ -37,43 +37,80 @@ class LeapHelper:
         end_pos = editor.cursorForPosition(bottom_right).position()
         return start_pos, end_pos
 
-    def search_forward_in_view(self, text: str) -> list[int]:
-        """Return cursor positions of ``text`` inside the viewport."""
+    def _collect_viewport_matches(self, text: str) -> list[int]:
+        """Return all match start positions for ``text`` inside the viewport."""
+        if not text:
+            return []
+
         editor = self.get_editor()
-        cur_pos = editor.textCursor().position()
         view_start, view_end = self.get_viewport_positions()
-        start_pos = min(view_end, cur_pos) + 1
+        if view_start > view_end:
+            return []
+
+        doc = editor.document()
         positions: list[int] = []
-        while view_start <= start_pos <= view_end:
-            cursor = editor.document().find(
+        start_pos = view_start
+
+        while start_pos <= view_end:
+            cursor = doc.find(
                 text,
                 start_pos,
                 QTextDocument.FindCaseSensitively,
             )
-            if cursor.isNull() or cursor.position() > view_end:
+            if cursor.isNull():
                 break
-            positions.append(cursor.position() - len(text))
-            start_pos = cursor.position()
-        return positions
+            match_end = cursor.position()
+            match_start = match_end - len(text)
+            if match_start > view_end:
+                break
+            if match_start >= view_start:
+                positions.append(match_start)
+            # Advance search cursor to avoid infinite loops on zero-width matches
+            start_pos = max(match_end, match_start + 1)
 
-    def search_backward_in_view(self, text: str) -> list[int]:
-        """Return positions of ``text`` when searching backward in the viewport."""
-        editor = self.get_editor()
-        cur_pos = editor.textCursor().position()
-        view_start, view_end = self.get_viewport_positions()
-        start_pos = min(view_end, cur_pos)
-        positions: list[int] = []
-        while view_start <= start_pos <= view_end:
-            cursor = editor.document().find(
-                text,
-                start_pos,
-                QTextDocument.FindCaseSensitively | QTextDocument.FindBackward,
+        return sorted(positions)
+
+    def _order_positions(
+        self, positions: list[int], *, reverse: bool = False
+    ) -> list[int]:
+        """Return positions ordered relative to the current cursor."""
+        if not positions:
+            return []
+
+        cursor_pos = self.get_editor().textCursor().position()
+        if reverse:
+            before = sorted((pos for pos in positions if pos < cursor_pos), reverse=True)
+            after = sorted(
+                (pos for pos in positions if pos >= cursor_pos), reverse=True
             )
-            if cursor.isNull() or cursor.position() < view_start:
-                break
-            positions.append(cursor.position() - len(text))
-            start_pos = cursor.position() - len(text) - 1
-        return positions
+            return before + after
+
+        after = sorted(pos for pos in positions if pos > cursor_pos)
+        before = sorted(pos for pos in positions if pos <= cursor_pos)
+        return after + before
+
+    def search_in_view(
+        self,
+        text: str,
+        *,
+        reverse: bool = False,
+        full_view: bool = False,
+    ) -> list[int]:
+        """Return viewport positions of ``text`` ordered for the given direction."""
+        positions = self._collect_viewport_matches(text)
+        if not positions:
+            return []
+
+        cursor_pos = self.get_editor().textCursor().position()
+
+        if not full_view:
+            if reverse:
+                filtered = [pos for pos in positions if pos < cursor_pos]
+                return sorted(filtered, reverse=True)
+            filtered = [pos for pos in positions if pos > cursor_pos]
+            return sorted(filtered)
+
+        return self._order_positions(positions, reverse=reverse)
 
     # ------------------------------------------------------------------
     # Preview helpers
@@ -89,15 +126,13 @@ class LeapHelper:
             self._preview_labels_by_pos.clear()
         self.vim_status.hide_annotate_on_txt()
 
-    def preview_first_char(self, char: str, reverse: bool) -> None:
+    def preview_first_char(
+        self, char: str, reverse: bool, *, full_view: bool = False
+    ) -> None:
         """Show preview markers for the first typed character."""
         if not char:
             return
-        positions = (
-            self.search_backward_in_view(char)
-            if reverse
-            else self.search_forward_in_view(char)
-        )
+        positions = self.search_in_view(char, reverse=reverse, full_view=full_view)
         max_annotations = self.vim_status.n_annotate_max
         limited_positions = positions[:max_annotations]
         if not limited_positions:
@@ -226,11 +261,15 @@ class LeapHelper:
         chars: str,
         num: int = 1,
         by_repeat_cmd: bool = False,
+        *,
+        full_view: bool = False,
+        cmd_name: str | None = None,
     ) -> MotionInfo:
         """Jump forward to the given two-character sequence within the viewport."""
         if not by_repeat_cmd:
-            self.vim_status.find_info.set("l", chars)
-        positions = self.search_forward_in_view(chars)
+            name = cmd_name or ("s" if full_view else "l")
+            self.vim_status.find_info.set(name, chars)
+        positions = self.search_in_view(chars, full_view=full_view)
         pos = None
         if positions:
             pos = positions[(num - 1) % len(positions)]
@@ -238,7 +277,10 @@ class LeapHelper:
 
     def display_additional_leap_targets(self) -> None:
         """Show annotations for additional Leap targets."""
-        positions = self.search_forward_in_view(self.vim_status.find_info.ch)
+        full_view = self.vim_status.find_info.cmd_name in {"s", "S"}
+        positions = self.search_in_view(
+            self.vim_status.find_info.ch, full_view=full_view
+        )
         info_group = {
             pos + 1: f"{idx};" if idx != 1 else ";"
             for idx, pos in enumerate(positions, 1)
@@ -250,11 +292,15 @@ class LeapHelper:
         chars: str,
         num: int = 1,
         by_repeat_cmd: bool = False,
+        *,
+        full_view: bool = False,
+        cmd_name: str | None = None,
     ) -> MotionInfo:
         """Jump backward to the given two-character sequence within the viewport."""
         if not by_repeat_cmd:
-            self.vim_status.find_info.set("L", chars)
-        positions = self.search_backward_in_view(chars)
+            name = cmd_name or ("S" if full_view else "L")
+            self.vim_status.find_info.set(name, chars)
+        positions = self.search_in_view(chars, reverse=True, full_view=full_view)
         pos = None
         if positions:
             pos = positions[(num - 1) % len(positions)]
@@ -262,7 +308,10 @@ class LeapHelper:
 
     def display_additional_reverse_leap_targets(self) -> None:
         """Show annotations for additional reverse Leap targets."""
-        positions = self.search_backward_in_view(self.vim_status.find_info.ch)
+        full_view = self.vim_status.find_info.cmd_name in {"s", "S"}
+        positions = self.search_in_view(
+            self.vim_status.find_info.ch, reverse=True, full_view=full_view
+        )
         info_group = {
             pos + 1: f"{idx};" if idx != 1 else ";"
             for idx, pos in enumerate(positions, 1)

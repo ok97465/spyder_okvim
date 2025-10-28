@@ -689,9 +689,13 @@ class MotionHelper:
         """Return start and end positions of the visible viewport."""
         return self.leap_helper.get_viewport_positions()
 
-    def search_forward_in_view(self, txt: str) -> list[int]:
-        """Return positions of ``txt`` within the visible viewport."""
-        return self.leap_helper.search_forward_in_view(txt)
+    def search_in_view(
+        self, txt: str, *, reverse: bool = False, full_view: bool = False
+    ) -> list[int]:
+        """Return viewport positions of ``txt`` ordered by direction."""
+        return self.leap_helper.search_in_view(
+            txt, reverse=reverse, full_view=full_view
+        )
 
     def leap(self, ch2, num=1, by_repeat_cmd=False):
         """Delegate to :class:`LeapHelper`."""
@@ -700,10 +704,6 @@ class MotionHelper:
     def display_additional_leap_targets(self):
         """Show annotations for additional Leap targets."""
         self.leap_helper.display_additional_leap_targets()
-
-    def search_backward_in_view(self, txt: str) -> list[int]:
-        """Return positions of ``txt`` when searching backward in the viewport."""
-        return self.leap_helper.search_backward_in_view(txt)
 
     def reverse_leap(self, ch2, num=1, by_repeat_cmd=False):
         """Delegate to :class:`LeapHelper`."""

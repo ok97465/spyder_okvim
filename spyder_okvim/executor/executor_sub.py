@@ -119,7 +119,7 @@ class ExecutorSubMotion(ExecutorSubBase):
 
     def __call__(self, txt):
         """Parse command and execute."""
-        if txt[-1] == self.vim_status.input_cmd.cmd[-1]:
+        if txt and self.vim_status.input_cmd.cmd and txt[-1] == self.vim_status.input_cmd.cmd[-1]:
             # Handle the case if the input is the same with previous input.
             cmd = txt[-1]
             if len(txt) == 1:
@@ -730,13 +730,16 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
         else:
             base_cmd = self._base_cmd or ch_previous
 
+        full_view = base_cmd in "sS"
         method = self.helper_motion.find_cmd_map.get(base_cmd, None)
 
         self.update_input_cmd_info(None, None, ch2)
 
         if len(ch2) == 1:
             reverse = base_cmd in "LSZ"
-            self.helper_motion.leap_helper.preview_first_char(ch2, reverse)
+            self.helper_motion.leap_helper.preview_first_char(
+                ch2, reverse, full_view=full_view
+            )
             return False
 
         self.helper_motion.leap_helper.clear_overlays(preserve_preview=True)
@@ -751,21 +754,36 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
             num = self.parent_num[0] * self.parent_num[-1]
 
         reverse = base_cmd in "LSZ"
-        if reverse:
-            positions = self.helper_motion.search_backward_in_view(ch2)
+        positions = self.helper_motion.search_in_view(
+            ch2, reverse=reverse, full_view=full_view
+        )
+        if base_cmd in "sS":
+            self.vim_status.find_info.set(base_cmd, ch2)
+        elif reverse:
             self.vim_status.find_info.set("L", ch2)
         else:
-            positions = self.helper_motion.search_forward_in_view(ch2)
             self.vim_status.find_info.set("l", ch2)
 
+        def _dispatch_motion():
+            if base_cmd in "sS":
+                leap_method = (
+                    self.helper_motion.leap_helper.reverse_leap
+                    if reverse
+                    else self.helper_motion.leap_helper.leap
+                )
+                return leap_method(
+                    ch2, num, full_view=full_view, cmd_name=base_cmd
+                )
+            return method(ch2, num)
+
         if not positions:
-            motion_info = method(ch2, num)
+            motion_info = _dispatch_motion()
             result = self.process_return(self.execute_func_deferred(motion_info))
             self._clear_state()
             return result
 
         if len(positions) == 1:
-            motion_info = method(ch2, num)
+            motion_info = _dispatch_motion()
             result = self.process_return(self.execute_func_deferred(motion_info))
             self._clear_state()
             return result
