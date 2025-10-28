@@ -109,7 +109,10 @@ class LeapHelper:
         preview_mapping = self._build_preview_label_map(limited_positions, doc)
         self._preview_labels_by_pos = preview_mapping
 
-        info_group = {pos + 1: label for pos, label in preview_mapping.items()}
+        info_group = {
+            self._label_anchor_position(doc, pos): label
+            for pos, label in preview_mapping.items()
+        }
         if info_group:
             self.vim_status.annotate_on_txt(info_group)
         else:
@@ -160,7 +163,8 @@ class LeapHelper:
     def _get_pair_key(self, doc: QTextDocument, pos: int) -> str:
         """Return the two-character key starting at ``pos``."""
         first = self._char_from_doc(doc, pos)
-        second = self._char_from_doc(doc, pos + 1)
+        advance = max(len(first), 1)
+        second = self._char_from_doc(doc, pos + advance)
         return f"{first}{second}"
 
     def _char_from_doc(self, doc: QTextDocument, pos: int) -> str:
@@ -174,6 +178,17 @@ class LeapHelper:
         if not text or text == "\x00":
             return ""
         return "\n" if text == "\u2029" else text
+
+    def _label_anchor_position(self, doc: QTextDocument, pos: int) -> int:
+        """Return the position where the label should be displayed."""
+        first = self._char_from_doc(doc, pos)
+        advance = max(len(first), 1)
+        second = self._char_from_doc(doc, pos + advance)
+        if second:
+            advance += len(second)
+        anchor = pos + advance
+        char_count = max(doc.characterCount() - 1, 0)
+        return min(anchor, char_count)
 
     def build_label_map(self, positions: list[int]) -> OrderedDict[str, int]:
         """Assign label strings to the given target positions."""
@@ -193,8 +208,9 @@ class LeapHelper:
 
     def show_label_map(self, label_map: OrderedDict[str, int]) -> None:
         """Display labels near targets."""
+        doc = self.get_editor().document()
         info_group = {
-            pos + 1: label
+            self._label_anchor_position(doc, pos): label
             for label, pos in label_map.items()
         }
         if info_group:
