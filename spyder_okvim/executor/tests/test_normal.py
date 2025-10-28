@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Tests for the executor_normal."""
 
 # Standard Libraries
@@ -719,7 +718,7 @@ def test_colon_num_cmd(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -900,34 +899,32 @@ def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     qtbot.wait(0)
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert vim.vim_cmd.vim_status.sub_mode is None
-    assert all(
-        label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate
-    )
+    assert all(label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate)
 
 
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
-        ("", ["s", "aa"], 0),
-        ("", ["s", "a", Qt.Key_Escape], 0),
+        ("", ["s", "ss"], 0),
+        ("", ["s", "s", Qt.Key_Escape], 0),
         ("", [";"], 0),
         ("", [","], 0),
         ("\n", ["j", "s", "rr"], 1),
-        ("d\ndhr Dhr dhr", ["sdha"], 2),
-        ("d\ndhr Dhr dhr", ["sdhb"], 10),
-        ("d\ndhr Dhr dhr", ["sdha", ";"], 10),
-        ("d\ndhr Dhr dhr", ["sdha", ";,"], 2),
-        ("d\ndhr Dhr dhr", ["j$", "Sdha"], 10),
-        ("d\ndhr Dhr dhr", ["j$", "Sdhb"], 2),
-        ("d\ndhr Dhr dhr", ["j$", "Sdha", ";"], 2),
-        ("d\ndhr Dhr dhr", ["j$", "Sdha", ";,"], 10),
+        ("d\ndhr Dhr dhr", ["sdhs"], 2),
+        ("d\ndhr Dhr dhr", ["sdhf"], 10),
+        ("d\ndhr Dhr dhr", ["sdhs", ";"], 10),
+        ("d\ndhr Dhr dhr", ["sdhf", ";,"], 2),
+        ("d\ndhr Dhr dhr", ["j$", "Sdhs"], 10),
+        ("d\ndhr Dhr dhr", ["j$", "Sdhf"], 2),
+        ("d\ndhr Dhr dhr", ["j$", "Sdhs", ";"], 2),
+        ("d\ndhr Dhr dhr", ["j$", "Sdhf", ";,"], 10),
     ],
 )
 def test_leap_cmd(vim_bot, text, cmd_list, cursor_pos):
@@ -949,7 +946,7 @@ def test_leap_cmd(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -1637,7 +1634,7 @@ def test_y_cmd_in_normal(
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     reg = vim.vim_cmd.vim_status.register_dict[register_name]
@@ -1986,7 +1983,7 @@ def test_c_cmd_in_normal(
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     reg = vim.vim_cmd.vim_status.register_dict[reg_name]
@@ -2150,7 +2147,7 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -2182,7 +2179,7 @@ def test_search_corner_case_cmd(vim_bot, text, cmd_list):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -2221,7 +2218,7 @@ def test_asterisk_sharp_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -2355,7 +2352,7 @@ def test_search_cmd_with_option(vim_bot):
         (' "AAA" ', ["d", "a", '"'], 0, " ", '"', '"AAA" '),
         ("(AAA)", ["d", "i", "("], 1, "()", '"', "AAA"),
         (" (AAA)", ["d", "i", "("], 2, " ()", '"', "AAA"),
-        ("(AAA) ", ["$" "d", "i", "("], 5, "(AAA) ", '"', ""),
+        ("(AAA) ", ["$d", "i", "("], 5, "(AAA) ", '"', ""),
         ("(AAA)", ["d", "a", "("], 0, "", '"', "(AAA)"),
         ("(AAA)", ["%", "d", "a", ")"], 0, "", '"', "(AAA)"),
         (
@@ -2475,7 +2472,7 @@ def test_space_cmd(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -2508,7 +2505,7 @@ def test_backspace_cmd(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -2541,7 +2538,7 @@ def test_enter_cmd(vim_bot, text, cmd_list, cursor_pos):
                 qtbot.keyPress(cmd_line, cmd)
             if cmd == Qt.Key_Escape:
                 qtbot.wait(0)
-                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ""
                 assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
@@ -2638,13 +2635,7 @@ def test_squarebracket_d_cmd(vim_bot):
 
 
 CELL_SAMPLE = (
-    "# %% Cell 1\n"
-    "print('a')\n"
-    "\n"
-    "# %% Cell 2\n"
-    "print('b')\n"
-    "# %% Cell 3\n"
-    "print('c')\n"
+    "# %% Cell 1\nprint('a')\n\n# %% Cell 2\nprint('b')\n# %% Cell 3\nprint('c')\n"
 )
 
 
@@ -2795,10 +2786,7 @@ def test_cell_navigation_delete(vim_bot):
     cmd_line.setFocus()
     qtbot.keyClicks(cmd_line, "d]c")
 
-    assert (
-        editor.toPlainText()
-        == "# %% Cell 2\nprint('b')\n# %% Cell 3\nprint('c')\n"
-    )
+    assert editor.toPlainText() == "# %% Cell 2\nprint('b')\n# %% Cell 3\nprint('c')\n"
 
     _prepare_editor_with_cells(editor, qtbot)
     block_last = editor.document().findBlockByNumber(5)
@@ -2809,8 +2797,7 @@ def test_cell_navigation_delete(vim_bot):
     qtbot.keyClicks(cmd_line, "d[c")
 
     assert (
-        editor.toPlainText()
-        == "# %% Cell 1\nprint('a')\n\n# %% Cell 3\nprint('c')\n"
+        editor.toPlainText() == "# %% Cell 1\nprint('a')\n\n# %% Cell 3\nprint('c')\n"
     )
 
 

@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """Helper routines for Leap-style two-character motions."""
 
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Callable, Iterator
+from collections.abc import Callable, Iterator
 
 from qtpy.QtCore import QPoint
 from qtpy.QtGui import QTextDocument
@@ -15,7 +14,7 @@ from spyder_okvim.utils.motion import MotionInfo, MotionType
 class LeapHelper:
     """Expose operations that mimic ``leap.nvim`` behaviour."""
 
-    _LABEL_BASE = "abcdefghijklmnopqrstuvwxyz0123456789"
+    _LABEL_BASE = "sfnjklhodweimbuyvrgtaqpcxzSFNJKLHODWEIMBUYVRGTAQPCXZ"
 
     def __init__(self, vim_status, set_motion_info: Callable[..., MotionInfo]):
         self.vim_status = vim_status
@@ -79,7 +78,9 @@ class LeapHelper:
 
         cursor_pos = self.get_editor().textCursor().position()
         if reverse:
-            before = sorted((pos for pos in positions if pos < cursor_pos), reverse=True)
+            before = sorted(
+                (pos for pos in positions if pos < cursor_pos), reverse=True
+            )
             after = sorted(
                 (pos for pos in positions if pos >= cursor_pos), reverse=True
             )
@@ -174,9 +175,7 @@ class LeapHelper:
             for second in base:
                 yield f"{first}{second}"
 
-    def _next_label(
-        self, label_stream: Iterator[str], used_labels: set[str]
-    ) -> str:
+    def _next_label(self, label_stream: Iterator[str], used_labels: set[str]) -> str:
         """Return the next label not present in ``used_labels``."""
         for label in label_stream:
             if label not in used_labels:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Tests for the executor_visual."""
 
 # Third Party Libraries
@@ -127,9 +126,7 @@ def test_v_cmd(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
-    assert all(
-        label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate
-    )
+    assert all(label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate)
 
 
 @pytest.mark.parametrize(
@@ -658,10 +655,10 @@ def test_F_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         ("", ["v", ";"], 0, [0, 0]),
         ("", ["v", ","], 0, [0, 0]),
         ("\n", ["v", "j", "s", "rr"], 1, [0, 1]),
-        ("d\ndhr Dhr dhr", ["v", "sdha"], 2, [0, 3]),
-        ("d\ndhr Dhr dhr", ["v", "sdhb"], 10, [0, 11]),
-        ("d\ndhr Dhr dhr", ["v", "sdha", ";"], 10, [0, 11]),
-        ("d\ndhr Dhr dhr", ["v", "sdha", ";,"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "sdhs"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "sdhf"], 10, [0, 11]),
+        ("d\ndhr Dhr dhr", ["v", "sdhs", ";"], 10, [0, 11]),
+        ("d\ndhr Dhr dhr", ["v", "sdhs", ";,"], 2, [0, 3]),
     ],
 )
 def test_leap_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):

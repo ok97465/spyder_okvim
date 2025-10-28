@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Tests for the executor_vline."""
 
 # Third Party Libraries
@@ -71,9 +70,7 @@ def test_V_cmd(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
-    assert all(
-        label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate
-    )
+    assert all(label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate)
 
 
 @pytest.mark.parametrize(
@@ -562,19 +559,19 @@ def test_F_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos, sel_pos",
     [
-        ("", ["V", "s", "aa"], 0, [0, 0]),
-        ("", ["V", "s", "a", Qt.Key_Escape], 0, [0, 0]),
+        ("", ["V", "s", "ss"], 0, [0, 0]),
+        ("", ["V", "s", "s", Qt.Key_Escape], 0, [0, 0]),
         ("", ["V", ";"], 0, [0, 0]),
         ("", ["V", ","], 0, [0, 0]),
         ("\n", ["V", "j", "s", "rr"], 1, [0, 1]),
-        ("d\ndhr Dhr dhr", ["V", "sdha"], 2, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "sdhb"], 10, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "sdha", ";"], 10, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "sdha", ";,"], 2, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "j$", "Sdha"], 10, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "j$", "Sdhb"], 2, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "j$", "Sdha", ";"], 2, [0, 13]),
-        ("d\ndhr Dhr dhr", ["V", "j$", "Sdha", ";,"], 10, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "sdhs"], 2, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "sdhf"], 10, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "sdhs", ";"], 10, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "sdhs", ";,"], 2, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "j$", "Sdhs"], 10, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "j$", "Sdhf"], 2, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "j$", "Sdhs", ";"], 2, [0, 13]),
+        ("d\ndhr Dhr dhr", ["V", "j$", "Sdhs", ";,"], 10, [0, 13]),
     ],
 )
 def test_leap_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
