@@ -20,6 +20,7 @@ from spyder_okvim.executor.executor_surround import (
     ExecutorDeleteSurround,
 )
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
 class ExecutorSubMotion_i(ExecutorSubBase):
@@ -708,28 +709,150 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
+        self.selector = ExecutorSubCmdLeapSelect(vim_status, self)
+        self._base_cmd: str | None = None
 
     def __call__(self, ch2: str):
         """Jump to the matching two-character sequence and execute."""
-        if len(ch2) < 2:
+        if not ch2:
             return False
+        if not self.vim_status.input_cmd.cmd:
+            self.helper_motion.leap_helper.clear_overlays()
+            self.vim_status.sub_mode = None
+            self.reset_base_cmd()
+            return True
+
         ch_previous = self.vim_status.input_cmd.cmd[-1]
-        method = self.helper_motion.find_cmd_map.get(ch_previous, None)
+        if len(ch2) == 1:
+            base_cmd = ch_previous
+            self._base_cmd = base_cmd
+        else:
+            base_cmd = self._base_cmd or ch_previous
+
+        method = self.helper_motion.find_cmd_map.get(base_cmd, None)
 
         self.update_input_cmd_info(None, None, ch2)
 
-        self.vim_status.sub_mode = None
+        if len(ch2) == 1:
+            reverse = base_cmd in "LSZ"
+            self.helper_motion.leap_helper.preview_first_char(ch2, reverse)
+            return False
 
-        if method:
-            if len(self.parent_num) == 1:
-                num = self.parent_num[0]
-            else:
-                num = self.parent_num[0] * self.parent_num[-1]
+        self.helper_motion.leap_helper.clear_overlays()
+
+        if not method:
+            self.reset_base_cmd()
+            return True
+
+        if len(self.parent_num) == 1:
+            num = self.parent_num[0]
+        else:
+            num = self.parent_num[0] * self.parent_num[-1]
+
+        reverse = base_cmd in "LSZ"
+        if reverse:
+            positions = self.helper_motion.search_backward_in_view(ch2)
+            self.vim_status.find_info.set("L", ch2)
+        else:
+            positions = self.helper_motion.search_forward_in_view(ch2)
+            self.vim_status.find_info.set("l", ch2)
+
+        if not positions:
             motion_info = method(ch2, num)
-            return self.process_return(self.execute_func_deferred(motion_info))
+            result = self.process_return(self.execute_func_deferred(motion_info))
+            self.vim_status.sub_mode = None
+            self.reset_base_cmd()
+            return result
 
-        return True
+        if len(positions) == 1:
+            motion_info = method(ch2, num)
+            result = self.process_return(self.execute_func_deferred(motion_info))
+            self.vim_status.sub_mode = None
+            self.reset_base_cmd()
+            return result
 
+        label_map = self.helper_motion.leap_helper.build_label_map(positions)
+        self.helper_motion.leap_helper.show_label_map(label_map)
+
+        motion_map = {
+            label: self.helper_motion.leap_helper._set_motion_info(
+                pos, motion_type=MotionType.CharWise
+            )
+            for label, pos in label_map.items()
+        }
+
+        self.selector.prepare_targets(motion_map)
+        self.selector.set_func_list_deferred(
+            self.func_list_deferred, self.return_deferred
+        )
+        self.set_parent_info_to_submode(
+            self.selector, num, self.parent_num_str[-1] if self.parent_num_str else ""
+        )
+        return self.process_return(
+            RETURN_EXECUTOR_METHOD_INFO(self.selector, True)
+        )
+
+    def reset_base_cmd(self) -> None:
+        """Forget the command that initiated the current Leap sequence."""
+        self._base_cmd = None
+
+
+class ExecutorSubCmdLeapSelect(ExecutorSubBase):
+    """Handle label selection after ambiguous Leap matches."""
+
+    def __init__(self, vim_status, parent_executor: ExecutorSubCmdLeap):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+        self._label_to_motion: dict[str, MotionInfo] = {}
+        self._partial = ""
+        self._parent_executor = parent_executor
+
+    def prepare_targets(self, label_map: dict[str, MotionInfo]) -> None:
+        """Store label mapping for subsequent keypresses."""
+        self._label_to_motion = label_map
+        self._partial = ""
+
+    def cleanup(self) -> None:
+        """Reset internal state and hide annotations."""
+        self._label_to_motion = {}
+        self._partial = ""
+        self.helper_motion.leap_helper.clear_overlays()
+        self.vim_status.sub_mode = None
+        if hasattr(self.vim_status, "cmd_line"):
+            self.vim_status.cmd_line.clear()
+        self._parent_executor.reset_base_cmd()
+
+    def __call__(self, ch: str):
+        """Accept label characters and execute the matching motion."""
+        if not ch:
+            return False
+
+        if ch == "\x1b":  # Escape
+            self.cleanup()
+            return True
+
+        if ch == "\b":  # Backspace
+            self._partial = self._partial[:-1]
+            return False
+
+        self._partial += ch
+
+        matching_labels = [
+            label
+            for label in self._label_to_motion
+            if label.startswith(self._partial)
+        ]
+
+        if not matching_labels:
+            self.cleanup()
+            return True
+
+        if self._partial not in self._label_to_motion:
+            return False
+
+        motion_info = self._label_to_motion[self._partial]
+        self.cleanup()
+        return self.process_return(self.execute_func_deferred(motion_info))
 
 class ExecutorSubCmd_r(ExecutorSubBase):
     """Submode of r."""

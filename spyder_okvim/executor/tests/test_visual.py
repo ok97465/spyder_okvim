@@ -648,9 +648,10 @@ def test_F_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         ("", ["v", ";"], 0, [0, 0]),
         ("", ["v", ","], 0, [0, 0]),
         ("\n", ["v", "j", "s", "rr"], 1, [0, 1]),
-        ("d\ndhr Dhr dhr", ["v", "sdh"], 2, [0, 3]),
-        ("d\ndhr Dhr dhr", ["v", "sdh", ";"], 10, [0, 11]),
-        ("d\ndhr Dhr dhr", ["v", "sdh", ";,"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "sdha"], 2, [0, 3]),
+        ("d\ndhr Dhr dhr", ["v", "sdhb"], 10, [0, 11]),
+        ("d\ndhr Dhr dhr", ["v", "sdha", ";"], 10, [0, 11]),
+        ("d\ndhr Dhr dhr", ["v", "sdha", ";,"], 2, [0, 3]),
     ],
 )
 def test_leap_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):

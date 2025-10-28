@@ -210,12 +210,7 @@ class SelectionMixin:
             executor_sub = self.executor_sub_leap
             self.set_parent_info_to_submode(executor_sub, num, num_str)
             executor_sub.set_func_list_deferred(
-                [
-                    FUNC_INFO(self.apply_motion_info_in_sel, True),
-                    FUNC_INFO(
-                        self.helper_motion.display_additional_leap_targets, False
-                    ),
-                ]
+                [FUNC_INFO(self.apply_motion_info_in_sel, True)]
             )
             return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
         else:

@@ -214,12 +214,7 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
             self.set_parent_info_to_submode(executor_sub, num, num_str)
 
             executor_sub.set_func_list_deferred(
-                [
-                    FUNC_INFO(self.apply_motion_info_in_vline, True),
-                    FUNC_INFO(
-                        self.helper_motion.display_additional_reverse_leap_targets, False
-                    ),
-                ]
+                [FUNC_INFO(self.apply_motion_info_in_vline, True)]
             )
 
             return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)

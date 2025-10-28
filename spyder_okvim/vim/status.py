@@ -128,6 +128,7 @@ class VimStatus(QObject):
         if editor:
             editor.clear_extra_selections("vim_selection")
             editor.clear_extra_selections("vim_cursor")
+        self.hide_annotate_on_txt()
 
     def is_normal(self):
         """Check that vim state is normal mode."""
