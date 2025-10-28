@@ -739,7 +739,7 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
             self.helper_motion.leap_helper.preview_first_char(ch2, reverse)
             return False
 
-        self.helper_motion.leap_helper.clear_overlays()
+        self.helper_motion.leap_helper.clear_overlays(preserve_preview=True)
 
         if not method:
             self.reset_base_cmd()

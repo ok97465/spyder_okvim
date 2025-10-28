@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Callable
+from typing import Callable, Iterator
 
 from qtpy.QtCore import QPoint
 from qtpy.QtGui import QTextDocument
@@ -15,15 +15,13 @@ from spyder_okvim.utils.motion import MotionInfo, MotionType
 class LeapHelper:
     """Expose operations that mimic ``leap.nvim`` behaviour."""
 
-    _PREVIEW_TOKEN = ".."
     _LABEL_BASE = "abcdefghijklmnopqrstuvwxyz0123456789"
 
     def __init__(self, vim_status, set_motion_info: Callable[..., MotionInfo]):
         self.vim_status = vim_status
         self.get_editor = vim_status.get_editor
         self._set_motion_info = set_motion_info
-        self._preview_positions: list[int] = []
-        self._active_labels: OrderedDict[str, int] = OrderedDict()
+        self._preview_labels_by_pos: OrderedDict[int, str] = OrderedDict()
 
     # ------------------------------------------------------------------
     # Viewport utilities
@@ -80,10 +78,15 @@ class LeapHelper:
     # ------------------------------------------------------------------
     # Preview helpers
     # ------------------------------------------------------------------
-    def clear_overlays(self) -> None:
-        """Remove any active Leap annotations."""
-        self._preview_positions.clear()
-        self._active_labels.clear()
+    def clear_overlays(self, *, preserve_preview: bool = False) -> None:
+        """Remove any active Leap annotations.
+
+        Args:
+            preserve_preview: When ``True``, keep the preview label mapping so
+                that follow-up stages can reuse the same labels.
+        """
+        if not preserve_preview:
+            self._preview_labels_by_pos.clear()
         self.vim_status.hide_annotate_on_txt()
 
     def preview_first_char(self, char: str, reverse: bool) -> None:
@@ -96,41 +99,96 @@ class LeapHelper:
             else self.search_forward_in_view(char)
         )
         max_annotations = self.vim_status.n_annotate_max
-        info_group = {
-            pos + 1: self._PREVIEW_TOKEN
-            for pos in positions[:max_annotations]
-        }
-        self._preview_positions = positions[:max_annotations]
+        limited_positions = positions[:max_annotations]
+        if not limited_positions:
+            self._preview_labels_by_pos.clear()
+            self.vim_status.hide_annotate_on_txt()
+            return
+
+        doc = self.get_editor().document()
+        preview_mapping = self._build_preview_label_map(limited_positions, doc)
+        self._preview_labels_by_pos = preview_mapping
+
+        info_group = {pos + 1: label for pos, label in preview_mapping.items()}
         if info_group:
             self.vim_status.annotate_on_txt(info_group)
         else:
             self.vim_status.hide_annotate_on_txt()
 
+    def _build_preview_label_map(
+        self, positions: list[int], doc: QTextDocument
+    ) -> OrderedDict[int, str]:
+        """Return per-position labels grouped by their two-character key."""
+        preview: OrderedDict[int, str] = OrderedDict()
+        for pos_list in self._group_positions_by_pair(positions, doc).values():
+            label_stream = self._label_stream()
+            used_labels: set[str] = set()
+            for pos in pos_list:
+                preview[pos] = self._next_label(label_stream, used_labels)
+        return preview
+
+    def _label_stream(self) -> Iterator[str]:
+        """Yield label strings in the same order as ``leap.nvim``."""
+        base = self._LABEL_BASE
+        for ch in base:
+            yield ch
+        for first in base:
+            for second in base:
+                yield f"{first}{second}"
+
+    def _next_label(
+        self, label_stream: Iterator[str], used_labels: set[str]
+    ) -> str:
+        """Return the next label not present in ``used_labels``."""
+        for label in label_stream:
+            if label not in used_labels:
+                used_labels.add(label)
+                return label
+        raise RuntimeError("Ran out of Leap labels")
+
+    def _group_positions_by_pair(
+        self, positions: list[int], doc: QTextDocument
+    ) -> OrderedDict[str, list[int]]:
+        """Return positions grouped by their two-character key."""
+        group_map: OrderedDict[str, list[int]] = OrderedDict()
+        for pos in positions:
+            pair_key = self._get_pair_key(doc, pos)
+            group_map.setdefault(pair_key, []).append(pos)
+
+        return group_map
+
+    def _get_pair_key(self, doc: QTextDocument, pos: int) -> str:
+        """Return the two-character key starting at ``pos``."""
+        first = self._char_from_doc(doc, pos)
+        second = self._char_from_doc(doc, pos + 1)
+        return f"{first}{second}"
+
+    def _char_from_doc(self, doc: QTextDocument, pos: int) -> str:
+        """Return the character at ``pos`` or empty string."""
+        if pos < 0:
+            return ""
+        char = doc.characterAt(pos)
+        if char is None:
+            return ""
+        text = str(char)
+        if not text or text == "\x00":
+            return ""
+        return "\n" if text == "\u2029" else text
+
     def build_label_map(self, positions: list[int]) -> OrderedDict[str, int]:
         """Assign label strings to the given target positions."""
         limited = positions[: self.vim_status.n_annotate_max]
-        count = len(limited)
-        labels: list[str] = []
-        base = list(self._LABEL_BASE)
+        mapping: OrderedDict[str, int] = OrderedDict()
+        label_stream = self._label_stream()
+        used_labels: set[str] = set()
 
-        for ch in base:
-            labels.append(ch)
-            if len(labels) >= count:
-                break
-
-        if len(labels) < count:
-            for first in base:
-                for second in base:
-                    labels.append(first + second)
-                    if len(labels) >= count:
-                        break
-                if len(labels) >= count:
-                    break
-
-        mapping = OrderedDict(
-            (label, pos) for label, pos in zip(labels, limited)
-        )
-        self._active_labels = mapping
+        for pos in limited:
+            label = self._preview_labels_by_pos.get(pos)
+            if label and label not in used_labels:
+                used_labels.add(label)
+            else:
+                label = self._next_label(label_stream, used_labels)
+            mapping[label] = pos
         return mapping
 
     def show_label_map(self, label_map: OrderedDict[str, int]) -> None:
