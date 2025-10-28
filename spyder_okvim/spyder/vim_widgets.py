@@ -407,9 +407,13 @@ class VimLineEdit(QLineEdit):
         """Clear state."""
         self.vim_status.input_cmd.clear()
         self.vim_status.remove_marker_of_easymotion()
-        if self.vim_status.sub_mode:
-            self.vim_status.sub_mode = None
-            self.clear()
+        sub_mode = self.vim_status.sub_mode
+        if sub_mode:
+            try:
+                sub_mode.on_escape()
+            finally:
+                self.vim_status.sub_mode = None
+                self.clear()
         else:
             self.to_normal()
 

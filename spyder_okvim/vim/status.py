@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Main object storing global Vim state."""
 
 # Standard Libraries
@@ -426,7 +425,7 @@ class VimStatus(QObject):
             current = self.get_current_location()
             if previous is not None and current and current != previous:
                 pos = current[1]
-                
+
                 if pos < 1:
                     # The cursor may be set to 0 before it is created and positioned,
                     # but a definition never starts at cursor position 0.
@@ -539,7 +538,7 @@ class VimStatus(QObject):
         for idx in range(self.n_annotate_max):
             self.labels_for_annotate[idx].hide()
 
-    def annotate_on_txt(self, info: dict[int, str], timeout: int = -1):
+    def annotate_on_txt(self, info: dict[int, str]):
         """Annotate the editor with temporary inline labels.
 
         Args:
@@ -554,12 +553,10 @@ class VimStatus(QObject):
         ch_height = fm.height()
 
         padding_h = (
-            ANNOTATION_STYLE["padding_h"] * 2
-            + ANNOTATION_STYLE["border_width"] * 2
+            ANNOTATION_STYLE["padding_h"] * 2 + ANNOTATION_STYLE["border_width"] * 2
         )
         padding_v = (
-            ANNOTATION_STYLE["padding_v"] * 2
-            + ANNOTATION_STYLE["border_width"] * 2
+            ANNOTATION_STYLE["padding_v"] * 2 + ANNOTATION_STYLE["border_width"] * 2
         )
 
         for idx, (pos, data) in enumerate(info.items()):
@@ -582,5 +579,3 @@ class VimStatus(QObject):
             label.move(pos_in_parent)
             label.raise_()
             label.show()
-
-        QTimer.singleShot(timeout, self.hide_annotate_on_txt)

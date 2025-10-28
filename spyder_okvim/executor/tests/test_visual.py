@@ -127,6 +127,9 @@ def test_v_cmd(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert sel_pos_ == sel_pos
+    assert all(
+        label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate
+    )
 
 
 @pytest.mark.parametrize(
@@ -522,7 +525,13 @@ def test_colon_num_cmd_in_v(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -645,6 +654,7 @@ def test_F_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     "text, cmd_list, cursor_pos, sel_pos",
     [
         ("", ["v", "s", "aa"], 0, [0, 0]),
+        ("", ["v", "s", "a", Qt.Key_Escape], 0, [0, 0]),
         ("", ["v", ";"], 0, [0, 0]),
         ("", ["v", ","], 0, [0, 0]),
         ("\n", ["v", "j", "s", "rr"], 1, [0, 1]),
@@ -667,8 +677,15 @@ def test_leap_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
+    qtbot.wait(0)
     sel = editor.get_extra_selections("vim_selection")[0]
     sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
 
@@ -1439,7 +1456,13 @@ def test_search_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     sel = editor.get_extra_selections("vim_selection")[0]
     sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
@@ -1470,7 +1493,13 @@ def test_asterisk_sharp_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_p
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     sel = editor.get_extra_selections("vim_selection")[0]
     sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
@@ -1502,7 +1531,13 @@ def test_space_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     sel = editor.get_extra_selections("vim_selection")[0]
     sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
@@ -1530,7 +1565,13 @@ def test_backspace_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     sel = editor.get_extra_selections("vim_selection")[0]
     sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]
@@ -1558,7 +1599,13 @@ def test_enter_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     sel = editor.get_extra_selections("vim_selection")[0]
     sel_pos_ = [sel.cursor.selectionStart(), sel.cursor.selectionEnd()]

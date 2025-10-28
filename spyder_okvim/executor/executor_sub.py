@@ -716,10 +716,11 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
         """Jump to the matching two-character sequence and execute."""
         if not ch2:
             return False
+        if ch2 == "\x1b":
+            self.on_escape()
+            return True
         if not self.vim_status.input_cmd.cmd:
-            self.helper_motion.leap_helper.clear_overlays()
-            self.vim_status.sub_mode = None
-            self.reset_base_cmd()
+            self._clear_state(clear_input=True, clear_cmd_line=True)
             return True
 
         ch_previous = self.vim_status.input_cmd.cmd[-1]
@@ -760,15 +761,13 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
         if not positions:
             motion_info = method(ch2, num)
             result = self.process_return(self.execute_func_deferred(motion_info))
-            self.vim_status.sub_mode = None
-            self.reset_base_cmd()
+            self._clear_state()
             return result
 
         if len(positions) == 1:
             motion_info = method(ch2, num)
             result = self.process_return(self.execute_func_deferred(motion_info))
-            self.vim_status.sub_mode = None
-            self.reset_base_cmd()
+            self._clear_state()
             return result
 
         label_map = self.helper_motion.leap_helper.build_label_map(positions)
@@ -796,6 +795,20 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
         """Forget the command that initiated the current Leap sequence."""
         self._base_cmd = None
 
+    def on_escape(self) -> None:
+        """Handle escape by clearing Leap overlays."""
+        self._clear_state(clear_input=True, clear_cmd_line=True)
+
+    def _clear_state(self, *, clear_input: bool = False, clear_cmd_line: bool = False):
+        """Reset Leap overlays and optionally clear command state."""
+        self.helper_motion.leap_helper.clear_overlays()
+        self.reset_base_cmd()
+        if clear_input:
+            self.vim_status.input_cmd.clear()
+        self.vim_status.sub_mode = None
+        if clear_cmd_line and hasattr(self.vim_status, "cmd_line"):
+            self.vim_status.cmd_line.clear()
+
 
 class ExecutorSubCmdLeapSelect(ExecutorSubBase):
     """Handle label selection after ambiguous Leap matches."""
@@ -807,6 +820,10 @@ class ExecutorSubCmdLeapSelect(ExecutorSubBase):
         self._partial = ""
         self._parent_executor = parent_executor
 
+    def on_escape(self) -> None:
+        """Handle escape by cleaning up label targets."""
+        self.cleanup()
+
     def prepare_targets(self, label_map: dict[str, MotionInfo]) -> None:
         """Store label mapping for subsequent keypresses."""
         self._label_to_motion = label_map
@@ -816,11 +833,9 @@ class ExecutorSubCmdLeapSelect(ExecutorSubBase):
         """Reset internal state and hide annotations."""
         self._label_to_motion = {}
         self._partial = ""
-        self.helper_motion.leap_helper.clear_overlays()
-        self.vim_status.sub_mode = None
-        if hasattr(self.vim_status, "cmd_line"):
-            self.vim_status.cmd_line.clear()
-        self._parent_executor.reset_base_cmd()
+        self._parent_executor._clear_state(
+            clear_input=True, clear_cmd_line=True
+        )
 
     def __call__(self, ch: str):
         """Accept label characters and execute the matching motion."""

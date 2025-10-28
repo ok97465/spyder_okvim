@@ -713,7 +713,14 @@ def test_colon_num_cmd(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -887,17 +894,29 @@ def test_f_cmd(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
+    qtbot.wait(0)
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
     assert vim.vim_cmd.vim_status.sub_mode is None
+    assert all(
+        label.isHidden() for label in vim.vim_cmd.vim_status.labels_for_annotate
+    )
 
 
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
         ("", ["s", "aa"], 0),
+        ("", ["s", "a", Qt.Key_Escape], 0),
         ("", [";"], 0),
         ("", [","], 0),
         ("\n", ["j", "s", "rr"], 1),
@@ -924,7 +943,14 @@ def test_leap_cmd(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -1605,7 +1631,14 @@ def test_y_cmd_in_normal(
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     reg = vim.vim_cmd.vim_status.register_dict[register_name]
     assert cmd_line.text() == ""
@@ -1947,7 +1980,14 @@ def test_c_cmd_in_normal(
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     reg = vim.vim_cmd.vim_status.register_dict[reg_name]
     assert cmd_line.text() == ""
@@ -2104,7 +2144,14 @@ def test_search_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -2129,7 +2176,14 @@ def test_search_corner_case_cmd(vim_bot, text, cmd_list):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert vim.vim_cmd.vim_status.sub_mode is None
@@ -2161,7 +2215,14 @@ def test_asterisk_sharp_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -2408,7 +2469,14 @@ def test_space_cmd(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -2434,7 +2502,14 @@ def test_backspace_cmd(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos
@@ -2460,7 +2535,14 @@ def test_enter_cmd(vim_bot, text, cmd_list, cursor_pos):
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
         else:
-            qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                cmd_line.esc_pressed()
+            else:
+                qtbot.keyPress(cmd_line, cmd)
+            if cmd == Qt.Key_Escape:
+                qtbot.wait(0)
+                assert vim.vim_cmd.vim_status.input_cmd.cmd == ''
+                assert vim.vim_cmd.vim_status.sub_mode is None
 
     assert cmd_line.text() == ""
     assert editor.textCursor().position() == cursor_pos

@@ -102,7 +102,7 @@ class LeapHelper:
         }
         self._preview_positions = positions[:max_annotations]
         if info_group:
-            self.vim_status.annotate_on_txt(info_group, timeout=1200)
+            self.vim_status.annotate_on_txt(info_group)
         else:
             self.vim_status.hide_annotate_on_txt()
 
@@ -140,7 +140,7 @@ class LeapHelper:
             for label, pos in label_map.items()
         }
         if info_group:
-            self.vim_status.annotate_on_txt(info_group, timeout=1500)
+            self.vim_status.annotate_on_txt(info_group)
         else:
             self.vim_status.hide_annotate_on_txt()
 
@@ -169,7 +169,7 @@ class LeapHelper:
             pos + 1: f"{idx};" if idx != 1 else ";"
             for idx, pos in enumerate(positions, 1)
         }
-        self.vim_status.annotate_on_txt(info_group, timeout=1500)
+        self.vim_status.annotate_on_txt(info_group)
 
     def reverse_leap(
         self,
@@ -193,4 +193,4 @@ class LeapHelper:
             pos + 1: f"{idx};" if idx != 1 else ";"
             for idx, pos in enumerate(positions, 1)
         }
-        self.vim_status.annotate_on_txt(info_group, timeout=1500)
+        self.vim_status.annotate_on_txt(info_group)

@@ -178,6 +178,10 @@ class ExecutorSubBase(ExecutorBase):
         """Add input cmd to vim_status."""
         self.vim_status.input_cmd.cmd += input_txt
 
+    def on_escape(self) -> None:
+        """Handle ``Esc`` key while in this submode."""
+        return
+
     # ------------------------------------------------------------------
     # Common editor actions
     # ------------------------------------------------------------------
