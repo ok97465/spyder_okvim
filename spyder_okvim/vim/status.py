@@ -21,7 +21,7 @@ from spyder_okvim.utils.jump_list import JumpList
 from spyder_okvim.utils.qtcompat import text_width
 
 from .cursor import VimCursor
-from .label import InlineLabel
+from .label import ANNOTATION_STYLE, InlineLabel
 from .macro import MacroManager
 from .search import SearchInfo
 from .state import DotCmdInfo, FindInfo, InputCmdInfo, KeyInfo, RegisterInfo, VimState
@@ -552,10 +552,25 @@ class VimStatus(QObject):
         ch_width = text_width(fm, "H")
         ch_height = fm.height()
 
+        padding_h = (
+            ANNOTATION_STYLE["padding_h"] * 2
+            + ANNOTATION_STYLE["border_width"] * 2
+        )
+        padding_v = (
+            ANNOTATION_STYLE["padding_v"] * 2
+            + ANNOTATION_STYLE["border_width"] * 2
+        )
+
         for idx, (pos, data) in enumerate(info.items()):
+            if idx >= self.n_annotate_max:
+                break
+
             label = self.labels_for_annotate[idx]
             label.set_style(font.family(), font.pointSize())
-            label.setFixedSize(ch_width * len(data), ch_height)
+            text_width_px = max(text_width(fm, data), ch_width)
+            label_width = text_width_px + padding_h
+            label_height = ch_height + padding_v
+            label.setFixedSize(label_width, label_height)
             label.setText(data)
 
             tc.setPosition(pos)
@@ -563,12 +578,8 @@ class VimStatus(QObject):
             pos_in_parent = editor.viewport().mapTo(
                 label.parent(), rect_in_local.topLeft()
             )
-            print(pos_in_parent)
             label.move(pos_in_parent)
             label.raise_()
             label.show()
-
-            if idx > self.n_annotate_max - 1:
-                break
 
         QTimer.singleShot(timeout, self.hide_annotate_on_txt)

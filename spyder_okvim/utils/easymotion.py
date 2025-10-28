@@ -11,6 +11,7 @@ from qtpy.QtWidgets import QPlainTextEdit, QWidget
 
 # Project Libraries
 from spyder_okvim.utils.qtcompat import text_width
+from spyder_okvim.vim.label import ANNOTATION_STYLE
 
 
 class EasyMotionMarkerManager:
@@ -88,26 +89,43 @@ class EasyMotionPainter(QObject):
         tc = editor.textCursor()
         fm = editor.fontMetrics()
 
-        pen_ch = QPen(QColor(220, 120, 120, 255))
-        pen_border = QPen(QColor(0, 160, 100, 255), 1)
+        font = editor.font()
+        font.setBold(True)
+
+        border_width = ANNOTATION_STYLE["border_width"]
+        padding_h = ANNOTATION_STYLE["padding_h"]
+        padding_v = ANNOTATION_STYLE["padding_v"]
+        radius = ANNOTATION_STYLE["radius"]
+
+        text_color = QColor(ANNOTATION_STYLE["text"])
+        border_color = QColor(ANNOTATION_STYLE["border"])
+        background_color = QColor(ANNOTATION_STYLE["background"])
+
+        pen_text = QPen(text_color)
+        pen_border = QPen(border_color, border_width)
 
         with QPainter(viewport) as painter:
-            painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-            painter.setBrush(QColor(57, 34, 79, 255))
-            painter.setFont(editor.font())
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setBrush(background_color)
+            painter.setFont(font)
             ch_width = text_width(fm, " ")
 
             for pos_ch, marker_name in zip(self.positions, self.names):
                 tc.setPosition(pos_ch)
 
                 rect = editor.cursorRect(tc)
-                rect.setWidth(ch_width * len(marker_name))
+                text_width_px = max(text_width(fm, marker_name), ch_width)
+                total_width = text_width_px + 2 * (padding_h + border_width)
+                total_height = fm.height() + 2 * (padding_v + border_width)
+
+                rect.setWidth(total_width)
+                rect.setHeight(total_height)
+                rect.translate(-(border_width + padding_h), -(border_width + padding_v))
 
                 if rect.intersects(viewport.rect()):
                     painter.setPen(pen_border)
-                    painter.drawRoundedRect(rect, 40, 40, Qt.RelativeSize)
-                    painter.setPen(pen_ch)
-                    text_height = rect.bottom() - fm.descent()
-                    painter.drawText(rect.left(), text_height, marker_name)
+                    painter.drawRoundedRect(rect, radius, radius)
+                    painter.setPen(pen_text)
+                    painter.drawText(rect, Qt.AlignCenter, marker_name)
 
         return True
