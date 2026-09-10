@@ -226,7 +226,7 @@ class VimCursor:
         old_cursor = editor.textCursor()
         sel_start = self.get_pos_start_in_selection()
         sel_end = self.get_pos_end_in_selection()
-        if sel_start:
+        if sel_start is not None:
             new_cursor = editor.textCursor()
             new_cursor.setPosition(sel_start, QTextCursor.MoveAnchor)
             new_cursor.setPosition(sel_end, QTextCursor.KeepAnchor)

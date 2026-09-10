@@ -18,6 +18,8 @@ class ExecutorLeaderKey(ExecutorBase):
         self.dispatcher = {
             "i": self.auto_import,
             "b": self.toggle_breakpoint,
+            "d": self.debug_cell,
+            "D": self.debug_selection,
             "\r": self.run_cell_and_advance,
             "r": self.run_selection,
             "f": self.formatting,
@@ -78,6 +80,24 @@ class ExecutorLeaderKey(ExecutorBase):
         if old_cursor:
             editor.setTextCursor(old_cursor)
         self.vim_status.set_focus_to_vim()
+
+    def debug_cell(self, num=1, num_str=""):
+        """Debug the current cell without advancing to the next cell."""
+        editor_stack = self.get_editorstack()
+        editor_stack.sig_trigger_action.emit("run cell in debugger", Plugins.Run)
+        self.vim_status.set_focus_to_vim()
+
+    def debug_selection(self, num=1, num_str=""):
+        """Debug selected text or the current line without advancing."""
+        editor_stack = self.get_editorstack()
+        editor = self.get_editor()
+        old_cursor = self.set_selection_to_editor_using_vim_selection()
+        try:
+            editor_stack.sig_trigger_action.emit("run selection in debugger", Plugins.Run)
+        finally:
+            if old_cursor is not None:
+                editor.setTextCursor(old_cursor)
+            self.vim_status.set_focus_to_vim()
 
     def retrieve_curosr_pos(self, pos: int, delay: int):
         """Retrieve the cursor position."""

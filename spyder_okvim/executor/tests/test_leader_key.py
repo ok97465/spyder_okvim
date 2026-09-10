@@ -59,32 +59,105 @@ def test_run_cell_and_advance(vim_bot):
     assert tuple(blocker.args) == expected_args
 
 
-def test_run_selection(vim_bot):
-    """Test run_selection."""
+def test_debug_cell(vim_bot):
+    """Lowercase leader d dispatches Spyder's current-cell debugger action."""
     _, editor_stack, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\nc\n")
-    vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.to_normal()
-
     cmd_line = vim.vim_cmd.commandline
+    cmd_line.to_normal()
+    text = "# %% First\nalpha = 1\n# %% Second\nbeta = 2\n"
+    editor.set_text(text)
+    vim.vim_cmd.vim_status.reset_for_test()
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(text.index("beta"))
+    cmd_line.setFocus()
+    original_cursor = editor.textCursor()
+
+    try:
+        signal = editor_stack.sig_trigger_action
+        with qtbot.waitSignal(signal, timeout=1000) as blocker:
+            qtbot.keyPress(cmd_line, Qt.Key_Space)
+            qtbot.keyClicks(cmd_line, "d")
+
+        assert cmd_line.text() == ""
+        assert tuple(blocker.args) == ("run cell in debugger", Plugins.Run)
+        assert editor.textCursor().position() == original_cursor.position()
+        assert editor.textCursor().anchor() == original_cursor.anchor()
+        assert editor.toPlainText() == text
+    finally:
+        cmd_line.to_normal()
+
+
+@pytest.mark.parametrize(
+    "key, action",
+    [
+        ("r", "run selection and advance"),
+        ("D", "run selection in debugger"),
+    ],
+)
+@pytest.mark.parametrize(
+    "start, selection_keys, expected_selection",
+    [
+        pytest.param(12, "", "", id="current-line"),
+        pytest.param(0, "v2l", "alp", id="characterwise-at-zero"),
+        pytest.param(10, "v2l", "bet", id="characterwise-after-zero"),
+        pytest.param(0, "Vj", "alpha = 1\nbeta = 2", id="linewise-at-zero"),
+        pytest.param(10, "Vj", "beta = 2\ngamma = 3", id="linewise-after-zero"),
+    ],
+)
+def test_run_or_debug_selection(
+    vim_bot, key, action, start, selection_keys, expected_selection
+):
+    """Expose Vim selections to Spyder while dispatching r and uppercase D."""
+    _, editor_stack, editor, vim, qtbot = vim_bot
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.to_normal()
+    text = "alpha = 1\nbeta = 2\ngamma = 3\n"
+    editor.set_text(text)
+    vim.vim_cmd.vim_status.reset_for_test()
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(start)
+    cmd_line.setFocus()
+    if selection_keys:
+        qtbot.keyClicks(cmd_line, selection_keys)
+    original_cursor = editor.textCursor()
+    assert not original_cursor.hasSelection()
+
+    delivered = []
+
+    def capture_action(action_id, plugin):
+        # Spyder consumes the native selection synchronously during emission.
+        delivered.append(
+            (action_id, plugin, editor.textCursor(), editor_stack.get_selection()[0])
+        )
+
     signal = editor_stack.sig_trigger_action
-    expected_args = ("run selection and advance", Plugins.Run)
-    with qtbot.waitSignal(signal, timeout=1000) as blocker:
+    signal.connect(capture_action)
+    try:
         qtbot.keyPress(cmd_line, Qt.Key_Space)
-        qtbot.keyClicks(cmd_line, "r")
+        qtbot.keyClicks(cmd_line, key)
 
-    assert cmd_line.text() == ""
-    assert blocker.signal_triggered
-    assert tuple(blocker.args) == expected_args
+        assert cmd_line.text() == ""
+        assert len(delivered) == 1
+        action_id, plugin, delivered_cursor, executable_text = delivered[0]
+        assert (action_id, plugin) == (action, Plugins.Run)
+        assert executable_text == (expected_selection or "beta = 2")
+        assert (
+            delivered_cursor.selectedText().replace("\u2029", "\n")
+            == expected_selection
+        )
+        if expected_selection:
+            assert delivered_cursor.selectionStart() == start
+            assert delivered_cursor.selectionEnd() == start + len(expected_selection)
+        else:
+            assert not delivered_cursor.hasSelection()
+            assert delivered_cursor.position() == start
+            assert delivered_cursor.block().text() == "beta = 2"
 
-    qtbot.keyClicks(cmd_line, "Vj")
-    with qtbot.waitSignal(signal, timeout=1000) as blocker:
-        qtbot.keyPress(cmd_line, Qt.Key_Space)
-        qtbot.keyClicks(cmd_line, "r")
-
-    assert cmd_line.text() == ""
-    assert blocker.signal_triggered
-    assert tuple(blocker.args) == expected_args
+        restored_cursor = editor.textCursor()
+        assert restored_cursor.position() == original_cursor.position()
+        assert restored_cursor.anchor() == original_cursor.anchor()
+        assert editor.toPlainText() == text
+    finally:
+        signal.disconnect(capture_action)
+        cmd_line.to_normal()
 
 
 def test_formatting(vim_bot):

@@ -130,6 +130,8 @@ seconds, that temporary entry is discarded.
 
 - \<leader\>f : autoformat the curruent file
 - \<leader\>b : toggle a breakpoint
+- \<leader\>d : debug the current cell without advancing
+- \<leader\>D : debug the selection or current line without advancing
 - \<leader\>r : run the selection or current line in the console.
 - \<leader\>enter :  run cell and advance
 - \<leader\>p : Spyder switcher
@@ -140,6 +142,10 @@ seconds, that temporary entry is discarded.
   - gcc : toggle the comment for the current line
 - [c, ]c : go to previousr/next cell
 - yic, dic, cid : Operate on the entire current cell (yank, delete, or change respectively)
+
+The default leader key is Space. Press Space then `d` to debug a cell, or
+Space then Shift+`d` to debug the visual selection (the current line when
+nothing is selected).
 
 ## Vim Surround
 
