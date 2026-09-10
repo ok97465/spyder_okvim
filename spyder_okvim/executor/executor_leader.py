@@ -17,6 +17,7 @@ class ExecutorLeaderKey(ExecutorBase):
 
         self.dispatcher = {
             "i": self.auto_import,
+            "I": self.search_imports,
             "b": self.toggle_breakpoint,
             "d": self.debug_cell,
             "D": self.debug_selection,
@@ -59,6 +60,20 @@ class ExecutorLeaderKey(ExecutorBase):
             self.vim_status.set_focus_to_vim()
         except AttributeError:
             pass
+
+    def search_imports(self, num=1, num_str=""):
+        """Browse import candidates without filtering by the cursor word."""
+        editor = self.get_editor()
+        if editor is None or not editor.is_python() or editor.isReadOnly():
+            return
+        search = getattr(getattr(editor, "auto_import", None), "search_imports", None)
+        if not callable(search):
+            return
+        try:
+            search(query="")
+        finally:
+            # Spyder runs the picker modally; restore focus after it closes.
+            self.vim_status.set_focus_to_vim()
 
     def toggle_breakpoint(self, num=1, num_str=""):
         """Toggle break."""

@@ -2,11 +2,12 @@
 """Tests for the executor_leader_key."""
 
 # Standard Libraries
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, QTimer
 from spyder.api.plugins import Plugins
 
 
@@ -23,6 +24,95 @@ def test_auto_import(vim_bot):
 
     assert cmd_line.text() == ""
     assert editor.auto_import.auto_import.called
+
+
+@pytest.mark.parametrize("accept", [False, True], ids=["cancel", "import"])
+def test_search_imports_opens_unfiltered_project_picker(
+    vim_bot, monkeypatch, tmp_path, accept
+):
+    """Space+I opens the real picker, imports or cancels, then restores Vim."""
+    autoimport = pytest.importorskip("spyder.plugins.editor.extensions.autoimport")
+    selector = pytest.importorskip("spyder.plugins.editor.widgets.importselector")
+    _, _, editor, vim, qtbot = vim_bot
+    extension = autoimport.AutoImportExtension
+    monkeypatch.setattr(extension, "IMPORT_LISTS", {})
+    monkeypatch.setattr(extension, "PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setattr(editor, "auto_import", extension(editor, editor), raising=False)
+    monkeypatch.setattr(editor, "filename", str(tmp_path / "main.py"))
+    (tmp_path / "helpers.py").write_text(
+        "class Worker:\n    pass\ndef calculate():\n    pass\n", encoding="utf-8"
+    )
+    text = "unrelated_cursor_word()\n"
+    editor.set_text(text)
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.to_normal()
+    vim.vim_cmd.vim_status.reset_for_test()
+    vim.vim_cmd.vim_status.cursor.set_cursor_pos(3)
+    cmd_line.setFocus()
+    observed = []
+    timer = QTimer(editor)
+    timeout = QTimer(editor)
+    timeout.setSingleShot(True)
+
+    def interact():
+        for dialog in editor.findChildren(selector.ImportSearchDialog):
+            if not dialog.isVisible() or not dialog._scan_complete:
+                continue
+            observed.append((
+                dialog.search.text(),
+                {dialog.results.topLevelItem(i).text(0)
+                 for i in range(dialog.results.topLevelItemCount())},
+                dialog.search.hasFocus(),
+            ))
+            timer.stop()
+            if accept:
+                dialog.search.setText("Worker")
+            qtbot.keyClick(dialog.search, Qt.Key_Return if accept else Qt.Key_Escape)
+
+    def close_on_timeout():
+        for dialog in editor.findChildren(selector.ImportSearchDialog):
+            dialog.reject()
+
+    timer.timeout.connect(interact)
+    timeout.timeout.connect(close_on_timeout)
+    timer.start(10)
+    timeout.start(5000)
+    try:
+        qtbot.keyPress(cmd_line, Qt.Key_Space)
+        qtbot.keyClicks(cmd_line, "I")
+        assert observed == [("", {"Worker", "calculate"}, True)]
+        assert cmd_line.text() == ""
+        assert cmd_line.isVisible()
+        assert cmd_line.window().focusWidget() is cmd_line
+        # Offscreen Qt has no window manager to reactivate the parent dialog.
+        cmd_line.window().activateWindow()
+        qtbot.waitUntil(cmd_line.hasFocus)
+        assert editor.textCursor().block().text() == text.rstrip()
+        assert editor.textCursor().positionInBlock() == 3
+        if accept:
+            assert "from helpers import Worker" in editor.toPlainText()
+            editor.undo()
+        assert editor.toPlainText() == text
+    finally:
+        timer.stop()
+        timeout.stop()
+        timer.deleteLater()
+        timeout.deleteLater()
+        cmd_line.to_normal()
+
+
+@pytest.mark.parametrize("extension", [None, SimpleNamespace()])
+def test_search_imports_without_custom_spyder(vim_bot, monkeypatch, extension):
+    """A standard Spyder or an older fork still consumes the leader command."""
+    _, _, editor, vim, qtbot = vim_bot
+    monkeypatch.setattr(editor, "auto_import", extension, raising=False)
+    cmd_line = vim.vim_cmd.commandline
+    cmd_line.to_normal()
+    text = editor.toPlainText()
+    qtbot.keyPress(cmd_line, Qt.Key_Space)
+    qtbot.keyClicks(cmd_line, "I")
+    assert cmd_line.text() == ""
+    assert editor.toPlainText() == text
 
 
 def test_toggle_breakpoint(vim_bot):
