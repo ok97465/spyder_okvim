@@ -74,9 +74,6 @@ class VimStatus(QObject):
         # register
         self.register_dict = defaultdict(RegisterInfo)
 
-        # config
-        self.indent = "    "
-
         # search
         self.search = SearchInfo(self.cursor)
 
@@ -118,6 +115,11 @@ class VimStatus(QObject):
             InlineLabel(self.main) for _ in range(self.n_annotate_max)
         ]
         self.hide_annotate_on_txt()
+
+    @property
+    def indent(self) -> str:
+        """Return one indentation level from the active document settings."""
+        return self.get_editor().indent_chars
 
     def clear_state(self):
         """Clear."""
@@ -167,9 +169,6 @@ class VimStatus(QObject):
 
         # register
         self.register_dict = defaultdict(RegisterInfo)
-
-        # config
-        self.indent = "    "
 
         # search
         self.search = SearchInfo(self.cursor)

@@ -370,35 +370,7 @@ class ActionHelper:
 
     def _indent(self, pos_start: int, pos_end: int) -> None:
         """Indent lines between ``pos_start`` and ``pos_end``."""
-        self.vim_status.update_dot_cmd(connect_editor=False)
-
-        editor = self.get_editor()
-        cursor = self.get_cursor()
-
-        block_no_start, block_no_end, pos_start, pos_end = self._get_block_range(
-            pos_start, pos_end
-        )
-
-        text_list = _get_block_texts(editor, block_no_start, block_no_end)
-
-        indent = self.vim_status.indent
-        text_list_indent = []
-        for text in text_list:
-            if text:
-                text_list_indent.append(indent + text)
-            else:
-                text_list_indent.append("")
-        texts_indent = "\n".join(text_list_indent)
-
-        cursor.setPosition(pos_start)
-        cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-        cursor.insertText(texts_indent)
-
-        block_start, _ = self.vim_status.cursor.get_block(pos_start)
-        len_blank = len(block_start.text()) - len(block_start.text().lstrip())
-
-        self.vim_status.cursor.set_cursor_pos(block_start.position() + len_blank)
-        editor.document_did_change()
+        self._shift_indentation(pos_start, pos_end, forward=True)
 
     def unindent(self, motion_info: MotionInfo) -> None:
         """Shift the given lines to the left."""
@@ -409,6 +381,10 @@ class ActionHelper:
 
     def _unindent(self, pos_start: int, pos_end: int) -> None:
         """Remove one level of indentation from the given range."""
+        self._shift_indentation(pos_start, pos_end, forward=False)
+
+    def _shift_indentation(self, pos_start: int, pos_end: int, forward: bool) -> None:
+        """Shift leading whitespace by one level using the document settings."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         editor = self.get_editor()
@@ -421,17 +397,27 @@ class ActionHelper:
         text_list = _get_block_texts(editor, block_no_start, block_no_end)
 
         indent = self.vim_status.indent
-        len_indent = len(indent)
-        text_list_unindent = []
+        tab_width = editor.tab_stop_width_spaces
+        shift_width = tab_width if indent == "\t" else len(indent)
+        text_list_shifted = []
         for text in text_list:
-            n_space = len(text) - len(text.lstrip())
-            idx_discard = min([n_space, len_indent])
-            text_list_unindent.append(text[idx_discard:])
-        texts_unindent = "\n".join(text_list_unindent)
+            if not text:
+                text_list_shifted.append("")
+                continue
+
+            n_blank = len(text) - len(text.lstrip(" \t"))
+            # Measure tabs before shifting so mixed whitespace keeps its width.
+            width = len(text[:n_blank].expandtabs(tab_width))
+            width = width + shift_width if forward else max(0, width - shift_width)
+            if indent == "\t":
+                prefix = "\t" * (width // tab_width) + " " * (width % tab_width)
+            else:
+                prefix = " " * width
+            text_list_shifted.append(prefix + text[n_blank:])
 
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-        cursor.insertText(texts_unindent)
+        cursor.insertText("\n".join(text_list_shifted))
 
         block_start, _ = self.vim_status.cursor.get_block(pos_start)
         len_blank = len(block_start.text()) - len(block_start.text().lstrip())
