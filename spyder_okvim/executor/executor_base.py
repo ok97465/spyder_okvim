@@ -24,6 +24,8 @@ RETURN_EXECUTOR_METHOD_INFO = NamedTuple(
 class ExecutorBase:
     """Baseclass Executor."""
 
+    accepts_input_method = False
+
     SYMBOLS_REPLACEMENT = {
         "!": "exclamation",
         "?": "question",

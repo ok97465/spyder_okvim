@@ -942,6 +942,8 @@ class ExecutorSubCmd_Z(ExecutorSubBase):
 class ExecutorSearch(ExecutorSubBase):
     """Submode of search."""
 
+    accepts_input_method = True
+
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False

@@ -16,8 +16,14 @@ from functools import wraps
 # Third Party Libraries
 from qtpy import PYSIDE2, PYSIDE6
 from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
-from qtpy.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QTextCursor
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QWidget, QStyle
+from qtpy.QtGui import (
+    QFocusEvent,
+    QInputMethodEvent,
+    QKeyEvent,
+    QKeySequence,
+    QTextCursor,
+)
+from qtpy.QtWidgets import QApplication, QHBoxLayout, QLabel, QLineEdit, QWidget, QStyle
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
@@ -32,6 +38,7 @@ from spyder_okvim.executor import (
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.utils.file_search import FileSearchDialog
+from spyder_okvim.utils.key_helpers import latin_command_key
 from spyder_okvim.utils.qtcompat import exec_dialog, text_width
 from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
@@ -54,6 +61,7 @@ if PYSIDE2 or PYSIDE6:
         if _sbk_is_valid is None:
             return False
         return not _sbk_is_valid(obj)
+
 else:  # PYQT5
     try:
         # Third Party Libraries
@@ -382,6 +390,38 @@ class VimLineEdit(QLineEdit):
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
 
+    def inputMethodQuery(self, query):
+        """Report mode-specific IME availability to the native input context."""
+        if query == Qt.ImEnabled:
+            # Qt 6 QLineEdit reports ImEnabled independently of this attribute.
+            return (
+                self.testAttribute(Qt.WA_InputMethodEnabled)
+                and self.isEnabled()
+                and not self.isReadOnly()
+            )
+        return super().inputMethodQuery(query)
+
+    def sync_input_method(self) -> None:
+        """Allow composition only while entering search or Ex text."""
+        enabled = bool(
+            self.vim_status.sub_mode and self.vim_status.sub_mode.accepts_input_method
+        )
+        if enabled == self.testAttribute(Qt.WA_InputMethodEnabled):
+            return
+        # Disable delivery before resetting: some IMEs commit on reset.
+        self.setAttribute(Qt.WA_InputMethodEnabled, enabled)
+        if not enabled:
+            if self.hasFocus():
+                QApplication.inputMethod().reset()
+            super().inputMethodEvent(QInputMethodEvent())
+
+    def inputMethodEvent(self, event: QInputMethodEvent) -> None:
+        """Keep late IME commits from being interpreted as Normal commands."""
+        if self.testAttribute(Qt.WA_InputMethodEnabled):
+            super().inputMethodEvent(event)
+        else:
+            event.ignore()
+
     def to_normal(self) -> None:
         """Convert the state of vim to normal mode."""
         self.clear()
@@ -390,16 +430,25 @@ class VimLineEdit(QLineEdit):
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Override Qt method."""
+        if not self.testAttribute(Qt.WA_InputMethodEnabled):
+            e = latin_command_key(e)
         self.vim_status.manager_macro.add_vim_keyevent(e)
 
         key = e.key()
         pressed_ctrl = e.modifiers() == Qt.ControlModifier
         if key == Qt.Key_Escape:
             self.esc_pressed()
-        elif KEYCODE2STR.get(key, None):
-            self.setText(self.text() + KEYCODE2STR[key])
         elif pressed_ctrl and key in self.dispatcher.keys():
             self.dispatcher[key]()
+        elif self.testAttribute(Qt.WA_InputMethodEnabled):
+            if key in (Qt.Key_Return, Qt.Key_Enter):
+                # Flush the final composing syllable before executing the text.
+                QApplication.inputMethod().commit()
+                self.setText(self.text() + "\r")
+            else:
+                super().keyPressEvent(e)
+        elif KEYCODE2STR.get(key, None):
+            self.setText(self.text() + KEYCODE2STR[key])
         else:
             super().keyPressEvent(e)
 
@@ -413,6 +462,7 @@ class VimLineEdit(QLineEdit):
                 sub_mode.on_escape()
             finally:
                 self.vim_status.sub_mode = None
+                self.sync_input_method()
                 self.clear()
         else:
             self.to_normal()
@@ -427,6 +477,8 @@ class VimLineEdit(QLineEdit):
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
+        if self.testAttribute(Qt.WA_InputMethodEnabled):
+            self.esc_pressed()
         super().focusOutEvent(event)
         self.clear()
         try:
@@ -551,6 +603,10 @@ class VimWidget(QWidget):
     def on_text_changed(self, txt: str) -> None:
         """Send input command to executor."""
         if not txt:
+            sub_mode = self.vim_status.sub_mode
+            if sub_mode and sub_mode.accepts_input_method:
+                self.commandline.esc_pressed()
+            self.commandline.sync_input_method()
             return
 
         executor = self.executors[self.vim_status.vim_state]
@@ -570,6 +626,8 @@ class VimWidget(QWidget):
 
         if executor(txt):
             self.commandline.clear()
+
+        self.commandline.sync_input_method()
 
         if self.vim_status.manager_macro.reg_name_for_execute:
             mm = self.vim_status.manager_macro

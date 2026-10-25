@@ -8,14 +8,6 @@
 
 
 
-- [ ] **09. 검색·명령 입력에서 한글 IME 지원** — 보완-10 · 중간
-
-  작업: `/`·`:` 입력 중에는 한글 조합을 허용하고, 입력 완료·취소 후 Normal 명령 처리로 복귀하도록 한다. 기존 Insert 편집기의 IME 동작을 유지한다.
-
-  완료 기준: 한글 검색어의 조합·수정·Enter·Esc가 정상 동작하고, 이후 Normal 명령이 오작동하지 않는다. 실제 운영체제의 IME로 확인한다.
-
-  관련 코드: [vim_widgets.py](spyder_okvim/spyder/vim_widgets.py), [executor_sub.py](spyder_okvim/executor/executor_sub.py), [executor_colon.py](spyder_okvim/executor/executor_colon.py).
-
 - [ ] **10. 역방향·증분 검색 추가** — 추가-05 · 중간
 
   작업: `?pattern`, 입력 중 일치 미리보기, 빈 검색의 이전 패턴 재사용, 검색 방향에 따른 `n/N`을 구현한다.

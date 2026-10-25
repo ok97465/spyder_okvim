@@ -15,6 +15,8 @@ from spyder_okvim.vim import VimState
 class ExecutorColon(ExecutorSubBase):
     """Interpreter for ``:`` commands entered in the command line."""
 
+    accepts_input_method = True
+
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
