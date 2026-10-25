@@ -83,14 +83,13 @@ class ExecutorColon(ExecutorSubBase):
 
     def qexclamation(self, arg=""):
         """Close current file without saving."""
-        # TODO :
-        self.close_current_file()
+        self.close_current_file(force=True)
         self.vim_status.set_focus_to_vim()
 
     def wq(self, arg=""):
         """Save and close current file."""
-        self.w(arg)
-        self.q()
+        self.save_and_close_current_file()
+        self.vim_status.set_focus_to_vim()
 
     def n(self, args=""):
         """Create new file."""

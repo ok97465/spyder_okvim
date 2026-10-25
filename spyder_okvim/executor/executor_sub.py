@@ -923,14 +923,12 @@ class ExecutorSubCmd_Z(ExecutorSubBase):
 
     def Q(self, num=1, num_str=""):
         """Close current file without saving."""
-        # TODO :
-        self.close_current_file()
+        self.close_current_file(force=True)
         self.vim_status.set_focus_to_vim()
 
     def Z(self, num=1, num_str=""):
         """Save and close current file."""
-        self.save_current_file()
-        self.close_current_file()
+        self.save_and_close_current_file()
         self.vim_status.set_focus_to_vim()
 
 

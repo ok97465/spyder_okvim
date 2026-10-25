@@ -1094,9 +1094,14 @@ def test_r_cmd(vim_bot, text, cmd_list, text_expected, cursor_pos):
     assert editor.toPlainText() == text_expected
 
 
-def test_ZZ_cmd(vim_bot):
+def test_ZZ_cmd(vim_bot, monkeypatch):
     """Test ZZ command."""
     main, editor_stack, editor, vim, qtbot = vim_bot
+    monkeypatch.setattr(main.editor, "save", Mock(return_value=True))
+    monkeypatch.setattr(main.editor, "close_file", Mock())
+    finfo = editor_stack.get_current_finfo()
+    monkeypatch.setattr(finfo, "newly_created", False)
+    monkeypatch.setattr(finfo.editor.document(), "isModified", lambda: False)
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ZZ")
     main.editor.save.assert_called_once_with()
@@ -1105,13 +1110,19 @@ def test_ZZ_cmd(vim_bot):
     main.editor.close_file.reset_mock()
 
 
-def test_ZQ_cmd(vim_bot):
+def test_ZQ_cmd(vim_bot, monkeypatch):
     """Test ZQ command."""
     main, editor_stack, editor, vim, qtbot = vim_bot
+    close = Mock()
+    monkeypatch.setattr(editor_stack, "close_file", close)
+    monkeypatch.setattr(editor_stack.autosave, "remove_autosave_file", Mock())
+    monkeypatch.setattr(
+        main.editor, "can_close_file", Mock(return_value=True), raising=False
+    )
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ZQ")
-    main.editor.close_file.assert_called_once_with()
-    main.editor.close_file.reset_mock()
+    close.assert_called_once_with(force=True)
+    main.editor.close_file.assert_not_called()
 
 
 @pytest.mark.parametrize(

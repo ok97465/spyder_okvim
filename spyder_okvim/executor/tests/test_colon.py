@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """Tests for :mod:`spyder_okvim.executor.executor_colon`."""
 
+# Standard Libraries
+from unittest.mock import Mock
+
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import QEvent, Qt
@@ -88,21 +91,32 @@ def test_colon_q_command_without_close_file(vim_bot):
     main.editor.close_file = orig_close_file
 
 
-def test_colon_qexclamation_command(vim_bot):
+def test_colon_qexclamation_command(vim_bot, monkeypatch):
     """Test :q!."""
     main, editor_stack, editor, vim, qtbot = vim_bot
+    close = Mock()
+    monkeypatch.setattr(editor_stack, "close_file", close)
+    monkeypatch.setattr(editor_stack.autosave, "remove_autosave_file", Mock())
+    monkeypatch.setattr(
+        main.editor, "can_close_file", Mock(return_value=True), raising=False
+    )
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, ":")
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyClicks(cmd_line, "!")
     qtbot.keyPress(cmd_line, Qt.Key_Return)
-    main.editor.close_file.assert_called_once_with()
-    main.editor.close_file.reset_mock()
+    close.assert_called_once_with(force=True)
+    main.editor.close_file.assert_not_called()
 
 
-def test_colon_wq_command(vim_bot):
+def test_colon_wq_command(vim_bot, monkeypatch):
     """Test :wq."""
     main, editor_stack, editor, vim, qtbot = vim_bot
+    monkeypatch.setattr(main.editor, "save", Mock(return_value=True))
+    monkeypatch.setattr(main.editor, "close_file", Mock())
+    finfo = editor_stack.get_current_finfo()
+    monkeypatch.setattr(finfo, "newly_created", False)
+    monkeypatch.setattr(finfo.editor.document(), "isModified", lambda: False)
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, ":")
     qtbot.keyClicks(cmd_line, "w")

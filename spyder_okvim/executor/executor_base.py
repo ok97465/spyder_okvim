@@ -185,13 +185,45 @@ class ExecutorSubBase(ExecutorBase):
     # ------------------------------------------------------------------
     # Common editor actions
     # ------------------------------------------------------------------
-    def close_current_file(self) -> None:
-        """Close the current file using Spyder's editor API."""
-        self.vim_status.editor_widget.close_file()
+    def close_current_file(self, force=False) -> None:
+        """Close the active file, optionally discarding unsaved changes."""
+        if not force:
+            self.vim_status.editor_widget.close_file()
+            return
 
-    def save_current_file(self) -> None:
-        """Save the active file through Spyder's editor plugin."""
-        self.vim_status.editor_widget.save()
+        stack = self.get_editorstack()
+        finfo = stack.get_current_finfo()
+        if finfo is None:
+            return
+
+        filename = finfo.filename
+        widget = self.vim_status.editor_widget.get_widget()
+        # Spyder's forced stack close also bypasses its debugger guard.
+        if not widget.can_close_file(filename):
+            return
+
+        # Match Spyder's Discard action, including autosave recovery cleanup.
+        stack.autosave.remove_autosave_file(filename)
+        if self.get_editorstack().get_current_finfo() is finfo:
+            stack.close_file(force=True)
+
+    def save_current_file(self) -> bool:
+        """Return whether Spyder explicitly reports a successful save."""
+        return self.vim_status.editor_widget.save() is True
+
+    def save_and_close_current_file(self) -> None:
+        """Close only when the original, still-active document was saved."""
+        finfo = self.get_editorstack().get_current_finfo()
+        if finfo is None or not self.save_current_file():
+            return
+
+        # Save As and format-on-save may process events or leave edits unsaved.
+        if (
+            self.get_editorstack().get_current_finfo() is finfo
+            and not finfo.newly_created
+            and not finfo.editor.document().isModified()
+        ):
+            self.close_current_file()
 
     def create_new_file(self) -> None:
         """Create a new file using Spyder's editor plugin."""

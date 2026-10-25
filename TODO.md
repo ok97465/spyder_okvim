@@ -6,14 +6,6 @@
 
 보완 중 반응 시간에 영향을 미치는 사항에 대해서는 진행 여부를 사용자에게 문의한다.
 
-- [ ] **03. 저장·닫기의 취소와 실패 처리** — 보완-08 · 작음
-
-  작업: `:q!`의 변경 내용 버리기 동작을 구현하고, `:wq`·`ZZ`가 저장 성공을 확인한 후 닫도록 한다.
-
-  완료 기준: 저장 취소·실패 시 파일을 유지하며, `:q`와 `:q!`가 구분되어 동작한다. Spyder API가 제공하는 반환값과 실패 경로를 먼저 확인한다.
-
-  관련 코드: [executor_base.py](spyder_okvim/executor/executor_base.py), [executor_colon.py](spyder_okvim/executor/executor_colon.py), [executor_sub.py](spyder_okvim/executor/executor_sub.py).
-
 - [ ] **04. 기본 텍스트 객체 확대** — 추가-03 · 중간
 
   작업: 문단 `ip/ap`, 주변 WORD `aW`, 백틱 내부·주변 문자열 객체를 기존 객체 처리 구조에 추가한다.
