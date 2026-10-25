@@ -59,7 +59,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.move_cursor_no_end = self.vim_status.cursor.set_cursor_pos_without_end
 
         cmds = (
-            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/=<>{} \b\rq@\[\]*#"
+            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/?=<>{} \b\rq@\[\]*#"
         )
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -528,7 +528,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
-    def slash(self, num=1, num_str=""):
+    def slash(self, num=1, num_str="", forward=True):
         """Go to the next searched text."""
         self.vim_status.set_message("")
         executor_sub = self.executor_sub_search
@@ -538,8 +538,14 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         executor_sub.set_func_list_deferred(
             [FUNC_INFO(self.apply_motion_info_in_normal, True)]
         )
+        if not executor_sub.begin(forward):
+            return
 
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, False)
+
+    def question(self, num=1, num_str=""):
+        """Search backward from the current position."""
+        return self.slash(num, num_str, forward=False)
 
     def n(self, num=1, num_str=""):
         """Go to the next searched text."""

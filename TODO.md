@@ -6,16 +6,6 @@
 
 보완 중 반응 시간에 영향을 미치는 사항에 대해서는 진행 여부를 사용자에게 문의한다.
 
-
-
-- [ ] **10. 역방향·증분 검색 추가** — 추가-05 · 중간
-
-  작업: `?pattern`, 입력 중 일치 미리보기, 빈 검색의 이전 패턴 재사용, 검색 방향에 따른 `n/N`을 구현한다.
-
-  완료 기준: `/`와 `?`의 방향을 기억하고, Esc로 증분 검색을 취소하면 시작 위치·선택을 복원한다. 선행 권장: 07.
-
-  관련 코드: [executor_sub.py](spyder_okvim/executor/executor_sub.py), [mixins.py](spyder_okvim/executor/mixins.py), [search_helpers.py](spyder_okvim/utils/search_helpers.py), [search.py](spyder_okvim/vim/search.py).
-
 - [ ] **11. 명령줄·검색 이력과 자동완성 추가** — 추가-06 · 중간
 
   작업: Ex 명령과 검색어의 이력을 분리해 위·아래 키로 조회하고, Tab으로 지원 명령·파일 경로를 완성한다.

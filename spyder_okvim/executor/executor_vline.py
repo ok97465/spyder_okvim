@@ -45,7 +45,7 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.move_cursor = vim_status.cursor.set_cursor_pos_in_vline
         self.move_cursor_no_end = vim_status.cursor.set_cursor_pos_in_vline
 
-        cmds = "uUovhiyadcsSxHjJklLMwWbBepP^$gG~:%fFtTnN/;,\"`'mr<>{} \b\r[]*#"
+        cmds = "uUovhiyadcsSxHjJklLMwWbBepP^$gG~:%fFtTnN/?;,\"`'mr<>{} \b\r[]*#"
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos

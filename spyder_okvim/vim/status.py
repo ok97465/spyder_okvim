@@ -325,25 +325,25 @@ class VimStatus(QObject):
         """Group each Insert event without delaying editor updates until Esc."""
         info = self.insert_cmd
         if (
-            info is not None
-            and watched is info.editor
-            and not self._forwarding_insert_event
-            and event.type() in (QEvent.KeyPress, QEvent.InputMethod)
+            info is None
+            or watched is not info.editor
+            or self._forwarding_insert_event
+            or event.type() not in (QEvent.KeyPress, QEvent.InputMethod)
         ):
-            if event.type() == QEvent.KeyPress and (
-                event.matches(QKeySequence.Undo) or event.matches(QKeySequence.Redo)
-            ):
-                self.finish_insert(apply_count=False)
-                return False
-            self._forwarding_insert_event = True
-            try:
-                with info.edit_block():
-                    # Forward through Qt so other editor filters still run.
-                    QCoreApplication.sendEvent(watched, event)
-            finally:
-                self._forwarding_insert_event = False
-            return True
-        return super().eventFilter(watched, event)
+            return super().eventFilter(watched, event)
+        if event.type() == QEvent.KeyPress and (
+            event.matches(QKeySequence.Undo) or event.matches(QKeySequence.Redo)
+        ):
+            self.finish_insert(apply_count=False)
+            return False
+        self._forwarding_insert_event = True
+        try:
+            with info.edit_block():
+                # Forward through Qt so other editor filters still run.
+                QCoreApplication.sendEvent(watched, event)
+        finally:
+            self._forwarding_insert_event = False
+        return True
 
     def send_insert_event(self, editor, event):
         """Group programmatic input from dot and macro playback as well."""

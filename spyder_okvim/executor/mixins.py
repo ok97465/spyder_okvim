@@ -194,17 +194,13 @@ class SelectionMixin:
 
     def greater(self, num: int = 1, num_str: str = ""):
         """Indent the selected text."""
-        sel_start = self.get_pos_start_in_selection()
-        sel_end = self.get_pos_end_in_selection()
-        self.helper_action._indent(sel_start, sel_end)
+        self.helper_action.indent(None)
         self.vim_status.to_normal()
         self.vim_status.cursor.draw_vim_cursor()
 
     def less(self, num: int = 1, num_str: str = ""):
         """Unindent the selected text."""
-        sel_start = self.get_pos_start_in_selection()
-        sel_end = self.get_pos_end_in_selection()
-        self.helper_action._unindent(sel_start, sel_end)
+        self.helper_action.unindent(None)
         self.vim_status.to_normal()
         self.vim_status.cursor.draw_vim_cursor()
 
@@ -246,7 +242,7 @@ class SelectionMixin:
         self.vim_status.to_normal()
         self.set_cursor_pos(sel_start)
 
-    def slash(self, num: int = 1, num_str: str = ""):
+    def slash(self, num: int = 1, num_str: str = "", forward: bool = True):
         """Enter search submode and execute motion on return."""
         self.vim_status.set_message("")
         executor_sub = self.executor_sub_search
@@ -254,7 +250,13 @@ class SelectionMixin:
         executor_sub.set_func_list_deferred(
             [FUNC_INFO(self.apply_motion_info_in_sel, True)]
         )
+        if not executor_sub.begin(forward):
+            return
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, False)
+
+    def question(self, num: int = 1, num_str: str = ""):
+        """Enter backward search while retaining the selection anchor."""
+        return self.slash(num, num_str, forward=False)
 
     def n(self, num: int = 1, num_str: str = ""):
         """Jump to next search occurrence."""

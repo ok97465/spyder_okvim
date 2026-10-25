@@ -4,17 +4,14 @@
 # Standard Libraries
 import ast
 import re
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left
 from typing import TYPE_CHECKING
 
 # Third Party Libraries
-from qtpy.QtCore import QPoint, QRegularExpression
-from qtpy.QtGui import QTextCursor, QTextDocument
-from qtpy.QtWidgets import QTextEdit
-from spyder.config.manager import CONF
+from qtpy.QtCore import QPoint
+from qtpy.QtGui import QTextCursor
 
 # Project Libraries
-from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.leap_helpers import LeapHelper
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.utils.search_helpers import SearchHelper
@@ -776,7 +773,7 @@ class MotionHelper:
         """Find quoted block position excluding quotes."""
         if quote == "`":
             return self._backtick_object(around=False)
-        sel_end = None
+        sel_end = -1
 
         cursor = self.get_cursor()
         block = cursor.block()
@@ -798,14 +795,12 @@ class MotionHelper:
 
             if sel_start < 0:
                 sel_start = text.find(quote, cursor_pos)
-                if sel_start < 0:
-                    pass
-                else:
+                if sel_start >= 0:
                     sel_end = text.find(quote, sel_start + 1)
             else:
                 sel_end = text.find(quote, cursor_pos)
 
-        if sel_start > -1 and sel_end is not None and sel_end > -1:
+        if sel_start > -1 and sel_end > -1:
             sel_start = sel_start + block.position() + 1
             sel_end = sel_end + block.position()
         else:
@@ -854,45 +849,16 @@ class MotionHelper:
         """Find quoted block position including trailing white space."""
         if quote == "`":
             return self._backtick_object(around=True)
-        sel_end = None
 
-        cursor = self.get_cursor()
-        block = cursor.block()
-        text = block.text()
+        inner = self.i_quote(quote)
+        if inner.sel_start is None:
+            return inner
 
-        cursor_pos = cursor.positionInBlock()
-        if self._get_ch(cursor.position()) == quote:
-            # When the cursor starts on a quote, Vim will figure out which
-            # quote pairs form a string by searching from the start of the line
-            quote_pos = [m.start() for m in re.finditer(quote, text[:cursor_pos])]
-            if len(quote_pos) % 2 == 0:
-                sel_start = cursor_pos
-                sel_end = text.find(quote, cursor_pos + 1)
-            else:
-                sel_start = quote_pos[-1]
-                sel_end = cursor_pos
-        else:
-            sel_start = text[:cursor_pos].rfind(quote)
-
-            if sel_start < 0:
-                sel_start = text.find(quote, cursor_pos)
-                if sel_start < 0:
-                    pass
-                else:
-                    sel_end = text.find(quote, sel_start + 1)
-            else:
-                sel_end = text.find(quote, cursor_pos)
-
-        if sel_start > -1 and sel_end is not None and sel_end > -1:
-            sel_start = sel_start + block.position()
-            sel_end = sel_end + block.position() + 1
-            sel_end_old = sel_end
-            sel_end = self._include_trailing_white(sel_end)
-            if sel_end == sel_end_old:
-                sel_start = self._include_leading_white(sel_start)
-        else:
-            sel_start = None
-            sel_end = None
+        sel_start = inner.sel_start - 1
+        quote_end = inner.sel_end + 1
+        sel_end = self._include_trailing_white(quote_end)
+        if sel_end == quote_end:
+            sel_start = self._include_leading_white(sel_start)
 
         return self._set_motion_info(
             None, sel_start, sel_end, motion_type=MotionType.BlockWise
@@ -1012,9 +978,6 @@ class MotionHelper:
         def is_space(position):
             return document.characterAt(position).isspace()
 
-        def invalid_range():
-            return self._set_motion_info(None, motion_type=MotionType.BlockWise)
-
         block_start = cursor.block().position()
         starts_space = is_space(start)
         while start > block_start and is_space(start - 1) == starts_space:
@@ -1030,7 +993,7 @@ class MotionHelper:
                 if end == block.position() + block.length() - 1:
                     end += 1
             if end >= document_end:
-                return invalid_range()
+                return self._set_motion_info(None, motion_type=MotionType.BlockWise)
 
             leading_space = is_space(end)
             if leading_space:
@@ -1042,7 +1005,7 @@ class MotionHelper:
                         break
                     end += 1
                 if end > document_end:
-                    return invalid_range()
+                    return self._set_motion_info(None, motion_type=MotionType.BlockWise)
 
             while end < document_end and not is_space(end):
                 end += 1
@@ -1316,9 +1279,9 @@ class MotionHelper:
 
         return motion_info
 
-    def search(self, txt: str):
+    def search(self, txt: str, forward: bool = True):
         """Delegate search to :class:`SearchHelper`."""
-        self.search_helper.search(txt)
+        self.search_helper.search(txt, forward=forward)
 
     def n(self, num=1, num_str=""):
         """Move to the next search match."""

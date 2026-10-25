@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """Utilities for searching within the editor."""
 
-from qtpy.QtCore import QObject, QRegularExpression, QTimer
+from dataclasses import dataclass
+
+from qtpy.QtCore import QObject, QRegularExpression, QTimer, Signal
 from qtpy.QtGui import QBrush, QColor, QTextCursor
 from qtpy.QtWidgets import QTextEdit
 
@@ -10,8 +12,20 @@ from spyder.config.manager import CONF
 from spyder_okvim.spyder.config import CONF_SECTION
 
 
+@dataclass(frozen=True)
+class SearchSnapshot:
+    """Search settings to restore after an incremental search is cancelled."""
+
+    text: str
+    ignorecase: bool
+    forward: bool
+    highlight_enabled: bool
+
+
 class SearchInfo(QObject):
     """Cache search results for the active document and refresh highlights."""
+
+    closed = Signal()
 
     def __init__(self, vim_cursor, parent=None):
         """Initialize the search state.
@@ -27,6 +41,7 @@ class SearchInfo(QObject):
         self.selection_list = []
         self.vim_cursor = vim_cursor
         self.ignorecase = True
+        self.forward = True
         self._pattern = QRegularExpression()
         self._editor = None
         self._document = None
@@ -59,16 +74,41 @@ class SearchInfo(QObject):
             sel.format.setBackground(self.color_bg)
         self._display_selections()
 
-    def search(self, text, ignorecase=True):
+    def search(self, text, ignorecase=True, forward=True):
         """Start a search using one compiled expression for all matches."""
         self.txt_searched = text
         self.ignorecase = ignorecase
+        self.forward = forward
         self._pattern = QRegularExpression(text)
         if ignorecase:
             self._pattern.setPatternOptions(QRegularExpression.CaseInsensitiveOption)
         self._revision = None
         self._highlight_enabled = True
         self.refresh()
+
+    def snapshot(self):
+        """Save the confirmed pattern, direction, and highlight visibility."""
+        return SearchSnapshot(
+            self.txt_searched,
+            self.ignorecase,
+            self.forward,
+            self._highlight_enabled,
+        )
+
+    @property
+    def is_closed(self):
+        """Whether this search state has released its editor connections."""
+        return self._closed
+
+    def restore(self, snapshot):
+        """Restore saved search settings and repaint their current matches."""
+        self.search(
+            snapshot.text,
+            ignorecase=snapshot.ignorecase,
+            forward=snapshot.forward,
+        )
+        if not snapshot.highlight_enabled:
+            self.clear_highlights()
 
     def _display_selections(self):
         """Draw only on the editor that owns these results."""
@@ -167,7 +207,10 @@ class SearchInfo(QObject):
 
     def close(self):
         """Disconnect signals and cancel delayed work during reset or shutdown."""
+        if self._closed:
+            return
         self._closed = True
+        self.closed.emit()
         self._refresh_timer.stop()
         for signal in self._editor_signals:
             try:

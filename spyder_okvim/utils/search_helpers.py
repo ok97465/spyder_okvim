@@ -21,40 +21,39 @@ class SearchHelper:
     # ------------------------------------------------------------------
     # Search in document
     # ------------------------------------------------------------------
-    def search(self, text: str) -> None:
-        """Highlight all occurrences of ``text`` in the document."""
+    def search(self, text: str, forward: bool = True) -> None:
+        """Search in ``forward`` direction, reusing the previous pattern if empty."""
+        text = text or self.vim_status.search.txt_searched
+        if not text:
+            return
         is_ignorecase = CONF.get(CONF_SECTION, "ignorecase")
         is_smartcase = CONF.get(CONF_SECTION, "smartcase")
         ignorecase = is_ignorecase and not (is_smartcase and text.lower() != text)
-        self.vim_status.search.search(text, ignorecase=ignorecase)
+        self.vim_status.search.search(text, ignorecase=ignorecase, forward=forward)
 
     def n(self, num: int = 1, num_str: str = "") -> MotionInfo:
-        """Move to the next search match."""
-        positions = self.vim_status.search.get_sel_start_list()
-        if not positions:
-            return self._set_motion_info(None)
-        text = self.vim_status.search.txt_searched
-        self.vim_status.set_message(f"/{text}")
-        cursor_pos = self.get_cursor().position()
-        idx = bisect_right(positions, cursor_pos)
-        if idx == len(positions):
-            idx = 0
-        idx = (idx + num - 1) % len(positions)
-        return self._set_motion_info(positions[idx], motion_type=MotionType.CharWise)
+        """Move to a match in the direction of the last search."""
+        return self._repeat(num, self.vim_status.search.forward)
 
     def N(self, num: int = 1, num_str: str = "") -> MotionInfo:
-        """Move to the previous search match."""
+        """Move to a match opposite the direction of the last search."""
+        return self._repeat(num, not self.vim_status.search.forward)
+
+    def _repeat(self, num: int, forward: bool) -> MotionInfo:
+        """Find a counted match while preserving the saved search direction."""
         positions = self.vim_status.search.get_sel_start_list()
         if not positions:
             return self._set_motion_info(None)
         text = self.vim_status.search.txt_searched
-        self.vim_status.set_message(f"?{text}")
+        prefix = "/" if forward else "?"
+        self.vim_status.set_message(f"{prefix}{text}")
         cursor_pos = self.get_cursor().position()
-        idx = bisect_left(positions, cursor_pos)
-        idx = (idx - (num - 1)) % len(positions)
-        return self._set_motion_info(
-            positions[idx - 1], motion_type=MotionType.CharWise
-        )
+        if forward:
+            idx = bisect_right(positions, cursor_pos) + num - 1
+        else:
+            idx = bisect_left(positions, cursor_pos) - num
+        idx %= len(positions)
+        return self._set_motion_info(positions[idx], motion_type=MotionType.CharWise)
 
     # ------------------------------------------------------------------
     # Word searches
@@ -68,7 +67,7 @@ class SearchHelper:
         word = self._get_word_under_cursor()
         if word is None:
             return self._set_motion_info(None)
-        self.search(rf"\b{word}\b")
+        self.search(rf"\b{word}\b", forward=True)
         return self.n(num=num)
 
     def sharp(self, num: int = 1, num_str: str = "") -> MotionInfo:
@@ -76,5 +75,5 @@ class SearchHelper:
         word = self._get_word_under_cursor()
         if word is None:
             return self._set_motion_info(None)
-        self.search(rf"\b{word}\b")
-        return self.N(num=num)
+        self.search(rf"\b{word}\b", forward=False)
+        return self.n(num=num)

@@ -438,26 +438,18 @@ class ActionHelper:
 
         editor.document_did_change()
 
-    def indent(self, motion_info: MotionInfo) -> None:
+    def indent(self, motion_info: MotionInfo | None) -> None:
         """Shift the given lines to the right."""
         pos_start, pos_end, _ = self._get_selection_range(motion_info)
         if pos_start is None or pos_end is None:
             return
-        self._indent(pos_start, pos_end)
-
-    def _indent(self, pos_start: int, pos_end: int) -> None:
-        """Indent lines between ``pos_start`` and ``pos_end``."""
         self._shift_indentation(pos_start, pos_end, forward=True)
 
-    def unindent(self, motion_info: MotionInfo) -> None:
+    def unindent(self, motion_info: MotionInfo | None) -> None:
         """Shift the given lines to the left."""
         pos_start, pos_end, _ = self._get_selection_range(motion_info)
         if pos_start is None or pos_end is None:
             return
-        self._unindent(pos_start, pos_end)
-
-    def _unindent(self, pos_start: int, pos_end: int) -> None:
-        """Remove one level of indentation from the given range."""
         self._shift_indentation(pos_start, pos_end, forward=False)
 
     def _shift_indentation(self, pos_start: int, pos_end: int, forward: bool) -> None:

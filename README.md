@@ -17,7 +17,7 @@ If you run into problems, uninstall Okvim and try again.
 
 ## Overview
 
-- Supported Vim motions include `hjkl`, `^u`, `%`, `iw`, `i(`, `/`, `n`, `N`, `;` and more.
+- Supported Vim motions include `hjkl`, `^u`, `%`, `iw`, `i(`, `/`, `?`, `n`, `N`, `;` and more.
 
 - You can combine operators with motions. Examples: `diw`, `di(`, `c%`, `c/foo`, `cn`, `ygg`, `d2w`, `2d2W` and more.
   
@@ -103,7 +103,7 @@ The following motions are supported:
 - %
 - [[, ]], {{, }}
 - f, F, t, T, ;, ,
-- /, N, n
+- /, ?, N, n
 - Enter, Space, Backspace
 - easymotion
 
