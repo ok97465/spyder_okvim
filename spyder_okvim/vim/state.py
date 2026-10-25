@@ -90,7 +90,7 @@ class DotCmdInfo:
             num: Numeric prefix used for the command.
             num_str: Original numeric string typed by the user.
         """
-        # TODO : apply register name.
+        register_prefix = f'"{self.register_name}' if self.register_name else ""
         cmd_str = ""
 
         if self.vim_state == VimState.VLINE:
@@ -98,7 +98,8 @@ class DotCmdInfo:
             n_lines = self.sel_block_no_end - self.sel_block_no_start
             if n_lines > 0:
                 cmd_str += f"{n_lines}j"
-            cmd_str += self.cmd
+            # Select the register after reconstructing the Visual selection.
+            cmd_str += register_prefix + self.cmd
             return cmd_str
 
         if self.vim_state == VimState.VISUAL:
@@ -113,13 +114,13 @@ class DotCmdInfo:
                 n = self.sel_col_end - self.sel_col_start - 1
                 if n > 0:
                     cmd_str += f"{n}l"
-            cmd_str += self.cmd
+            cmd_str += register_prefix + self.cmd
             return cmd_str
 
         if num_str:
-            return str(num) + self.cmd
+            return register_prefix + str(num) + self.cmd
         else:
-            return self.num_str + self.cmd
+            return register_prefix + self.num_str + self.cmd
 
 
 
