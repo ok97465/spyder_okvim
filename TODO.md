@@ -6,14 +6,6 @@
 
 보완 중 반응 시간에 영향을 미치는 사항에 대해서는 진행 여부를 사용자에게 문의한다.
 
-- [ ] **11. 명령줄·검색 이력과 자동완성 추가** — 추가-06 · 중간
-
-  작업: Ex 명령과 검색어의 이력을 분리해 위·아래 키로 조회하고, Tab으로 지원 명령·파일 경로를 완성한다.
-
-  완료 기준: 입력 중인 내용을 잃지 않고 이력을 왕복하며, 검색 입력에서는 Ex 완성이 개입하지 않는다. 한글 경로와 공백이 있는 경로도 처리한다.
-
-  관련 코드: [vim_widgets.py](spyder_okvim/spyder/vim_widgets.py), [executor_colon.py](spyder_okvim/executor/executor_colon.py), [executor_sub.py](spyder_okvim/executor/executor_sub.py).
-
 - [ ] **12. 매크로의 재실행·추가 녹화·중단 보완** — 보완-05 · 큼
 
   작업: `@@`, 기존 `a`에 이어 녹화하는 `qA`, 재생 중 중단과 종료 시 정리를 구현한다.

@@ -9,13 +9,14 @@
 
 # Standard Libraries
 import os.path as osp
+import re
 import sys
 import threading
 from functools import wraps
 
 # Third Party Libraries
 from qtpy import PYSIDE2, PYSIDE6
-from qtpy.QtCore import QObject, Qt, QThread, Signal, Slot
+from qtpy.QtCore import QEvent, QObject, Qt, QThread, Signal, Slot
 from qtpy.QtGui import (
     QFocusEvent,
     QInputMethodEvent,
@@ -37,6 +38,7 @@ from spyder_okvim.executor import (
     ExecutorVlineCmd,
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
+from spyder_okvim.utils.commandline import completion_candidates
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.key_helpers import latin_command_key
 from spyder_okvim.utils.qtcompat import exec_dialog, text_width
@@ -367,6 +369,14 @@ class VimLineEdit(QLineEdit):
         self.vim_widget = vim_widget
         self.vim_status = vim_status
         self.vim_shortcut = vim_shortcut
+        self.histories = {"ex": [], "search": []}
+        self._history_index = None
+        self._history_draft = None
+        self._completion_candidates = []
+        self._completion_index = -1
+        self._updating_commandline = False
+        self.textChanged.connect(self._reset_navigation)
+        self.cursorPositionChanged.connect(self._reset_completion)
 
         # Set size
         tw = text_width(self.fontMetrics(), " :%s/international/internationl/g ")
@@ -389,6 +399,128 @@ class VimLineEdit(QLineEdit):
             Qt.Key_I: vim_shortcut.jump_forward,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
+
+    def _reset_navigation(self, text="") -> None:
+        """Discard navigation state when the user edits or leaves a prompt."""
+        if not self._updating_commandline:
+            self._history_index = None
+            self._history_draft = None
+            self._completion_candidates = []
+            self._completion_index = -1
+
+    def _reset_completion(self, old_position, new_position) -> None:
+        """A manually moved caret starts a new completion at that position."""
+        if not self._updating_commandline:
+            self._completion_candidates = []
+            self._completion_index = -1
+
+    def _history_context(self, text):
+        """Return the history kind, current prompt/count, and editable body."""
+        kind = getattr(self.vim_status.sub_mode, "history_kind", None)
+        if kind == "ex" and text.startswith(":"):
+            return kind, ":", text[1:]
+        if kind == "search":
+            match = re.fullmatch(r"(\d*[/?])(.*)", text, re.DOTALL)
+            if match:
+                return kind, *match.groups()
+        return None
+
+    def remember_command(self, text) -> None:
+        """Keep confirmed, nonempty inputs in separate bounded histories."""
+        context = self._history_context(text)
+        if context is None:
+            return
+        kind, _, body = context
+        if not body or (kind == "ex" and not body.strip()):
+            return
+        history = self.histories[kind]
+        if not history or history[-1] != body:
+            history.append(body)
+            del history[:-100]
+
+    def _replace_commandline(self, text, cursor_position=None) -> None:
+        """Update a recalled/completed input without restarting navigation."""
+        self._updating_commandline = True
+        try:
+            self.setText(text)
+            if cursor_position is not None:
+                self.setCursorPosition(cursor_position)
+        finally:
+            self._updating_commandline = False
+
+    def _browse_history(self, backward) -> None:
+        """Recall entries and restore the exact draft after the newest one."""
+        context = self._history_context(self.text())
+        if context is None:
+            return
+        kind, prompt, _ = context
+        history = self.histories[kind]
+        if not history:
+            return
+        if self._history_index is None:
+            if not backward:
+                return
+            self._history_draft = (self.text(), self.cursorPosition())
+            self._history_index = len(history)
+        self._completion_candidates = []
+        self._completion_index = -1
+        if backward:
+            self._history_index = max(0, self._history_index - 1)
+        else:
+            self._history_index += 1
+        if self._history_index >= len(history):
+            self._replace_commandline(*self._history_draft)
+            self._history_index = None
+            self._history_draft = None
+        else:
+            self._replace_commandline(prompt + history[self._history_index])
+
+    def _complete_commandline(self, backward=False) -> None:
+        """Complete Ex commands or one directory of paths on explicit Tab."""
+        context = self._history_context(self.text())
+        if context is None or context[0] != "ex":
+            return
+        if not self._completion_candidates:
+            # Qt cursor offsets count UTF-16 units; the helper uses Python indices.
+            cursor = len(
+                self.text()
+                .encode("utf-16-le")[: self.cursorPosition() * 2]
+                .decode("utf-16-le", errors="ignore")
+            )
+            filename = self.vim_status.get_editorstack().get_current_filename()
+            self._completion_candidates = completion_candidates(
+                self.text(),
+                cursor,
+                self.vim_status.sub_mode.SUPPORTED_COMMANDS,
+                osp.dirname(filename) if filename else osp.curdir,
+            )
+            self._completion_index = (
+                len(self._completion_candidates) - 1 if backward else 0
+            )
+        else:
+            step = -1 if backward else 1
+            self._completion_index = (self._completion_index + step) % len(
+                self._completion_candidates
+            )
+        if not self._completion_candidates:
+            return
+        text, cursor = self._completion_candidates[self._completion_index]
+        qt_cursor = len(text[:cursor].encode("utf-16-le")) // 2
+        self._replace_commandline(text, qt_cursor)
+        # A unique directory can be traversed with the next Tab.
+        if len(self._completion_candidates) == 1:
+            self._completion_candidates = []
+
+    def event(self, event) -> bool:
+        """Keep Tab in the prompt instead of letting QWidget move focus."""
+        if (
+            event.type() == QEvent.KeyPress
+            and event.key() in (Qt.Key_Tab, Qt.Key_Backtab)
+            and self._history_context(self.text()) is not None
+        ):
+            self.keyPressEvent(event)
+            return True
+        return super().event(event)
 
     def inputMethodQuery(self, query):
         """Report mode-specific IME availability to the native input context."""
@@ -441,7 +573,16 @@ class VimLineEdit(QLineEdit):
         elif pressed_ctrl and key in self.dispatcher.keys():
             self.dispatcher[key]()
         elif self.testAttribute(Qt.WA_InputMethodEnabled):
-            if key in (Qt.Key_Return, Qt.Key_Enter):
+            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Tab, Qt.Key_Backtab):
+                QApplication.inputMethod().commit()
+                if key in (Qt.Key_Up, Qt.Key_Down):
+                    self._browse_history(key == Qt.Key_Up)
+                else:
+                    self._complete_commandline(
+                        key == Qt.Key_Backtab or bool(e.modifiers() & Qt.ShiftModifier)
+                    )
+                e.accept()
+            elif key in (Qt.Key_Return, Qt.Key_Enter):
                 # Flush the final composing syllable before executing the text.
                 QApplication.inputMethod().commit()
                 self.setText(self.text() + "\r")
@@ -624,6 +765,8 @@ class VimWidget(QWidget):
                 self.commandline.clear()
                 return
 
+        if txt.endswith("\r"):
+            self.commandline.remember_command(txt[:-1])
         if executor(txt):
             self.commandline.clear()
 

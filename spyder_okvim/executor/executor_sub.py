@@ -953,6 +953,7 @@ class ExecutorSearch(ExecutorSubBase):
     """Preview searches without executing pending operators until Enter."""
 
     accepts_input_method = True
+    history_kind = "search"
 
     def __init__(self, vim_status):
         super().__init__(vim_status)

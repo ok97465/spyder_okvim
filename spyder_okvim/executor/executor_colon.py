@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """Executor for ":" command-line input."""
 
+# Standard Libraries
+import os.path as osp
+
 # Third Party Libraries
 from qtpy.QtWidgets import QDialog
 
@@ -16,6 +19,8 @@ class ExecutorColon(ExecutorSubBase):
     """Interpreter for ``:`` commands entered in the command line."""
 
     accepts_input_method = True
+    history_kind = "ex"
+    SUPPORTED_COMMANDS = ("e", "w", "q", "q!", "wq", "n", "marks", "jumps")
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -53,6 +58,9 @@ class ExecutorColon(ExecutorSubBase):
 
         txt = txt[1:-1]  # remove :, \r
         cmd = txt.split(None, 1)
+        if not cmd:
+            self.vim_status.sub_mode = None
+            return True
         args = cmd[1] if len(cmd) > 1 else ""
         cmd = cmd[0]
 
@@ -72,6 +80,28 @@ class ExecutorColon(ExecutorSubBase):
         self.vim_status.sub_mode = None
 
         return True
+
+    def e(self, arg=""):
+        """Open an existing path using the same base folder as completion."""
+        vs = self.vim_status
+        path = arg
+        if len(path) >= 2 and path[0] in "\"'" and path[-1] == path[0]:
+            path = path[1:-1]
+        if not path:
+            vs.set_message("Specify a file path")
+            return
+        filename = self.get_editorstack().get_current_filename()
+        base_directory = osp.dirname(filename) if filename else osp.curdir
+        path = osp.abspath(osp.join(base_directory, osp.expanduser(path)))
+        if not osp.isfile(path):
+            vs.set_message(f"Not a file: {path}")
+            return
+        vs.to_normal()
+        vs.push_jump()
+        self.editor_widget.load(path)
+        vs.push_jump()
+        vs.set_focus_to_vim()
+        vs.cursor.draw_vim_cursor()
 
     def w(self, arg=""):
         """Save current file."""
