@@ -1,6 +1,7 @@
 # Spyder Okvim
 
-![Window tests](https://github.com/ok97465/spyder_okvim/workflows/Windows%20tests/badge.svg)
+[![Windows tests](https://github.com/ok97465/spyder_okvim/actions/workflows/windows-tests.yml/badge.svg?branch=main&event=push)](https://github.com/ok97465/spyder_okvim/actions/workflows/windows-tests.yml)
+[![macOS tests](https://github.com/ok97465/spyder_okvim/actions/workflows/macos-tests.yml/badge.svg?branch=main&event=push)](https://github.com/ok97465/spyder_okvim/actions/workflows/macos-tests.yml)
 [![codecov](https://codecov.io/gh/ok97465/spyder_okvim/branch/main/graph/badge.svg?token=7JIIKTOZMO)](https://codecov.io/gh/ok97465/spyder_okvim)
 
 Spyder plugin for running Vim commands in the code editor.

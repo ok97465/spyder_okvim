@@ -1,0 +1,71 @@
+name: PySide6 tests
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      CI: 'true'
+      QT_API: pyside6
+      PYTEST_QT_API: pyside6
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+      - name: Set up Miniforge
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          activate-environment: test
+          # Conda 26.9 installers lack Windows launcher metadata (conda/conda-launchers#35).
+          miniforge-version: 26.7.2-1
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge
+          channel-priority: strict
+      - name: Install dependencies
+        run: >-
+          conda install --name test --yes --override-channels --channel conda-forge
+          --file requirements/conda.txt --file requirements/tests.txt
+          "python=${{ matrix.python-version }}" pip
+      - name: Install PySide6
+        run: python -m pip install "PySide6==6.8.3"
+      - name: Install package
+        run: python -m pip install --no-deps -e .
+      - name: Show environment information
+        run: |
+          python --version
+          conda list --name test
+      - name: Run tests
+        run: python runtests.py
+      - name: Run native IME tests
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: >-
+          python -m pytest spyder_okvim/spyder/tests/test_commandline_ime.py
+          spyder_okvim/utils/tests/test_key_helpers.py -q
+        timeout-minutes: 5
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

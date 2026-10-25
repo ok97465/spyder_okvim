@@ -1,0 +1,19 @@
+name: macOS tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    with:
+      os: macos-latest
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
