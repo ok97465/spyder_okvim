@@ -5,8 +5,8 @@ import os.path as osp
 from collections import defaultdict
 
 # Third Party Libraries
-from qtpy.QtCore import QCoreApplication, QObject, QTimer, Signal, Slot
-from qtpy.QtGui import QKeyEvent, QTextCursor
+from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt, QTimer, Signal, Slot
+from qtpy.QtGui import QKeyEvent, QKeySequence, QTextCursor
 from qtpy.QtWidgets import QApplication, QLabel, QWidget
 from spyder.api.plugins import Plugins
 from spyder.config.manager import CONF
@@ -23,7 +23,15 @@ from .cursor import VimCursor
 from .label import ANNOTATION_STYLE, InlineLabel
 from .macro import MacroManager
 from .search import SearchInfo
-from .state import DotCmdInfo, FindInfo, InputCmdInfo, KeyInfo, RegisterInfo, VimState
+from .state import (
+    DotCmdInfo,
+    FindInfo,
+    InputCmdInfo,
+    InsertCmdInfo,
+    KeyInfo,
+    RegisterInfo,
+    VimState,
+)
 
 
 class VimStatus(QObject):
@@ -70,6 +78,8 @@ class VimStatus(QObject):
         self.input_cmd_prev = InputCmdInfo("", "")
         self.dot_cmd = DotCmdInfo()
         self.running_dot_cmd = False
+        self.insert_cmd = None
+        self._forwarding_insert_event = False
 
         # register
         self.register_dict = defaultdict(RegisterInfo)
@@ -137,6 +147,7 @@ class VimStatus(QObject):
 
     def to_normal(self):
         """Change vim state to normal mode."""
+        self.finish_insert()
         self.clear_state()
         cursor = self.get_cursor()
         if cursor.atBlockEnd() and not cursor.atBlockStart():
@@ -154,6 +165,7 @@ class VimStatus(QObject):
 
     def reset_for_test(self):
         """Reset status for test."""
+        self.finish_insert(apply_count=False)
         # Remove any pending EasyMotion overlays before processing Qt events.
         self.remove_marker_of_easymotion()
         QCoreApplication.processEvents()
@@ -267,6 +279,9 @@ class VimStatus(QObject):
     @Slot(QKeyEvent)
     def rcv_key_from_editor(self, event):
         """Add key event from editor to list."""
+        self.handle_insert_key(event)
+        if self.running_dot_cmd:
+            return
         self.dot_cmd.key_list_from_editor.append(
             KeyInfo(event.key(), event.text(), event.modifiers(), 1)
         )
@@ -275,9 +290,113 @@ class VimStatus(QObject):
         """Disconnect from the editor."""
         # disconnect previous connection.
         editor = self.dot_cmd.editor_connected
-        if editor:
-            editor.sig_key_pressed.disconnect(self.rcv_key_from_editor)
         self.dot_cmd.editor_connected = None
+        if editor:
+            try:
+                editor.sig_key_pressed.disconnect(self.rcv_key_from_editor)
+            except (TypeError, RuntimeError):
+                # The editor may already have been disconnected or closed.
+                pass
+
+    def handle_insert_key(self, event):
+        """Cancel count expansion when Insert navigation interrupts typing."""
+        if self.insert_cmd is not None and event.key() in (
+            Qt.Key_Left,
+            Qt.Key_Right,
+            Qt.Key_Up,
+            Qt.Key_Down,
+            Qt.Key_Home,
+            Qt.Key_End,
+            Qt.Key_PageUp,
+            Qt.Key_PageDown,
+        ):
+            self.insert_cmd.count = 1
+
+    def start_insert(self, command: str, count: int):
+        """Begin an insertion before changing the document, including ``o/O``."""
+        self.finish_insert(apply_count=False)
+        self.disconnect_from_editor()
+        self.insert_cmd = InsertCmdInfo(self.get_editor(), command, count)
+        self.insert_cmd.editor.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        """Group each Insert event without delaying editor updates until Esc."""
+        info = self.insert_cmd
+        if (
+            info is not None
+            and watched is info.editor
+            and not self._forwarding_insert_event
+            and event.type() in (QEvent.KeyPress, QEvent.InputMethod)
+        ):
+            if event.type() == QEvent.KeyPress and (
+                event.matches(QKeySequence.Undo) or event.matches(QKeySequence.Redo)
+            ):
+                self.finish_insert(apply_count=False)
+                return False
+            self._forwarding_insert_event = True
+            try:
+                with info.edit_block():
+                    # Forward through Qt so other editor filters still run.
+                    QCoreApplication.sendEvent(watched, event)
+            finally:
+                self._forwarding_insert_event = False
+            return True
+        return super().eventFilter(watched, event)
+
+    def send_insert_event(self, editor, event):
+        """Group programmatic input from dot and macro playback as well."""
+        info = self.insert_cmd
+        if info is not None and info.editor is editor:
+            with info.edit_block():
+                self.handle_insert_key(event)
+                editor.keyPressEvent(event)
+        else:
+            editor.keyPressEvent(event)
+
+    def set_insert_start(self):
+        """Track the inserted range after positioning or opening a line."""
+        info = self.insert_cmd
+        cursor = info.editor.textCursor()
+        if info.command in ("o", "O"):
+            cursor.movePosition(QTextCursor.StartOfBlock)
+        cursor.setKeepPositionOnInsert(True)
+        info.start_cursor = cursor
+        info.end_cursor = info.editor.textCursor()
+
+    def finish_insert(self, apply_count=True):
+        """Apply the insertion count once and close its undo block."""
+        info = self.insert_cmd
+        if info is None:
+            return
+        self.insert_cmd = None
+        self.disconnect_from_editor()
+        try:
+            info.editor.removeEventFilter(self)
+        except RuntimeError:
+            return  # The editor has already been closed.
+        editor = info.editor
+        if not apply_count or editor is not self.get_editor():
+            return
+        cursor = editor.textCursor()
+        start = info.start_cursor.position()
+        end = cursor.position()
+        if end != info.end_cursor.position():
+            # Also guard cursor changes made with the mouse or editor APIs.
+            info.count = 1
+        if info.count > 1 and end >= start:
+            inserted = QTextCursor(cursor)
+            inserted.setPosition(start)
+            inserted.setPosition(end, QTextCursor.KeepAnchor)
+            text = inserted.selectedText().replace("\u2029", "\n")
+            if info.command in ("o", "O"):
+                text = "\n" + text
+            if text:
+                with info.edit_block():
+                    cursor.insertText(text * (info.count - 1))
+                editor.document_did_change()
+        if info.count > 1 and not cursor.atBlockStart():
+            cursor.movePosition(QTextCursor.PreviousCharacter)
+        editor.setTextCursor(cursor)
 
     def update_dot_cmd(
         self, connect_editor, register_name=None, key_list_to_cmd_line=None

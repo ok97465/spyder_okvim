@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """Core data structures for Vim status handling."""
 
+# Standard Libraries
+from contextlib import contextmanager
+
+# Third Party Libraries
 from qtpy.QtCore import QEvent
-from qtpy.QtGui import QKeyEvent
+from qtpy.QtGui import QKeyEvent, QTextCursor
 
 
 class VimState:
@@ -122,6 +126,35 @@ class DotCmdInfo:
         else:
             return register_prefix + self.num_str + self.cmd
 
+
+class InsertCmdInfo:
+    """One insertion, including its count and shared undo block."""
+
+    def __init__(self, editor, command: str, count: int):
+        self.editor = editor
+        self.command = command
+        self.count = count
+        self.edit_cursor = editor.textCursor()
+        self.has_edit = False
+        self.initial_revision = self.edit_cursor.document().revision()
+        self.start_cursor = QTextCursor(self.edit_cursor)
+        self.start_cursor.setKeepPositionOnInsert(True)
+        self.end_cursor = QTextCursor(self.edit_cursor)
+
+    @contextmanager
+    def edit_block(self):
+        """Join edits while delivering document signals after every event."""
+        document = self.edit_cursor.document()
+        revision = document.revision()
+        if self.has_edit or revision != self.initial_revision:
+            self.edit_cursor.joinPreviousEditBlock()
+        else:
+            self.edit_cursor.beginEditBlock()
+        try:
+            yield
+        finally:
+            self.edit_cursor.endEditBlock()
+            self.has_edit = self.has_edit or document.revision() != revision
 
 
 class KeyInfo:

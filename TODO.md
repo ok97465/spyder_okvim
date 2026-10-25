@@ -7,14 +7,6 @@
 보완 중 반응 시간에 영향을 미치는 사항에 대해서는 진행 여부를 사용자에게 문의한다.
 
 
-- [ ] **06. 삽입·줄 추가 명령의 횟수 처리** — 보완-03 · 중간
-
-  작업: `i`, `a`, `A`, `o`, `O`의 count를 삽입 종료 시 반영하고, `.` 반복과 연결한다.
-
-  완료 기준: `80i-<Esc>`와 `3oabc<Esc>` 등이 입력 횟수를 반영하며, 취소·다시 실행·undo 시 입력이 중복되거나 누락되지 않는다.
-
-  관련 코드: [executor_normal.py](spyder_okvim/executor/executor_normal.py), [status.py](spyder_okvim/vim/status.py), [vim_widgets.py](spyder_okvim/spyder/vim_widgets.py).
-
 - [ ] **07. 검색 시 멈춤 방지와 결과 갱신** — 보완-01 · 중간
 
   작업: 길이 0인 정규식 일치에서도 검색 위치를 전진시키고, 문서 편집·파일 전환 시 일치 목록을 갱신한다.

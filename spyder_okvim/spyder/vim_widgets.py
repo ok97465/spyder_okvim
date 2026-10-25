@@ -529,7 +529,7 @@ class VimWidget(QWidget):
             self.commandline.keyPressEvent(event)
         else:
             editor = self.vim_status.get_editor()
-            editor.keyPressEvent(event)
+            self.vim_status.send_insert_event(editor, event)
 
     def set_leader_key(self) -> None:
         """Set leader key from CONF."""
@@ -580,6 +580,7 @@ class VimWidget(QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        self.vim_status.finish_insert(apply_count=False)
         try:
             self.vim_status.change_label.disconnect(self.status_label.change_state)
         except Exception:

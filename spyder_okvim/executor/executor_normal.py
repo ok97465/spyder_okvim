@@ -96,25 +96,30 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def a(self, num=1, num_str=""):
         """Append text after the cursor."""
+        self.vim_status.start_insert("a", num)
         self.vim_status.update_dot_cmd(connect_editor=True)
 
         cursor = self.get_cursor()
         if not (cursor.atBlockEnd() and cursor.atBlockStart()):
             cursor.movePosition(QTextCursor.Right)
             self.set_cursor(cursor)
+        self.vim_status.set_insert_start()
         self.get_editor().setFocus()
 
     def A(self, num=1, num_str=""):
         """Append text at the end of the line."""
+        self.vim_status.start_insert("A", num)
         self.vim_status.update_dot_cmd(connect_editor=True)
 
         cursor = self.get_cursor()
         cursor.movePosition(QTextCursor.EndOfLine)
         self.set_cursor(cursor)
+        self.vim_status.set_insert_start()
         self.get_editor().setFocus()
 
     def i(self, num=1, num_str=""):
         """Insert text before the cursor."""
+        self.vim_status.start_insert("i", num)
         self.vim_status.update_dot_cmd(connect_editor=True)
         self.get_editor().setFocus()
 
@@ -153,6 +158,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def o(self, num=1, num_str=""):
         """Begin a new line below the cursor and insert text."""
+        self.vim_status.start_insert("o", num)
         editor = self.get_editor()
         cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.EndOfLine)
@@ -161,20 +167,24 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
         # Send the keyevent to editor for using autoindent of editor.
         new_event = QKeyEvent(QEvent.KeyPress, Qt.Key_Return, Qt.NoModifier)
-        editor.keyPressEvent(new_event)
+        self.vim_status.send_insert_event(editor, new_event)
 
+        self.vim_status.set_insert_start()
         self.vim_status.update_dot_cmd(connect_editor=True)
 
     def O(self, num=1, num_str=""):
         """Begin a new line above the cursor and insert text."""
+        self.vim_status.start_insert("O", num)
         editor = self.get_editor()
         cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.StartOfLine)
-        cursor.insertText("\n")
+        with self.vim_status.insert_cmd.edit_block():
+            cursor.insertText("\n")
         cursor.movePosition(QTextCursor.Up)
         editor.setTextCursor(cursor)
         editor.setFocus()
 
+        self.vim_status.set_insert_start()
         self.vim_status.update_dot_cmd(connect_editor=True)
 
     def K(self, num=1, num_str=""):
@@ -283,20 +293,26 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
         cmd_line = self.vim_status.cmd_line
         self.vim_status.running_dot_cmd = True
-        cmd_line.clear()
-        for ch in cmd_str:
-            cmd_line.setText(cmd_line.text() + ch)
+        try:
+            cmd_line.clear()
+            for ch in cmd_str:
+                cmd_line.setText(cmd_line.text() + ch)
 
-        for key_info in self.vim_status.dot_cmd.key_list_to_cmd_line:
-            event = key_info.to_event()
-            cmd_line.keyPressEvent(event)
+            for key_info in self.vim_status.dot_cmd.key_list_to_cmd_line:
+                event = key_info.to_event()
+                cmd_line.keyPressEvent(event)
 
-        editor = self.get_editor()
-        for key_info in self.vim_status.dot_cmd.key_list_from_editor:
-            event = key_info.to_event()
-            editor.keyPressEvent(event)
+            editor = self.get_editor()
+            for key_info in self.vim_status.dot_cmd.key_list_from_editor:
+                event = key_info.to_event()
+                self.vim_status.send_insert_event(editor, event)
 
-        self.vim_status.running_dot_cmd = False
+            self.vim_status.finish_insert()
+            if num_str and self.vim_status.dot_cmd.cmd in ("i", "a", "A", "o", "O"):
+                self.vim_status.dot_cmd.num_str = num_str
+        finally:
+            self.vim_status.finish_insert(apply_count=False)
+            self.vim_status.running_dot_cmd = False
 
         self.vim_status.set_focus_to_vim()
 
