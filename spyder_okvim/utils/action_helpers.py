@@ -6,6 +6,8 @@ import re
 
 # Third Party Libraries
 from qtpy.QtGui import QTextCursor
+from spyder.plugins.editor.utils.editor import TextBlockHelper
+from spyder.utils.syntaxhighlighters import PythonSH
 
 # Project Libraries
 from spyder_okvim.utils.motion import MotionInfo, MotionType
@@ -359,6 +361,81 @@ class ActionHelper:
             cursor.insertText(text.upper())
 
         editor = self.get_editor()
+        editor.document_did_change()
+
+    def reindent(self, motion_info: MotionInfo) -> None:
+        """Recalculate leading whitespace for the lines covered by a motion."""
+        pos_start, pos_end, is_linewise = self._get_selection_range(motion_info)
+        if pos_start is None or pos_end is None:
+            return
+        if not is_linewise and pos_end > pos_start:
+            # Character ranges exclude their end, which can be on the next line.
+            pos_end -= 1
+        block_no_start, block_no_end, _, _ = self._get_block_range(pos_start, pos_end)
+        self.vim_status.update_dot_cmd(connect_editor=False)
+
+        editor = self.get_editor()
+        document = editor.document()
+        indent = self.vim_status.indent
+        tab_width = editor.tab_stop_width_spaces
+        is_python = editor.is_python_like()
+        edit_cursor = self.get_cursor()
+        previous_skip_rstrip = editor.skip_rstrip
+        editor.skip_rstrip = True
+        edit_cursor.beginEditBlock()
+        try:
+            for block_no in range(block_no_start, block_no_end + 1):
+                block = document.findBlockByNumber(block_no)
+                text = block.text()
+                if not text.strip():
+                    continue
+
+                prefix_length = len(text) - len(text.lstrip(" \t"))
+                cursor = QTextCursor(block)
+                if is_python:
+                    if TextBlockHelper.get_state(block.previous()) in (
+                        PythonSH.INSIDE_SQ3STRING,
+                        PythonSH.INSIDE_DQ3STRING,
+                        PythonSH.INSIDE_SQSTRING,
+                        PythonSH.INSIDE_DQSTRING,
+                    ):
+                        # Leading spaces in a multiline string are its content.
+                        continue
+                    # Use Spyder's indentation context without its directional
+                    # Tab/Backtab behavior or its mixed-whitespace replacement.
+                    editor.setTextCursor(cursor)
+                    current_width = len(text[:prefix_length].expandtabs(tab_width))
+                    if indent == "\t":
+                        # Spyder rounds dedents using len(indent_chars), which
+                        # is one for tabs rather than the configured tab width.
+                        current_width = -(-current_width // tab_width) * tab_width
+                    width = editor.find_indentation(cur_indent=current_width)
+                    if width < 0:
+                        continue
+                    if indent == "\t":
+                        prefix = "\t" * (width // tab_width) + " " * (width % tab_width)
+                    else:
+                        prefix = " " * width
+                else:
+                    # Match Spyder's simple indentation for other languages.
+                    previous_text = block.previous().text()
+                    prefix = previous_text[
+                        : len(previous_text) - len(previous_text.lstrip(" \t"))
+                    ]
+
+                if prefix != text[:prefix_length]:
+                    cursor.setPosition(
+                        block.position() + prefix_length, QTextCursor.KeepAnchor
+                    )
+                    cursor.insertText(prefix)
+
+            block = document.findBlockByNumber(block_no_start)
+            text = block.text()
+            self.set_cursor_pos(block.position() + len(text) - len(text.lstrip(" \t")))
+        finally:
+            edit_cursor.endEditBlock()
+            editor.skip_rstrip = previous_skip_rstrip
+
         editor.document_did_change()
 
     def indent(self, motion_info: MotionInfo) -> None:

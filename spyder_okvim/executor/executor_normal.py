@@ -59,7 +59,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.move_cursor_no_end = self.vim_status.cursor.set_cursor_pos_without_end
 
         cmds = (
-            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/<>{} \b\rq@\[\]*#"
+            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/=<>{} \b\rq@\[\]*#"
         )
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
@@ -333,6 +333,15 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
             [FUNC_INFO(self.helper_action.indent, True)]
         )
 
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def equal(self, num=1, num_str=""):
+        """Reindent the lines covered by the following motion."""
+        executor_sub = self.executor_sub_motion
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred(
+            [FUNC_INFO(self.helper_action.reindent, True)]
+        )
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def less(self, num=1, num_str=""):

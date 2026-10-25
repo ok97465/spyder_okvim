@@ -6,13 +6,6 @@
 
 보완 중 반응 시간에 영향을 미치는 사항에 대해서는 진행 여부를 사용자에게 문의한다.
 
-- [ ] **05. 재들여쓰기 연산자 `=` 추가** — 추가-07 · 중간
-
-  작업: `==`, `={motion}`, `gg=G`를 현재 문서의 재들여쓰기 기능에 연결한다. 전체 포맷과 재들여쓰기의 적용 범위를 구분한다.
-
-  완료 기준: 현재 줄·지정 범위·전체 문서에 적용되며, 문서 설정과 undo 단위를 유지한다. 선행 권장: 02.
-
-  관련 코드: [executor_normal.py](spyder_okvim/executor/executor_normal.py), [executor_sub.py](spyder_okvim/executor/executor_sub.py), [action_helpers.py](spyder_okvim/utils/action_helpers.py).
 
 - [ ] **06. 삽입·줄 추가 명령의 횟수 처리** — 보완-03 · 중간
 

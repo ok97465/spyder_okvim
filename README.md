@@ -72,6 +72,7 @@ The following actions are supported:
 - C, D, S
 - dd, cc, yy
 - <<, >>
+- ==, ={motion}, gg=G
 - p, P
 - d{motion}, c{motion}
 - <{motion}, >{motion}
@@ -79,6 +80,12 @@ The following actions are supported:
 - u, ^R
 - J
 - .
+
+Use `==` to reindent the current line, `3==` for three lines, `=j` for the
+current and next line, or `gg=G` for the whole document. Reindent uses Spyder's
+indentation rules and the active document's space/tab settings, changes only
+leading whitespace, and supports undo and `.` repeat. Python dedents and
+multiline string contents are preserved. Use `<leader>f` for full formatting.
 
 ## Motions
 

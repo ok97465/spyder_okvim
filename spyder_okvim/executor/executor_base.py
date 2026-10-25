@@ -29,6 +29,7 @@ class ExecutorBase:
         "?": "question",
         "<": "less",
         ">": "greater",
+        "=": "equal",
         "|": "pipe",
         " ": "space",
         "\b": "backspace",
