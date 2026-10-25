@@ -22,7 +22,7 @@ jobs:
         python-version: ['3.12', '3.13']
     defaults:
       run:
-        shell: pwsh
+        shell: bash -el {0}
     env:
       CI: 'true'
       QT_API: pyside6
@@ -35,8 +35,8 @@ jobs:
         uses: conda-incubator/setup-miniconda@v4
         with:
           activate-environment: test
-          miniforge-version: latest
-          run-init: false
+          # Conda 26.9 installers lack Windows launcher metadata (conda/conda-launchers#35).
+          miniforge-version: 26.7.2-1
           python-version: ${{ matrix.python-version }}
           channels: conda-forge
           channel-priority: strict
@@ -46,21 +46,20 @@ jobs:
           --file requirements/conda.txt --file requirements/tests.txt
           "python=${{ matrix.python-version }}" pip
       - name: Install PySide6
-        run: conda run --no-capture-output --name test python -m pip install "PySide6==6.8.3"
+        run: python -m pip install "PySide6==6.8.3"
       - name: Install package
-        run: conda run --no-capture-output --name test python -m pip install --no-deps -e .
+        run: python -m pip install --no-deps -e .
       - name: Show environment information
         run: |
-          conda run --no-capture-output --name test python --version
+          python --version
           conda list --name test
       - name: Run tests
-        run: conda run --no-capture-output --name test python runtests.py
+        run: python runtests.py
       - name: Run native IME tests
         env:
           QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: >-
-          conda run --no-capture-output --name test python -m pytest
-          spyder_okvim/spyder/tests/test_commandline_ime.py
+          python -m pytest spyder_okvim/spyder/tests/test_commandline_ime.py
           spyder_okvim/utils/tests/test_key_helpers.py -q
         timeout-minutes: 5
       - name: Upload coverage to Codecov
