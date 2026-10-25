@@ -3,9 +3,6 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from typing import Callable
 
-from qtpy.QtCore import QRegularExpression
-from qtpy.QtGui import QTextCursor, QTextDocument
-from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
 
 from spyder_okvim.spyder.config import CONF_SECTION
@@ -26,44 +23,10 @@ class SearchHelper:
     # ------------------------------------------------------------------
     def search(self, text: str) -> None:
         """Highlight all occurrences of ``text`` in the document."""
-        editor = self.get_editor()
-        cursor = QTextCursor(editor.document())
-        cursor.movePosition(QTextCursor.Start)
-
         is_ignorecase = CONF.get(CONF_SECTION, "ignorecase")
         is_smartcase = CONF.get(CONF_SECTION, "smartcase")
-
-        option = None
-        if is_ignorecase:
-            self.vim_status.search.ignorecase = True
-            if is_smartcase and text.lower() != text:
-                option = QTextDocument.FindCaseSensitively
-                self.vim_status.search.ignorecase = False
-        else:
-            option = QTextDocument.FindCaseSensitively
-            self.vim_status.search.ignorecase = False
-
-        back = self.vim_status.search.color_bg
-        fore = self.vim_status.search.color_fg
-        search_stack = []
-        while True:
-            if option:
-                cursor = editor.document().find(QRegularExpression(text), cursor, options=option)
-            else:
-                cursor = editor.document().find(QRegularExpression(text), cursor)
-
-            if cursor.position() != -1:
-                selection = QTextEdit.ExtraSelection()
-                selection.format.setBackground(back)
-                selection.format.setForeground(fore)
-                selection.cursor = cursor
-                search_stack.append(selection)
-            else:
-                break
-
-        self.vim_status.cursor.set_extra_selections("vim_search", [i for i in search_stack])
-        self.vim_status.search.selection_list = search_stack
-        self.vim_status.search.txt_searched = text
+        ignorecase = is_ignorecase and not (is_smartcase and text.lower() != text)
+        self.vim_status.search.search(text, ignorecase=ignorecase)
 
     def n(self, num: int = 1, num_str: str = "") -> MotionInfo:
         """Move to the next search match."""
@@ -89,7 +52,9 @@ class SearchHelper:
         cursor_pos = self.get_cursor().position()
         idx = bisect_left(positions, cursor_pos)
         idx = (idx - (num - 1)) % len(positions)
-        return self._set_motion_info(positions[idx - 1], motion_type=MotionType.CharWise)
+        return self._set_motion_info(
+            positions[idx - 1], motion_type=MotionType.CharWise
+        )
 
     # ------------------------------------------------------------------
     # Word searches
@@ -103,7 +68,7 @@ class SearchHelper:
         word = self._get_word_under_cursor()
         if word is None:
             return self._set_motion_info(None)
-        self.search(fr"\b{word}\b")
+        self.search(rf"\b{word}\b")
         return self.n(num=num)
 
     def sharp(self, num: int = 1, num_str: str = "") -> MotionInfo:
@@ -111,5 +76,5 @@ class SearchHelper:
         word = self._get_word_under_cursor()
         if word is None:
             return self._set_motion_info(None)
-        self.search(fr"\b{word}\b")
+        self.search(rf"\b{word}\b")
         return self.N(num=num)

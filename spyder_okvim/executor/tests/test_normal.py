@@ -2204,7 +2204,7 @@ def test_search_corner_case_cmd(vim_bot, text, cmd_list):
         ("", ["#"], 0),
         ("dhr dhr", ["l", "*"], 4),
         ("dhr dhr", ["l", "#"], 0),
-        ("dhr Dhr", ["l", "*"], 0),
+        ("dhr Dhr", ["l", "*"], 4),
         ("dhr _dhr dhrw dhr", ["l", "*"], 14),
         ("dhr _dhr dhrw _dhr", ["w", "#"], 14),
         ("dhr dhr dhrw dhr", ["l", "2*"], 13),

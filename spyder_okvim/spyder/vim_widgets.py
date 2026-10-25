@@ -296,7 +296,7 @@ class VimShortcut(QObject):
     def clear_tip_search(self) -> None:
         """Clear tooltip, search highlight."""
         self.get_editor().hide_tooltip()
-        self.vim_status.cursor.set_extra_selections("vim_search", [])
+        self.vim_status.search.clear_highlights()
 
     def jump_backward(self) -> None:
         """Jump to previous location in the jumplist."""
@@ -581,6 +581,7 @@ class VimWidget(QWidget):
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
         self.vim_status.finish_insert(apply_count=False)
+        self.vim_status.search.close()
         try:
             self.vim_status.change_label.disconnect(self.status_label.change_state)
         except Exception:

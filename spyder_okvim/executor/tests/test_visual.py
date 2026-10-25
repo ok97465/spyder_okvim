@@ -1474,7 +1474,7 @@ def test_search_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     [
         ("a", ["v", "*"], 0, [0, 1]),
         ("a", ["v", "#"], 0, [0, 1]),
-        ("dhr\n  Dhr\n\n_dhr\n   dhr", ["v", "*"], 19, [0, 20]),
+        ("dhr\n  Dhr\n\n_dhr\n   dhr", ["v", "*"], 6, [0, 7]),
         ("dhr\n  dhr\n\n_dhr\n   dhr", ["j2l", "v", "#"], 0, [0, 7]),
     ],
 )

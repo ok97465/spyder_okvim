@@ -85,7 +85,7 @@ class VimStatus(QObject):
         self.register_dict = defaultdict(RegisterInfo)
 
         # search
-        self.search = SearchInfo(self.cursor)
+        self.search = SearchInfo(self.cursor, self)
 
         # message
         self.msg_label = msg_label
@@ -183,7 +183,9 @@ class VimStatus(QObject):
         self.register_dict = defaultdict(RegisterInfo)
 
         # search
-        self.search = SearchInfo(self.cursor)
+        self.search.close()
+        self.search.deleteLater()
+        self.search = SearchInfo(self.cursor, self)
 
         # Macro
         self.manager_macro = MacroManager()

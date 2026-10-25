@@ -1136,7 +1136,7 @@ def test_search_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     [
         ("a", ["V", "*"], 0, [0, 1]),
         ("a", ["V", "#"], 0, [0, 1]),
-        ("dhr\n  Dhr\n\n_dhr\n   dhr", ["V", "*"], 19, [0, 22]),
+        ("dhr\n  Dhr\n\n_dhr\n   dhr", ["V", "*"], 6, [0, 9]),
         ("dhr\n  dhr\n\n_dhr\n   dhr", ["j2l", "V", "#"], 0, [0, 9]),
     ],
 )
