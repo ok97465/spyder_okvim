@@ -20,6 +20,7 @@ def main():
             "--durations=30",
             "--cov=spyder_okvim",
             "--cov-report=term-missing",
+            "--cov-report=xml:coverage.xml",
         ]
     )
 

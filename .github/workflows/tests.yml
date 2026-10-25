@@ -1,0 +1,68 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python-version: ['3.12', '3.13']
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      CI: 'true'
+      QT_API: pyside6
+      PYTEST_QT_API: pyside6
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+      - name: Set up Miniforge
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          activate-environment: test
+          miniforge-version: latest
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge
+          channel-priority: strict
+      - name: Install dependencies
+        run: >-
+          conda install --yes --override-channels --channel conda-forge
+          --file requirements/conda.txt --file requirements/tests.txt
+          "python=${{ matrix.python-version }}" pip
+      - name: Install PySide6
+        run: python -m pip install "PySide6==6.8.3"
+      - name: Install package
+        run: python -m pip install --no-deps -e .
+      - name: Show environment information
+        run: |
+          python --version
+          conda list
+      - name: Run tests
+        run: python runtests.py
+      - name: Run native IME tests
+        env:
+          QT_QPA_PLATFORM: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: >-
+          python -m pytest spyder_okvim/spyder/tests/test_commandline_ime.py
+          spyder_okvim/utils/tests/test_key_helpers.py -q
+        timeout-minutes: 5
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
