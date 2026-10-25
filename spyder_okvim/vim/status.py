@@ -447,27 +447,67 @@ class VimStatus(QObject):
             return '"'  # default register name
 
     def set_register(self, name, content, register_type):
-        """Set content into register_dict."""
+        """Write one register, appending uppercase names to their lowercase pair."""
+        if name == "_":
+            return None
+
+        if "A" <= name <= "Z":
+            name = name.lower()
+            previous = self.register_dict[name]
+            if previous.type == VimState.VLINE:
+                if register_type != VimState.VLINE:
+                    content += "\n"
+                register_type = VimState.VLINE
+            elif register_type == VimState.VLINE and previous.content:
+                content = "\n" + content
+            content = previous.content + content
+
+        # Use independent values so history rotation cannot mutate other registers.
+        info = RegisterInfo()
+        info.name = name
+        info.content = content
+        info.type = register_type
         if name == "+":
             QApplication.clipboard().setText(content)
         else:
-            info = self.register_dict[name]
-            info.name = name
-            info.content = content
-            info.type = register_type
             self.register_dict[name] = info
+        return info
+
+    def update_registers(
+        self, name, content, register_type, *, is_yank, force_numbered=False
+    ):
+        """Store a yank/delete and update the unnamed and automatic registers."""
+        if name == "_" or not content:
+            return
+
+        info = self.set_register(name, content, register_type)
+        if is_yank:
+            if name == '"':
+                self.set_register("0", content, register_type)
+        else:
+            is_small_delete = register_type != VimState.VLINE and "\n" not in content
+            if not is_small_delete or force_numbered:
+                for number in range(9, 1, -1):
+                    previous = self.register_dict[str(number - 1)]
+                    self.set_register(str(number), previous.content, previous.type)
+                self.set_register("1", content, register_type)
+            if is_small_delete and name == '"':
+                self.set_register("-", content, register_type)
+
+        # Appends expose the combined value; deletion history keeps only this delete.
+        self.set_register('"', info.content, info.type)
 
     def get_register(self):
         """Get content from register_dict."""
         name = self.get_register_name()
-        if name == "+":
+        if name in ("+", "_"):
             info = RegisterInfo()
-            info.name = "+"
-            info.content = QApplication.clipboard().text()
-            info.type = VimState.NORMAL
+            info.name = name
+            if name == "+":
+                info.content = QApplication.clipboard().text()
             return info
         else:
-            return self.register_dict[name]
+            return self.register_dict[name.lower()]
 
     # ---- Application helpers ----------------------------------------
     def _get_application_plugin(self):

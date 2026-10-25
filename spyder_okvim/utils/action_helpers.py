@@ -531,9 +531,17 @@ class ActionHelper:
         if register_type == VimState.VLINE:
             txt += "\n"
 
-        self.vim_status.set_register(register_name, txt, register_type)
-        if is_explicit is True and register_name == '"':
-            self.vim_status.set_register("0", txt, register_type)
+        # These operator motions also use numbered history for a small delete.
+        force_numbered = self.vim_status.is_normal() and bool(
+            re.match(r"^[dc]\d*[%()`/?nN{}]", self.vim_status.input_cmd.cmd)
+        )
+        self.vim_status.update_registers(
+            register_name,
+            txt,
+            register_type,
+            is_yank=is_explicit,
+            force_numbered=force_numbered,
+        )
 
         # Set message
         doc = cursor.document()
@@ -560,7 +568,9 @@ class ActionHelper:
     def paste_in_normal(self, num, is_lower):
         """Paste register content in normal mode."""
         reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
+        self.vim_status.update_dot_cmd(
+            connect_editor=False, register_name=self.vim_status.get_register_name()
+        )
 
         editor = self.get_editor()
         n_block_old = editor.blockCount()
@@ -610,7 +620,9 @@ class ActionHelper:
         """Paste over the current visual selection."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
+        self.vim_status.update_dot_cmd(
+            connect_editor=False, register_name=self.vim_status.get_register_name()
+        )
 
         editor = self.get_editor()
         n_block_old = editor.blockCount()
@@ -653,7 +665,9 @@ class ActionHelper:
         """Paste register content in visual line mode."""
         editor = self.get_editor()
         reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
+        self.vim_status.update_dot_cmd(
+            connect_editor=False, register_name=self.vim_status.get_register_name()
+        )
 
         editor = self.get_editor()
         n_block_old = editor.blockCount()
@@ -695,11 +709,9 @@ class ActionHelper:
             is_insert: If ``True`` delete while in insert mode.
             replace_txt: Optional replacement text.
         """
-        reg = self.vim_status.get_register()
-        if is_insert:
-            self.vim_status.update_dot_cmd(connect_editor=True, register_name=reg.name)
-        else:
-            self.vim_status.update_dot_cmd(connect_editor=False, register_name=reg.name)
+        self.vim_status.update_dot_cmd(
+            connect_editor=is_insert, register_name=self.vim_status.get_register_name()
+        )
 
         if self.vim_status.is_normal():
             if motion_info.motion_type == MotionType.BlockWise:

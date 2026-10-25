@@ -137,7 +137,8 @@ def test_dot_preserves_delete_register(
     assert editor.toPlainText() == expected
     assert status.register_dict["a"].content == deleted
     assert status.register_dict["a"].type == register_type
-    assert status.register_dict['"'].content == "unnamed"
+    assert status.register_dict['"'].content == deleted
+    assert status.register_dict['"'].type == register_type
     assert cmd_line.text() == ""
     assert status.is_normal()
 
