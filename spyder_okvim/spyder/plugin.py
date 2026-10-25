@@ -7,11 +7,14 @@
 # -----------------------------------------------------------------------------
 """OkVim Plugin."""
 
+# Standard Libraries
+import weakref
+
 # Third Party Libraries
 import qtawesome as qta
-from qtpy.QtCore import Qt, Signal, QCoreApplication
+from qtpy.QtCore import QCoreApplication, QEvent, Qt, Signal
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut
 from spyder.api.plugin_registration.decorators import on_plugin_available
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
@@ -24,7 +27,7 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane
+from spyder_okvim.spyder.vim_widgets import VimPane, _widget_is_deleted
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -160,15 +163,167 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
+        self._status_bar_widget = status_bar_widget
+        self._main_statusbar = status_bar_widget.parentWidget()
 
-        editorsplitter = vim_cmd.editor_widget.get_widget().editorsplitter
+        self._editor_widget = vim_cmd.editor_widget.get_widget()
+        self._active_stack = None
+        self._active_editor = None
+        self._status_window = None
+        self._window_stacks = weakref.WeakKeyDictionary()
+        self._vim_focus = weakref.WeakKeyDictionary()
+        self._editors = weakref.WeakSet()
+        self._closing_windows = weakref.WeakSet()
+        vim_cmd.commandline.installEventFilter(self)
+        self._editor_widget.installEventFilter(self)
+        signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
+        if signal is not None:
+            signal.connect(self._on_editor_focus_changed)
+        self._on_editor_focus_changed()
+        self._sync_statusbar()
 
-        esc_shortcut = QShortcut(
-            QKeySequence("Esc"),
-            editorsplitter,
-            vim_cmd.commandline.setFocus,
-        )
-        esc_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+    def eventFilter(self, watched, event):
+        """Follow pane reparenting and rescue shared UI before a view closes."""
+        if event.type() == QEvent.FocusIn:
+            if watched is self.vim_cmd.commandline:
+                self._vim_focus[watched.window()] = True
+            elif (
+                watched in self._editors
+                and event.reason() != Qt.ActiveWindowFocusReason
+            ):
+                self._vim_focus[watched.window()] = False
+        if event.type() == QEvent.WindowActivate and watched in self._window_stacks:
+            stack = self._live(self._window_stacks[watched])
+            if stack is not None and watched not in self._closing_windows:
+                self._use_stack(stack)
+                if self._vim_focus.get(watched, False):
+                    self.vim_cmd.commandline.setFocus()
+        if event.type() == QEvent.Close and watched in self._window_stacks:
+            if watched is not self._main:
+                self._closing_windows.add(watched)
+        if event.type() == QEvent.Close and (
+            watched is self._live(self._status_window)
+            or watched is self._live(self._active_stack)
+        ):
+            if watched is not self._main and isinstance(watched, QMainWindow):
+                self._closing_windows.add(watched)
+            self._reset_view()
+            self._active_stack = None
+            self._active_editor = None
+            self.vim_cmd.vim_status.cursor.set_editorstack(None)
+            self._move_statusbar(self._main_statusbar)
+            self._move_labels(self._editor_widget)
+        if watched is self._editor_widget and event.type() in (
+            QEvent.ParentChange,
+            QEvent.Show,
+        ):
+            self._sync_statusbar()
+        return super().eventFilter(watched, event)
+
+    @staticmethod
+    def _live(reference):
+        """Dereference a view without keeping closed Qt widgets alive."""
+        widget = reference() if reference is not None else None
+        if widget is not None and not _widget_is_deleted(widget):
+            return widget
+        return None
+
+    def _on_editor_focus_changed(self):
+        """Discover new windows/splits through Spyder's editor focus signal."""
+        stack = self.vim_cmd.editor_widget.get_current_editorstack()
+        self._use_stack(stack)
+
+    def _use_stack(self, stack):
+        """Bind both Vim and Spyder commands to the selected editor view."""
+        if stack is None or stack.window() in self._closing_windows:
+            return
+        editor = stack.get_current_editor()
+        if editor is not self._live(self._active_editor):
+            self._reset_view()
+        self._active_stack = weakref.ref(stack)
+        self._active_editor = weakref.ref(editor) if editor is not None else None
+        self.vim_cmd.vim_status.cursor.set_editorstack(stack)
+        if editor is not None and editor not in self._editors:
+            self._editors.add(editor)
+            editor.installEventFilter(self)
+            self._vim_focus[stack.window()] = False
+        save_stack = getattr(self._editor_widget, "set_last_focused_editorstack", None)
+        if save_stack is not None:
+            owner = (
+                self._editor_widget
+                if self._editor_widget.isAncestorOf(stack)
+                else stack.window()
+            )
+            save_stack(owner, stack)
+        shortcut = stack.findChild(QShortcut, "okvim_escape", Qt.FindDirectChildrenOnly)
+        if shortcut is None:
+            shortcut = QShortcut(QKeySequence("Esc"), stack, self._focus_vim)
+            shortcut.setObjectName("okvim_escape")
+            shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+            stack.installEventFilter(self)
+        self._sync_statusbar()
+        self.vim_cmd.vim_status.search.refresh()
+
+    def _focus_vim(self):
+        """Keep the command line and command target on the focused stack."""
+        self._use_stack(self.sender().parent())
+        self.vim_cmd.commandline.setFocus()
+
+    def _reset_view(self):
+        """Cancel partial commands before they can cross into another view."""
+        status = self.vim_cmd.vim_status
+        self.vim_cmd.cancel_macro()
+        if status.is_recording_macro():
+            status.stop_recording_macro()
+        status.finish_insert(apply_count=False)
+        status.disconnect_from_editor()
+        editor = self._live(self._active_editor)
+        if editor is not None:
+            editor.clear_extra_selections("vim_selection")
+            editor.clear_extra_selections("vim_cursor")
+        if status.sub_mode is not None:
+            status.sub_mode.on_escape()
+        status.sub_mode = None
+        status.input_cmd.clear()
+        status.clear_state()
+        status.set_message("")
+        self.vim_cmd.commandline.clear()
+        self.vim_cmd.commandline.sync_input_method()
+
+    def _move_labels(self, parent):
+        """Keep shared Leap labels under a live ancestor of the active view."""
+        for label in self.vim_cmd.vim_status.labels_for_annotate:
+            if label.parentWidget() is not parent:
+                label.hide()
+                label.setParent(parent)
+
+    def _move_statusbar(self, statusbar):
+        """Reparent the same status widget without changing its registration."""
+        widget = self._status_bar_widget
+        if widget.parentWidget() is not statusbar:
+            widget.parentWidget().removeWidget(widget)
+            statusbar.insertPermanentWidget(0, widget)
+            widget.show()
+
+    def _sync_statusbar(self):
+        """Move the existing Vim UI without recreating widgets or shortcuts."""
+        stack = self._live(self._active_stack)
+        window = stack.window() if stack is not None else self._editor_widget.window()
+        if window is self._main:
+            statusbar = self._main_statusbar
+            label_parent = self._editor_widget
+        elif isinstance(window, QMainWindow):
+            statusbar = window.statusBar()
+            label_parent = window.centralWidget()
+        else:
+            # Qt can temporarily leave the pane without its final parent.
+            return
+        if window not in self._window_stacks:
+            window.installEventFilter(self)
+        self._window_stacks[window] = weakref.ref(stack) if stack is not None else None
+        self._status_window = weakref.ref(window)
+        self._move_statusbar(statusbar)
+        self._move_labels(label_parent)
 
     @on_plugin_available(plugin=Plugins.Preferences)
     def on_preferences_available(self) -> None:
@@ -185,6 +340,34 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def on_close(self, cancellable: bool = True) -> bool:
         """Handle plugin shutdown."""
+        if hasattr(self, "_editor_widget"):
+            self._editor_widget.removeEventFilter(self)
+            self.vim_cmd.commandline.removeEventFilter(self)
+            for editor in self._editors:
+                if not _widget_is_deleted(editor):
+                    editor.removeEventFilter(self)
+            signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
+            if signal is not None:
+                signal.disconnect(self._on_editor_focus_changed)
+            for window in self._window_stacks:
+                if not _widget_is_deleted(window):
+                    window.removeEventFilter(self)
+            stacks = getattr(self._editor_widget, "editorstacks", None)
+            if stacks is None:
+                stacks = [self.vim_cmd.editor_widget.get_current_editorstack()]
+            for stack in stacks:
+                if not _widget_is_deleted(stack):
+                    stack.removeEventFilter(self)
+                    shortcut = stack.findChild(
+                        QShortcut, "okvim_escape", Qt.FindDirectChildrenOnly
+                    )
+                    if shortcut is not None:
+                        shortcut.setEnabled(False)
+                        shortcut.deleteLater()
+            # The detached Editor window must not own the command input when
+            # it is deleted after the plugin has stopped tracking reparenting.
+            self._move_statusbar(self._main_statusbar)
+            self._move_labels(self._editor_widget)
         widget = self.get_widget()
         if widget is not None:
             try:

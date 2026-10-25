@@ -12,7 +12,7 @@ import pytest
 from pytestqt.plugin import QtBot
 from qtpy.QtCore import QCoreApplication
 from qtpy.QtGui import QFont
-from qtpy.QtWidgets import QVBoxLayout, QWidget
+from qtpy.QtWidgets import QStatusBar, QVBoxLayout, QWidget
 from spyder.api.plugins import Plugins
 from spyder.config.manager import CONF
 from spyder.plugins.editor.widgets.editorstack import EditorStack
@@ -58,16 +58,14 @@ class EditorMock(QWidget):
         return self.editor_stack
 
 
-class StatusBarMock(QWidget):
+class StatusBarMock(QStatusBar):
     """Stausbar mock."""
 
     def __init__(self):
-        QWidget.__init__(self, None)
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        super().__init__(None)
 
     def add_status_widget(self, widget):
-        self.layout.addWidget(widget)
+        self.insertPermanentWidget(0, widget)
 
 
 class MainMock(QWidget):

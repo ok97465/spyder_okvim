@@ -12,6 +12,7 @@ import os.path as osp
 import re
 import sys
 import threading
+import weakref
 from functools import wraps
 
 # Third Party Libraries
@@ -292,7 +293,7 @@ class VimShortcut(QObject):
         """Open the file search dialog."""
         root_folder = self.main.projects.get_active_project_path()
 
-        dlg = FileSearchDialog(root_folder, self.main)
+        dlg = FileSearchDialog(root_folder, self.get_editor().window())
         exec_dialog(dlg)
         path = dlg.get_selected_path()
 
@@ -301,7 +302,7 @@ class VimShortcut(QObject):
             application = self.main.get_plugin(Plugins.Application)
             application.open_file_in_plugin(path)
             self.vim_status.jump_list.push(path, 0)
-            self.vim_status.set_focus_to_vim()
+        self.vim_status.set_focus_to_vim()
 
     def clear_tip_search(self) -> None:
         """Clear tooltip, search highlight."""
@@ -643,34 +644,41 @@ class VimMessageLabel(QLabel):
 class MacroPlaybackWorker(QThread):
     """Replay a recorded macro on the main thread."""
 
-    sig_focus_vim = Signal()
-    sig_send_key_info = Signal(object)
+    sig_focus_vim = Signal(int)
+    sig_send_key_info = Signal(object, int)
 
     def __init__(self, parent: QObject | None) -> None:
         super().__init__(parent)
         self.key_info_list = []
         self.num_iteration = 0
+        self.generation = 0
 
     def set_key_infos(self, key_infos: list[KeyInfo], num: int) -> None:
         """Set key infos of registers."""
+        self.generation += 1
         self.key_info_list = key_infos.copy()
         self.num_iteration = num
 
     @enable_coverage_tracing
     def run(self) -> None:
         """Send key info to main thread."""
+        generation = self.generation
         is_focus_vim = True
         for _ in range(self.num_iteration):
+            if self.isInterruptionRequested():
+                return
             for key_info in self.key_info_list:
+                if self.isInterruptionRequested():
+                    return
                 if key_info.identifier == 1:
                     is_focus_vim = False
                 elif key_info.identifier == 0 and is_focus_vim is False:
                     is_focus_vim = True
-                    self.sig_focus_vim.emit()
-                self.sig_send_key_info.emit(key_info)
+                    self.sig_focus_vim.emit(generation)
+                self.sig_send_key_info.emit(key_info, generation)
 
         if is_focus_vim is False:
-            self.sig_focus_vim.emit()
+            self.sig_focus_vim.emit(generation)
 
 
 class VimWidget(QWidget):
@@ -711,12 +719,34 @@ class VimWidget(QWidget):
         self.set_leader_key()
 
         # macro
+        self._macro_generation = -1
+        self._macro_editor = None
         self.worker_macro = MacroPlaybackWorker(main)
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
-        self.worker_macro.sig_focus_vim.connect(self.commandline.setFocus)
+        self.worker_macro.sig_focus_vim.connect(self._focus_macro_input)
 
-    @Slot(object)
-    def send_key_event(self, key_info: KeyInfo) -> None:
+    def cancel_macro(self) -> None:
+        """Invalidate queued playback when its editor is left or closed."""
+        self._macro_generation = -1
+        self._macro_editor = None
+        self.worker_macro.requestInterruption()
+
+    def _macro_is_current(self, generation) -> bool:
+        return (
+            generation == self._macro_generation
+            and self._macro_editor is not None
+            and self._macro_editor() is self.vim_status.get_editor()
+        )
+
+    @Slot(int)
+    def _focus_macro_input(self, generation) -> None:
+        if self._macro_is_current(generation):
+            self.commandline.setFocus()
+
+    @Slot(object, int)
+    def send_key_event(self, key_info: KeyInfo, generation=None) -> None:
+        if generation is not None and not self._macro_is_current(generation):
+            return
         event = key_info.to_event()
         if key_info.identifier == 0:
             self.commandline.keyPressEvent(event)
@@ -775,12 +805,20 @@ class VimWidget(QWidget):
         if self.vim_status.manager_macro.reg_name_for_execute:
             mm = self.vim_status.manager_macro
             ch = mm.reg_name_for_execute
+            if self.worker_macro.isRunning():
+                self.worker_macro.requestInterruption()
+                self.worker_macro.wait()
             self.worker_macro.set_key_infos(mm.registers[ch], mm.num_execute)
+            self._macro_generation = self.worker_macro.generation
+            self._macro_editor = weakref.ref(self.vim_status.get_editor())
             self.worker_macro.start()
             mm.set_info_for_execute("", 0)
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        self.cancel_macro()
+        if self.vim_status.is_recording_macro():
+            self.vim_status.stop_recording_macro()
         self.vim_status.finish_insert(apply_count=False)
         self.vim_status.search.close()
         try:

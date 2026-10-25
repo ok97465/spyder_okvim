@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 """Cursor handling utilities."""
 
+# Standard Libraries
+import weakref
+
 # Third Party Libraries
 from qtpy.QtCore import QTimer
 from qtpy.QtGui import QBrush, QColor, QTextBlock, QTextCursor
@@ -18,6 +21,7 @@ class VimCursor:
 
     def __init__(self, editor_widget):
         self.editor_widget = editor_widget
+        self._editorstack = None
 
         self.vim_cursor = QTextEdit.ExtraSelection()
         self.vim_cursor.format.setForeground(QBrush(QColor("#000000")))
@@ -63,11 +67,22 @@ class VimCursor:
 
     def get_editor(self):
         """Get the editor focused."""
-        editorstack = self.editor_widget.get_current_editorstack()
-        return editorstack.get_current_editor()
+        editorstack = self.get_editorstack()
+        return editorstack.get_current_editor() if editorstack is not None else None
+
+    def set_editorstack(self, editorstack):
+        """Keep commands on their view while the command line has focus."""
+        self._editorstack = weakref.ref(editorstack) if editorstack is not None else None
 
     def get_editorstack(self):
         """Get the editorstack."""
+        stack = self._editorstack() if self._editorstack is not None else None
+        if stack is not None:
+            try:
+                stack.parent()  # A Python wrapper can outlive its Qt object.
+                return stack
+            except RuntimeError:
+                self._editorstack = None
         return self.editor_widget.get_current_editorstack()
 
     def get_cursor(self):

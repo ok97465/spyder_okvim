@@ -122,7 +122,8 @@ class VimStatus(QObject):
         # Leap
         self.n_annotate_max = 50
         self.labels_for_annotate = [
-            InlineLabel(self.main) for _ in range(self.n_annotate_max)
+            InlineLabel(self.editor_widget.get_widget())
+            for _ in range(self.n_annotate_max)
         ]
         self.hide_annotate_on_txt()
 

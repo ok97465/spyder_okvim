@@ -133,7 +133,7 @@ class ExecutorColon(ExecutorSubBase):
         vs = self.vim_status
         marks = vs.bookmark_manager.list_bookmarks()
 
-        dlg = MarkListDialog(marks, vs.main)
+        dlg = MarkListDialog(marks, vs.get_editor().window())
         result = exec_dialog(dlg)
         # Tests patch ``exec_`` to return ``None``; ``exec_dialog`` keeps that
         # behaviour so only an explicit ``QDialog.Rejected`` (0) cancels.
@@ -153,7 +153,7 @@ class ExecutorColon(ExecutorSubBase):
         """Display the jumplist in a popup dialog."""
         vs = self.vim_status
 
-        dlg = JumpListDialog(vs, vs.main)
+        dlg = JumpListDialog(vs, vs.get_editor().window())
         exec_dialog(dlg)
 
         vs.set_focus_to_vim()

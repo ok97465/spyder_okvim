@@ -12,10 +12,6 @@ Please do not open issues on the Spyder GitHub after installing Okvim.
 
 If you run into problems, uninstall Okvim and try again.
 
-## Known Issues
-
-- Okvim does not work when the Spyder editor is undocked from the main window.
-
 ## Overview
 
 - Supported Vim motions include `hjkl`, `^u`, `%`, `iw`, `i(`, `/`, `?`, `n`, `N`, `;` and more.
@@ -206,3 +202,16 @@ For operators use `z` because `s` belongs to vim-surround.
 
 When there are matches in another group, hints appear around the group.
 ![leap](https://github.com/ok97465/spyder_okvim/raw/main/doc/leap.gif)
+
+## Window integration tests
+
+The real-window matrix targets the paired Spyder fork, including its window and
+popup lifetime fixes. It is opt-in so the ordinary suite can also run against
+stock Spyder:
+
+```sh
+SPYDER_OKVIM_WINDOW_INTEGRATION=1 SPYDER_PYTEST=True \
+QT_QPA_PLATFORM=offscreen QT_API=pyqt5 PYTEST_QT_API=pyqt5 \
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p pytestqt.plugin \
+  spyder_okvim/spyder/tests/test_editor_windows.py
+```
