@@ -774,6 +774,8 @@ class MotionHelper:
 
     def i_quote(self, quote):
         """Find quoted block position excluding quotes."""
+        if quote == "`":
+            return self._backtick_object(around=False)
         sel_end = None
 
         cursor = self.get_cursor()
@@ -803,7 +805,7 @@ class MotionHelper:
             else:
                 sel_end = text.find(quote, cursor_pos)
 
-        if sel_start > -1 and sel_end > -1:
+        if sel_start > -1 and sel_end is not None and sel_end > -1:
             sel_start = sel_start + block.position() + 1
             sel_end = sel_end + block.position()
         else:
@@ -850,6 +852,8 @@ class MotionHelper:
 
     def a_quote(self, quote):
         """Find quoted block position including trailing white space."""
+        if quote == "`":
+            return self._backtick_object(around=True)
         sel_end = None
 
         cursor = self.get_cursor()
@@ -879,7 +883,7 @@ class MotionHelper:
             else:
                 sel_end = text.find(quote, cursor_pos)
 
-        if sel_start > -1 and sel_end > -1:
+        if sel_start > -1 and sel_end is not None and sel_end > -1:
             sel_start = sel_start + block.position()
             sel_end = sel_end + block.position() + 1
             sel_end_old = sel_end
@@ -893,6 +897,169 @@ class MotionHelper:
         return self._set_motion_info(
             None, sel_start, sel_end, motion_type=MotionType.BlockWise
         )
+
+    def _backtick_object(self, around: bool) -> MotionInfo:
+        """Find a line-local backtick pair, ignoring escaped delimiters."""
+        cursor = self.get_cursor()
+        block = cursor.block()
+        text = block.text()
+        # QTextCursor positions count UTF-16 code units, including surrogate pairs.
+        positions = []
+        offset = block.position()
+        backslashes = 0
+        for char in text:
+            if char == "`" and backslashes % 2 == 0:
+                positions.append(offset)
+            backslashes = backslashes + 1 if char == "\\" else 0
+            offset += 2 if ord(char) > 0xFFFF else 1
+
+        current = cursor.position()
+        index = bisect_left(positions, current)
+        if index < len(positions) and positions[index] == current:
+            # On a delimiter, pair quotes from the start of the line. Between
+            # delimiters, select the immediately surrounding pair instead.
+            index -= index % 2
+        else:
+            index = max(0, index - 1)
+        if index + 1 >= len(positions):
+            return self._set_motion_info(None, motion_type=MotionType.BlockWise)
+
+        start, end = positions[index : index + 2]
+        if around:
+            end += 1
+            document = cursor.document()
+            block_end = block.position() + block.length() - 1
+            trailing_end = end
+            while end < block_end and document.characterAt(end) in WHITE_SPACE:
+                end += 1
+            if end == trailing_end:
+                while (
+                    start > block.position()
+                    and document.characterAt(start - 1) in WHITE_SPACE
+                ):
+                    start -= 1
+        else:
+            start += 1
+        return self._set_motion_info(None, start, end, motion_type=MotionType.BlockWise)
+
+    def _paragraph_object(self, num: int, around: bool) -> MotionInfo:
+        """Select paragraph/blank-line runs without scanning unrelated blocks."""
+        block = self.get_cursor().block()
+        starts_blank = not block.text().strip()
+        start = block
+        while start.previous().isValid():
+            previous = start.previous()
+            if (not previous.text().strip()) != starts_blank:
+                break
+            start = previous
+
+        end = start
+        if around and starts_blank:
+            while end.isValid() and not end.text().strip():
+                end = end.next()
+            if not end.isValid():
+                return self._set_motion_info(None)
+
+        for index in range(max(1, num)):
+            blank = not end.text().strip()
+            while end.next().isValid():
+                following = end.next()
+                if (not following.text().strip()) != blank:
+                    break
+                end = following
+            if index + 1 < num:
+                end = end.next()
+                if around:
+                    while end.isValid() and not end.text().strip():
+                        end = end.next()
+                if not end.isValid():
+                    return self._set_motion_info(None)
+
+        if around and not starts_blank:
+            following = end.next()
+            if following.isValid() and not following.text().strip():
+                while following.isValid() and not following.text().strip():
+                    end = following
+                    following = following.next()
+            else:
+                previous = start.previous()
+                while previous.isValid() and not previous.text().strip():
+                    start = previous
+                    previous = previous.previous()
+
+        return self._set_motion_info(
+            start.position(),
+            start.position(),
+            end.position() + end.length() - 1,
+            motion_type=MotionType.LineWise,
+        )
+
+    def i_p(self, num: int = 1) -> MotionInfo:
+        """Select paragraph contents or the current run of blank lines."""
+        return self._paragraph_object(num, around=False)
+
+    def a_p(self, num: int = 1) -> MotionInfo:
+        """Select paragraphs with adjacent blank lines."""
+        return self._paragraph_object(num, around=True)
+
+    def a_W(self, num: int = 1) -> MotionInfo:
+        """Select whitespace-delimited WORDs with adjacent horizontal space."""
+        cursor = self.get_cursor()
+        document = cursor.document()
+        document_end = document.characterCount() - 1
+        start = cursor.position()
+
+        def is_space(position):
+            return document.characterAt(position).isspace()
+
+        def invalid_range():
+            return self._set_motion_info(None, motion_type=MotionType.BlockWise)
+
+        block_start = cursor.block().position()
+        starts_space = is_space(start)
+        while start > block_start and is_space(start - 1) == starts_space:
+            start -= 1
+
+        end = start
+        ends_space = False
+        for index in range(max(1, num)):
+            if index:
+                block = document.findBlock(end)
+                # The previous WORD excludes its line separator. Cross it
+                # before choosing the next WORD or whitespace object.
+                if end == block.position() + block.length() - 1:
+                    end += 1
+            if end >= document_end:
+                return invalid_range()
+
+            leading_space = is_space(end)
+            if leading_space:
+                # As in Vim's E motion, advance at least once, then stop at
+                # the next empty line instead of consuming every blank line.
+                end += 1
+                while end <= document_end and is_space(end):
+                    if document.findBlock(end).length() == 1:
+                        break
+                    end += 1
+                if end > document_end:
+                    return invalid_range()
+
+            while end < document_end and not is_space(end):
+                end += 1
+            word_end = end
+            if not leading_space:
+                while end < document_end and document.characterAt(end) in WHITE_SPACE:
+                    end += 1
+            ends_space = end > word_end or document.findBlock(end).length() == 1
+
+        if not starts_space and not ends_space:
+            leading_start = start
+            while leading_start > block_start and is_space(leading_start - 1):
+                leading_start -= 1
+            if leading_start > block_start:
+                start = leading_start
+
+        return self._set_motion_info(None, start, end, motion_type=MotionType.BlockWise)
 
     def i_w(self, num):
         """Find word block position."""

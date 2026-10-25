@@ -87,7 +87,8 @@ The following motions are supported:
 - hjkl
 - 0, ^, $
 - w, W, b, e
-- iwW, i()[]{}bB, i'"
+- iw, iW, aw, aW, ip, ap
+- i()[]{}bB, a()[]{}bB, i'", a'", and inner/around backticks
 - G, g
 - :{number}
 - ^D, ^U, ^F, ^B

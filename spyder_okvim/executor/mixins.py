@@ -10,6 +10,8 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.executor.executor_base import FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.vim.state import VimState
 
 
 class MovementMixin:
@@ -152,6 +154,28 @@ class SelectionMixin:
     # ------------------------------------------------------------------
     # Selection manipulation helpers
     # ------------------------------------------------------------------
+    def select_text_object(self, motion_info: MotionInfo):
+        """Apply a text object's range using its character/line selection mode."""
+        if motion_info.motion_type == MotionType.LineWise:
+            self.vim_status.to_visual_line()
+        elif self.vim_status.vim_state == VimState.VLINE:
+            self.vim_status.to_visual_char()
+        self.vim_status.cursor.set_block_selection_in_visual(motion_info)
+
+    def i(self, num: int = 1, num_str: str = ""):
+        """Select an inner text object."""
+        executor_sub = self.executor_sub_motion_i
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred([FUNC_INFO(self.select_text_object, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
+    def a(self, num: int = 1, num_str: str = ""):
+        """Select a text object with its surroundings."""
+        executor_sub = self.executor_sub_motion_a
+        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub.set_func_list_deferred([FUNC_INFO(self.select_text_object, True)])
+        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+
     def r(self, num: int = 1, num_str: str = ""):
         """Replace selection with a typed character."""
         executor_sub = self.executor_sub_r

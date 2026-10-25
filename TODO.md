@@ -6,14 +6,6 @@
 
 보완 중 반응 시간에 영향을 미치는 사항에 대해서는 진행 여부를 사용자에게 문의한다.
 
-- [ ] **04. 기본 텍스트 객체 확대** — 추가-03 · 중간
-
-  작업: 문단 `ip/ap`, 주변 WORD `aW`, 백틱 내부·주변 문자열 객체를 기존 객체 처리 구조에 추가한다.
-
-  완료 기준: `cip`, `dap`, `caW`와 백틱 객체가 연산자 및 Visual 선택에서 동작하며, 빈 문단·문서 경계도 처리한다.
-
-  관련 코드: [executor_sub.py](spyder_okvim/executor/executor_sub.py), [motion_helpers.py](spyder_okvim/utils/motion_helpers.py).
-
 - [ ] **05. 재들여쓰기 연산자 `=` 추가** — 추가-07 · 중간
 
   작업: `==`, `={motion}`, `gg=G`를 현재 문서의 재들여쓰기 기능에 연결한다. 전체 포맷과 재들여쓰기의 적용 범위를 구분한다.

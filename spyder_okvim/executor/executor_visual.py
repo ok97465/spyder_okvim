@@ -60,9 +60,6 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.apply_motion_info_in_visual = (
             self.vim_status.cursor.apply_motion_info_in_visual
         )
-        self.set_block_selection_in_visual = (
-            self.vim_status.cursor.set_block_selection_in_visual
-        )
         self.executor_colon = ExecutorColon(vim_status)
         self.executor_sub_g = ExecutorSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
@@ -172,30 +169,6 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
     def closebrace(self, num=1, num_str=""):
         """Start } submode."""
         return self.executor_sub_closebrace
-
-    def i(self, num=1, num_str=""):
-        """Select block exclusively."""
-        executor_sub = self.executor_sub_motion_i
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.set_block_selection_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
-
-    def a(self, num=1, num_str=""):
-        """Select block exclusively."""
-        executor_sub = self.executor_sub_motion_a
-
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.set_block_selection_in_visual, True)]
-        )
-
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
     def d(self, num=1, num_str=""):
         """Delete text."""

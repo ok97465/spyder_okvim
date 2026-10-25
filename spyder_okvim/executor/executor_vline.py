@@ -28,6 +28,8 @@ from spyder_okvim.executor.executor_sub import (
     ExecutorSubCmd_r,
     ExecutorSubCmd_register,
     ExecutorSubCmdLeap,
+    ExecutorSubMotion_a,
+    ExecutorSubMotion_i,
 )
 from spyder_okvim.executor.mixins import MovementMixin, SelectionMixin
 from spyder_okvim.spyder.config import CONF_SECTION
@@ -43,7 +45,7 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.move_cursor = vim_status.cursor.set_cursor_pos_in_vline
         self.move_cursor_no_end = vim_status.cursor.set_cursor_pos_in_vline
 
-        cmds = "uUovhydcsSxHjJklLMwWbBepP^$gG~:%fFtTnN/;,\"`'mr<>{} \b\r[]*#"
+        cmds = "uUovhiyadcsSxHjJklLMwWbBepP^$gG~:%fFtTnN/;,\"`'mr<>{} \b\r[]*#"
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
@@ -54,6 +56,8 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.executor_sub_g = ExecutorSubCmd_g(vim_status)
         self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
         self.executor_sub_r = ExecutorSubCmd_r(vim_status)
+        self.executor_sub_motion_i = ExecutorSubMotion_i(vim_status)
+        self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
         self.executor_sub_register = ExecutorSubCmd_register(vim_status)
         self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
         self.executor_sub_search = ExecutorSearch(vim_status)

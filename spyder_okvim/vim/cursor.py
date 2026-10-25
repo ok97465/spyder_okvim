@@ -283,7 +283,10 @@ class VimCursor:
         sel.cursor.setPosition(motion_info.sel_start)
         sel.cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
         self.set_extra_selections("vim_selection", [sel])
-        self.set_cursor_pos(motion_info.sel_end - 1)
+        if motion_info.motion_type == MotionType.LineWise:
+            self.set_cursor_pos(motion_info.sel_end)
+        else:
+            self.set_cursor_pos(max(motion_info.sel_start, motion_info.sel_end - 1))
 
     def set_cursor_pos(self, pos):
         """Place the editor cursor at ``pos``.

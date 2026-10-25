@@ -2,6 +2,7 @@
 """Collection of executor classes for various submodes."""
 
 # Standard Libraries
+import math
 import re
 
 # Third Party Libraries
@@ -37,12 +38,14 @@ class ExecutorSubMotion_i(ExecutorSubBase):
         self.update_input_cmd_info(None, None, txt)
         self.vim_status.sub_mode = None
 
-        if txt in "wW{}[]()'\"bBc":
+        if txt in "wWp{}[]()'\"`bBc":
             if txt == "w":
                 motion_info = self.helper_motion.i_w(self.parent_num[-1])
             elif txt == "W":
                 motion_info = self.helper_motion.i_W(self.parent_num[-1])
-            elif txt in "'\"":
+            elif txt == "p":
+                motion_info = self.helper_motion.i_p(math.prod(self.parent_num))
+            elif txt in "'\"`":
                 motion_info = self.helper_motion.i_quote(txt)
             elif txt == "c":
                 motion_info = self.helper_motion.i_cell(self.parent_num[-1])
@@ -73,10 +76,14 @@ class ExecutorSubMotion_a(ExecutorSubBase):
         self.update_input_cmd_info(None, None, txt)
         self.vim_status.sub_mode = None
 
-        if txt in "w{}[]()'\"bB":
+        if txt in "wWp{}[]()'\"`bB":
             if txt in "w":
                 motion_info = self.helper_motion.a_w(self.parent_num[-1])
-            elif txt in "'\"":
+            elif txt == "W":
+                motion_info = self.helper_motion.a_W(math.prod(self.parent_num))
+            elif txt == "p":
+                motion_info = self.helper_motion.a_p(math.prod(self.parent_num))
+            elif txt in "'\"`":
                 motion_info = self.helper_motion.a_quote(txt)
             else:
                 txt = txt.replace("b", "(")
