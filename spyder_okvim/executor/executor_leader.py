@@ -15,17 +15,21 @@ class ExecutorLeaderKey(ExecutorBase):
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
+        self._default_command_specs = (
+            ("i", self.auto_import, "Auto import"),
+            ("I", self.search_imports, "Search imports"),
+            ("b", self.toggle_breakpoint, "Toggle breakpoint"),
+            ("d", self.debug_cell, "Debug cell"),
+            ("D", self.debug_selection, "Debug selection or line"),
+            ("\r", self.run_cell_and_advance, "Run cell and advance"),
+            ("r", self.run_selection, "Run selection or line"),
+            ("f", self.formatting, "Format document or selection"),
+            ("p", self.open_switcher, "Switch file"),
+            ("s", self.open_symbol_swicher, "Switch symbol"),
+        )
+        self._command_specs = self._default_command_specs
         self.dispatcher = {
-            "i": self.auto_import,
-            "I": self.search_imports,
-            "b": self.toggle_breakpoint,
-            "d": self.debug_cell,
-            "D": self.debug_selection,
-            "\r": self.run_cell_and_advance,
-            "r": self.run_selection,
-            "f": self.formatting,
-            "p": self.open_switcher,
-            "s": self.open_symbol_swicher,
+            key: method for key, method, _ in self._command_specs
         }
 
         self.set_selection_to_editor_using_vim_selection = (
@@ -34,8 +38,29 @@ class ExecutorLeaderKey(ExecutorBase):
         self.prev_executor = None
 
     def set_easymotion_key(self, key):
-        "Set key for easymotion."
-        self.dispatcher[key] = self.execute_easymotion
+        """Restore default commands and bind the current EasyMotion key."""
+        easymotion_spec = (key, self.execute_easymotion, "EasyMotion")
+        self._command_specs = tuple(
+            easymotion_spec if command[0] == key else command
+            for command in self._default_command_specs
+        )
+        if not any(command[0] == key for command in self._default_command_specs):
+            self._command_specs += (easymotion_spec,)
+        self.dispatcher = {
+            command_key: method for command_key, method, _ in self._command_specs
+        }
+
+    def get_hint_candidates(self):
+        """Return executable leader keys and short descriptions in stable order."""
+        return [
+            (key, description)
+            for key, method, description in self._command_specs
+            if self.dispatcher.get(key) == method
+        ]
+
+    def on_escape(self):
+        """Discard the pending leader without executing its previous executor."""
+        self.prev_executor = None
 
     def __call__(self, txt):
         """Dispatch leader-key command ``txt`` and return execution info."""

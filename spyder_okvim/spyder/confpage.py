@@ -82,10 +82,31 @@ class OkvimConfigPage(PluginConfigPage):
         leaderkey_layout.addWidget(self.leaderkey_edit)
         leaderkey_group.setLayout(leaderkey_layout)
 
+        which_key_group = QGroupBox("Which-key")
+        which_key_layout = QVBoxLayout()
+        self.which_key_enabled = newcb(
+            "Enable which-key hints", "which_key_enabled", default=True
+        )
+        self.which_key_delay = newsb(
+            "Show hints after",
+            "ms",
+            "which_key_delay",
+            default=300,
+            min_=0,
+            max_=2000,
+            step=50,
+        )
+        self.which_key_enabled.checkbox.toggled.connect(self.which_key_delay.setEnabled)
+        self.which_key_delay.setEnabled(self.which_key_enabled.checkbox.isChecked())
+        which_key_layout.addWidget(self.which_key_enabled)
+        which_key_layout.addWidget(self.which_key_delay)
+        which_key_group.setLayout(which_key_layout)
+
         layout = QVBoxLayout()
         layout.addWidget(color_group)
         layout.addWidget(options_group)
         layout.addWidget(leaderkey_group)
+        layout.addWidget(which_key_group)
 
         self.setLayout(layout)
 

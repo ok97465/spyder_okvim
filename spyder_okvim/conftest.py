@@ -96,6 +96,7 @@ class MainMock(QWidget):
 
         # Disable highlight yank delay to avoid timer side effects
         CONF.set(CONF_SECTION, "highlight_yank_duration", 0)
+        CONF.set(CONF_SECTION, "which_key_enabled", False)
 
         self.add_dockwidget = Mock()
 
@@ -174,7 +175,8 @@ def vim_bot(qtbot_module):
 
 
 @pytest.fixture(autouse=True)
-def process_events_after_test():
-    """Process pending Qt events after each test."""
+def process_events_after_test(vim_bot):
+    """Cancel delayed hints before processing pending Qt events after a test."""
     yield
+    vim_bot[3].vim_cmd.which_key.cancel()
     QCoreApplication.processEvents()

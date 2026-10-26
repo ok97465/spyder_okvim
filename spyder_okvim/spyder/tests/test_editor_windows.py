@@ -97,6 +97,7 @@ def editor_windows(qtbot, tmp_path, vim_bot):
         for key, value in options.items():
             CONF.set(section, key, value)
     CONF.set(CONF_SECTION, "highlight_yank_duration", 0)
+    CONF.set(CONF_SECTION, "which_key_enabled", False)
     vim = _TestVim(main, CONF)
     main.spyder_okvim = vim
     vim.on_initialize()
@@ -199,6 +200,116 @@ def _exercise_vim(state, stack):
     assert all(label.window() is code.window() for label in status.labels_for_annotate)
     status.annotate_on_txt({0: "a", 6: "b"})
     status.hide_annotate_on_txt()
+
+
+@pytest.fixture
+def which_key_windows(editor_windows):
+    """Enable hints only for their window-routing tests."""
+    state = editor_windows
+    previous_delay = CONF.get(CONF_SECTION, "which_key_delay")
+    previous_leader = CONF.get(CONF_SECTION, "leader_key")
+    CONF.set(CONF_SECTION, "which_key_enabled", True)
+    CONF.set(CONF_SECTION, "which_key_delay", 40)
+    CONF.set(CONF_SECTION, "leader_key", "Space")
+    state.vim.apply_plugin_settings([])
+    try:
+        yield state
+    finally:
+        if not state.vim_closed:
+            state.vim.vim_cmd.which_key.cancel()
+            state.commandline.esc_pressed()
+        CONF.set(CONF_SECTION, "which_key_enabled", False)
+        CONF.set(CONF_SECTION, "which_key_delay", previous_delay)
+        CONF.set(CONF_SECTION, "leader_key", previous_leader)
+        if not state.vim_closed:
+            state.vim.apply_plugin_settings([])
+
+
+def _which_key_visible(controller):
+    popup = controller.popup
+    return popup is not None and not _widget_is_deleted(popup) and popup.isVisible()
+
+
+def _start_which_key(state, displayed):
+    controller = state.vim.vim_cmd.which_key
+    state.commandline.esc_pressed()
+    state.qtbot.keyClick(state.commandline, Qt.Key_Space)
+    if displayed:
+        state.qtbot.waitUntil(lambda: _which_key_visible(controller))
+    else:
+        assert controller.timer.isActive()
+        assert not _which_key_visible(controller)
+    return controller
+
+
+@pytest.mark.parametrize("displayed", [False, True], ids=["pending", "visible"])
+@pytest.mark.parametrize("target", ["tab", "split", "window"])
+def test_which_key_cancels_on_view_change(which_key_windows, displayed, target):
+    """Neither a timer nor a displayed hint can survive changing editor views."""
+    state = which_key_windows
+    source_stack = state.widget.editorstacks[0]
+    if target == "split":
+        state.widget.editorsplitter.split(Qt.Horizontal)
+        _settle()
+        target_stack = state.widget.editorstacks[-1]
+    elif target == "window":
+        window = state.widget.create_new_window()
+        _settle()
+        target_stack = window.editorwidget.editorstacks[0]
+    else:
+        target_stack = source_stack
+    source = _focus_stack(state, source_stack)
+    controller = _start_which_key(state, displayed)
+    old_popup = controller.popup
+
+    if target == "tab":
+        source_stack.set_stack_index(1 - source_stack.get_stack_index())
+    else:
+        target_code = target_stack.get_current_editor()
+        target_code.window().activateWindow()
+        target_code.setFocus()
+    _settle()
+
+    assert not controller.timer.isActive()
+    assert not _which_key_visible(controller)
+    assert state.vim.vim_cmd.vim_status.sub_mode is None
+    if old_popup is not None:
+        assert _widget_is_deleted(old_popup) or not old_popup.isVisible()
+    state.qtbot.wait(60)
+    assert not _which_key_visible(controller)
+
+    code = _focus_stack(state, target_stack)
+    assert code is not source
+    _start_which_key(state, True)
+    assert controller.popup.parentWidget() is code.viewport()
+    assert controller.popup.window() is code.window()
+    assert QApplication.focusWidget() is state.commandline
+
+
+@pytest.mark.parametrize("displayed", [False, True], ids=["pending", "visible"])
+def test_which_key_releases_closed_window(which_key_windows, displayed):
+    """Closing the hint's host releases its viewport and prevents late display."""
+    state = which_key_windows
+    window = state.widget.create_new_window()
+    _settle()
+    stack = window.editorwidget.editorstacks[0]
+    _focus_stack(state, stack)
+    controller = _start_which_key(state, displayed)
+    popup = controller.popup
+
+    window.close()
+    _settle()
+
+    assert _widget_is_deleted(window)
+    assert not controller.timer.isActive()
+    assert not _which_key_visible(controller)
+    if popup is not None:
+        assert _widget_is_deleted(popup)
+    state.qtbot.wait(60)
+    assert not _which_key_visible(controller)
+    code = _focus_stack(state, state.widget.editorstacks[0])
+    _start_which_key(state, True)
+    assert controller.popup.parentWidget() is code.viewport()
 
 
 @pytest.mark.parametrize("undocked", [False, True])
@@ -632,9 +743,12 @@ def test_recording_stops_and_disconnects_on_window_change(editor_windows):
 
 
 @pytest.mark.parametrize("undocked", [False, True])
-def test_plugin_shutdown_with_shared_ui_in_new_window(editor_windows, undocked):
-    """Shutdown releases shared widgets before all peer windows are deleted."""
-    state = editor_windows
+@pytest.mark.parametrize("displayed", [False, True], ids=["pending", "visible"])
+def test_plugin_shutdown_with_shared_ui_in_new_window(
+    which_key_windows, undocked, displayed
+):
+    """Shutdown cancels hints and releases shared UI before deleting windows."""
+    state = which_key_windows
     if undocked:
         state.widget.create_window()
         _settle()
@@ -646,9 +760,19 @@ def test_plugin_shutdown_with_shared_ui_in_new_window(editor_windows, undocked):
     state.qtbot.keyClicks(state.commandline, "qa")
     manager = state.vim.vim_cmd.vim_status.manager_macro
     assert manager.is_recording
+    controller = _start_which_key(state, displayed)
+    popup = controller.popup
+    timer = controller.timer
     state.vim.on_close()
     state.vim_closed = True
+    if not _widget_is_deleted(timer):
+        assert not timer.isActive()
     _settle()
+    if not _widget_is_deleted(controller):
+        assert not controller.timer.isActive()
+        assert controller.popup is None
+    if popup is not None:
+        assert _widget_is_deleted(popup)
     assert _widget_is_deleted(state.commandline)
     assert not manager.is_recording
     assert manager.editor_connected is None

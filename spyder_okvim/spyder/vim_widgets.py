@@ -14,6 +14,7 @@ import re
 import sys
 import threading
 import weakref
+from contextlib import contextmanager
 from functools import wraps
 
 # Third Party Libraries
@@ -40,6 +41,7 @@ from spyder_okvim.executor import (
     ExecutorVlineCmd,
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
+from spyder_okvim.spyder.which_key import WhichKeyController
 from spyder_okvim.utils.commandline import completion_candidates
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.key_helpers import latin_command_key
@@ -568,6 +570,11 @@ class VimLineEdit(QLineEdit):
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Override Qt method."""
+        with self.vim_widget.input_processing():
+            self._handle_key_press(e)
+
+    def _handle_key_press(self, e: QKeyEvent) -> None:
+        """Process a key before synchronizing hints at the outer input boundary."""
         if not self.testAttribute(Qt.WA_InputMethodEnabled):
             e = latin_command_key(e)
         self.vim_status.manager_macro.add_vim_keyevent(e)
@@ -601,6 +608,7 @@ class VimLineEdit(QLineEdit):
 
     def esc_pressed(self) -> None:
         """Clear state."""
+        self.vim_widget.which_key.cancel()
         self.vim_status.input_cmd.clear()
         self.vim_status.remove_marker_of_easymotion()
         sub_mode = self.vim_status.sub_mode
@@ -621,9 +629,11 @@ class VimLineEdit(QLineEdit):
         if self.vim_status.cursor.get_editor():
             self.to_normal()
         self.vim_status.set_message("")
+        self.vim_widget.which_key.sync()
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
+        self.vim_widget.which_key.cancel()
         if self.testAttribute(Qt.WA_InputMethodEnabled):
             self.esc_pressed()
         super().focusOutEvent(event)
@@ -651,6 +661,7 @@ class MacroPlaybackWorker(QThread):
 
     sig_focus_vim = Signal(int)
     sig_send_key_info = Signal(object, int)
+    sig_playback_finished = Signal(int)
 
     def __init__(self, parent: QObject | None) -> None:
         super().__init__(parent)
@@ -684,6 +695,8 @@ class MacroPlaybackWorker(QThread):
 
         if is_focus_vim is False:
             self.sig_focus_vim.emit(generation)
+        # This shares the key signals' sender and queued delivery order.
+        self.sig_playback_finished.emit(generation)
 
 
 class VimWidget(QWidget):
@@ -693,6 +706,7 @@ class VimWidget(QWidget):
         super().__init__(main)
         self.editor_widget = editor_widget
         self.main = main
+        self._input_depth = 0
         self.status_label = VimStateLabel(main)
         self.msg_label = VimMessageLabel("", main)
 
@@ -726,15 +740,37 @@ class VimWidget(QWidget):
         # macro
         self._macro_generation = -1
         self._macro_editor = None
+        self._macro_playing = False
+        self._macro_completion = None
         self.worker_macro = MacroPlaybackWorker(main)
         self.worker_macro.sig_send_key_info.connect(self.send_key_event)
         self.worker_macro.sig_focus_vim.connect(self._focus_macro_input)
+        self.worker_macro.sig_playback_finished.connect(self._finish_macro)
+        self.which_key = WhichKeyController(self, _widget_is_deleted)
+
+    @contextmanager
+    def input_processing(self):
+        """Synchronize hints once, after recursive command processing finishes."""
+        if self._input_depth == 0:
+            self.which_key.begin_input()
+        self._input_depth += 1
+        try:
+            yield
+        finally:
+            self._input_depth -= 1
+            if self._input_depth == 0:
+                if self._macro_completion is not None:
+                    self._finish_macro(self._macro_completion)
+                self.which_key.sync()
 
     def cancel_macro(self) -> None:
         """Invalidate queued playback when its editor is left or closed."""
         self._macro_generation = -1
         self._macro_editor = None
+        self._macro_playing = False
+        self._macro_completion = None
         self.worker_macro.requestInterruption()
+        self.which_key.cancel()
 
     def _macro_is_current(self, generation) -> bool:
         return (
@@ -748,16 +784,31 @@ class VimWidget(QWidget):
         if self._macro_is_current(generation):
             self.commandline.setFocus()
 
+    @Slot(int)
+    def _finish_macro(self, generation) -> None:
+        """Release hint suppression after the last queued key has been handled."""
+        if not self._macro_is_current(generation):
+            return
+        if self._input_depth:
+            self._macro_completion = generation
+            return
+        self._macro_completion = None
+        self._macro_playing = False
+        self._macro_generation = -1
+        self._macro_editor = None
+        self.which_key.sync()
+
     @Slot(object, int)
     def send_key_event(self, key_info: KeyInfo, generation=None) -> None:
         if generation is not None and not self._macro_is_current(generation):
             return
-        event = key_info.to_event()
-        if key_info.identifier == 0:
-            self.commandline.keyPressEvent(event)
-        else:
-            editor = self.vim_status.get_editor()
-            self.vim_status.send_insert_event(editor, event)
+        with self.input_processing():
+            event = key_info.to_event()
+            if key_info.identifier == 0:
+                self.commandline.keyPressEvent(event)
+            else:
+                editor = self.vim_status.get_editor()
+                self.vim_status.send_insert_event(editor, event)
 
     def set_leader_key(self) -> None:
         """Set leader key from CONF."""
@@ -775,9 +826,16 @@ class VimWidget(QWidget):
             leader_key = leader_key2
         self.leader_key = leader_key
         self.executor_leader_key.set_easymotion_key(self.leader_key)
+        if hasattr(self, "which_key"):
+            self.which_key.apply_settings()
 
     def on_text_changed(self, txt: str) -> None:
         """Send input command to executor."""
+        with self.input_processing():
+            self._process_text(txt)
+
+    def _process_text(self, txt: str) -> None:
+        """Run existing executors while recursive clears stay inside the guard."""
         if not txt:
             sub_mode = self.vim_status.sub_mode
             if sub_mode and sub_mode.accepts_input_method:
@@ -816,11 +874,15 @@ class VimWidget(QWidget):
             self.worker_macro.set_key_infos(mm.registers[ch], mm.num_execute)
             self._macro_generation = self.worker_macro.generation
             self._macro_editor = weakref.ref(self.vim_status.get_editor())
+            self._macro_completion = None
+            self._macro_playing = True
+            self.which_key.cancel()
             self.worker_macro.start()
             mm.set_info_for_execute("", 0)
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        self.which_key.cleanup()
         self.cancel_macro()
         if self.vim_status.is_recording_macro():
             self.vim_status.stop_recording_macro()

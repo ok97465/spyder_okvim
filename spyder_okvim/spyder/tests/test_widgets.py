@@ -9,8 +9,10 @@
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
 from qtpy.QtGui import QFocusEvent, QKeyEvent
+from spyder.config.manager import CONF
 
 # Project Libraries
+from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
 
 
@@ -45,6 +47,78 @@ def test_conf_page(vim_bot):
     conf_page.leaderkey_edit.keyPressEvent(new_event)
 
     assert conf_page.leaderkey_viewer.textbox.text() == "Enter"
+
+
+def test_which_key_preference_defaults(vim_bot, monkeypatch):
+    """Older configuration files can open the page with the new defaults."""
+    main, _, _, vim, _ = vim_bot
+    defaults = dict(CONF_DEFAULTS)[CONF_SECTION]
+    assert defaults["which_key_enabled"] is True
+    assert defaults["which_key_delay"] == 300
+
+    # The shared VimTesting plugin omits the configuration manager by default.
+    monkeypatch.setattr(vim, "_conf", CONF)
+    page = OkvimConfigPage(vim, main)
+    get_option = page.get_option
+
+    def without_which_key_options(option, default, **kwargs):
+        if option in ("which_key_enabled", "which_key_delay"):
+            return default
+        return get_option(option, default, **kwargs)
+
+    monkeypatch.setattr(page, "get_option", without_which_key_options)
+    try:
+        page.initialize()
+        assert page.which_key_enabled.checkbox.isChecked()
+        assert page.which_key_delay.isEnabled()
+        assert page.which_key_delay.spinbox.value() == 300
+    finally:
+        page.deleteLater()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_which_key_preferences_load_toggle_and_save(vim_bot, enabled, monkeypatch):
+    """Load, edit, and reopen the persistent hint options through preferences."""
+    main, _, _, vim, _ = vim_bot
+    monkeypatch.setattr(vim, "_conf", CONF)
+    old_enabled = CONF.get(CONF_SECTION, "which_key_enabled")
+    old_delay = CONF.get(CONF_SECTION, "which_key_delay")
+    pages = []
+    try:
+        CONF.set(CONF_SECTION, "which_key_enabled", enabled)
+        CONF.set(CONF_SECTION, "which_key_delay", 750)
+        page = OkvimConfigPage(vim, main)
+        pages.append(page)
+        page.initialize()
+
+        assert page.which_key_enabled.checkbox.isChecked() is enabled
+        assert page.which_key_delay.isEnabled() is enabled
+        spinbox = page.which_key_delay.spinbox
+        assert spinbox.value() == 750
+        assert (spinbox.minimum(), spinbox.maximum(), spinbox.singleStep()) == (
+            0,
+            2000,
+            50,
+        )
+
+        page.which_key_enabled.checkbox.click()
+        assert page.which_key_delay.isEnabled() is not enabled
+        spinbox.setValue(150)
+        page.save_to_conf()
+
+        assert CONF.get(CONF_SECTION, "which_key_enabled") is not enabled
+        assert CONF.get(CONF_SECTION, "which_key_delay") == 150
+        reopened = OkvimConfigPage(vim, main)
+        pages.append(reopened)
+        reopened.initialize()
+        assert reopened.which_key_enabled.checkbox.isChecked() is not enabled
+        assert reopened.which_key_delay.isEnabled() is not enabled
+        assert reopened.which_key_delay.spinbox.value() == 150
+    finally:
+        for page in pages:
+            page.deleteLater()
+        CONF.set(CONF_SECTION, "which_key_enabled", old_enabled)
+        CONF.set(CONF_SECTION, "which_key_delay", old_delay)
 
 
 def test_apply_config(vim_bot):

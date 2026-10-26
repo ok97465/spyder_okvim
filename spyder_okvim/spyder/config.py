@@ -35,6 +35,8 @@ CONF_DEFAULTS = [
             "yank_fg_color": "#17172d",
             "yank_bg_color": "#5cacee",
             "leader_key": "Space",
+            "which_key_enabled": True,
+            "which_key_delay": 300,
         },
     )
 ]

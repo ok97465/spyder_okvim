@@ -148,6 +148,9 @@ seconds, that temporary entry is discarded.
 - [c, ]c : go to previousr/next cell
 - yic, dic, cid : Operate on the entire current cell (yank, delete, or change respectively)
 
+In either Spyder switcher, use `Ctrl+p` and `Ctrl+n` to select the previous
+and next item while keeping focus in the search field.
+
 The default leader key is Space. Press Space then `d` to debug a cell, or
 Space then Shift+`d` to debug the visual selection (the current line when
 nothing is selected).

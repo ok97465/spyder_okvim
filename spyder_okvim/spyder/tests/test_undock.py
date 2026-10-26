@@ -8,8 +8,10 @@ import weakref
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, QTimer, Qt
 from qtpy.QtWidgets import QApplication, QMainWindow, QShortcut
+from spyder.config.manager import CONF
 
 # Project Libraries
+from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.plugin import StatusBarVimWidget
 from spyder_okvim.spyder.vim_widgets import _widget_is_deleted
 
@@ -221,3 +223,100 @@ def test_inline_hints_follow_the_undocked_editor(undock_bot):
         floating.close()
         floating.deleteLater()
         _process_events()
+
+
+@pytest.fixture
+def which_key_undock(undock_bot):
+    """Keep hint settings and pending UI local to each docking regression."""
+    vim = undock_bot[3]
+    previous_enabled = CONF.get(CONF_SECTION, "which_key_enabled")
+    previous_delay = CONF.get(CONF_SECTION, "which_key_delay")
+    previous_leader = CONF.get(CONF_SECTION, "leader_key")
+    CONF.set(CONF_SECTION, "which_key_enabled", True)
+    CONF.set(CONF_SECTION, "which_key_delay", 40)
+    CONF.set(CONF_SECTION, "leader_key", "Space")
+    vim.apply_plugin_settings([])
+    try:
+        yield undock_bot
+    finally:
+        vim.vim_cmd.which_key.cancel()
+        vim.vim_cmd.commandline.esc_pressed()
+        CONF.set(CONF_SECTION, "which_key_enabled", previous_enabled)
+        CONF.set(CONF_SECTION, "which_key_delay", previous_delay)
+        CONF.set(CONF_SECTION, "leader_key", previous_leader)
+        vim.apply_plugin_settings([])
+
+
+@pytest.mark.parametrize("displayed", [False, True], ids=["pending", "visible"])
+@pytest.mark.parametrize("close_to_dock", [False, True])
+def test_which_key_cancels_when_docking_host_changes(
+    which_key_undock, displayed, close_to_dock
+):
+    """Reparenting or closing a host cancels hints and permits reuse afterward."""
+    main, _, editor, vim, qtbot, _, dock = which_key_undock
+    controller = vim.vim_cmd.which_key
+    commandline = vim.vim_cmd.commandline
+
+    def visible():
+        popup = controller.popup
+        return (
+            popup is not None
+            and not _widget_is_deleted(popup)
+            and popup.isVisible()
+        )
+
+    def focus_and_start(window):
+        window.show()
+        window.activateWindow()
+        _process_events()
+        editor.setFocus()
+        qtbot.keyClick(editor, Qt.Key_Escape)
+        _process_events()
+        assert QApplication.focusWidget() is commandline
+        qtbot.keyClick(commandline, Qt.Key_Escape)
+        qtbot.keyClick(commandline, Qt.Key_Space)
+        if displayed:
+            qtbot.waitUntil(visible)
+            assert controller.popup.parentWidget() is editor.viewport()
+            assert controller.popup.window() is window
+            assert QApplication.focusWidget() is commandline
+        else:
+            assert controller.timer.isActive()
+            assert not visible()
+
+    def assert_cancelled():
+        assert not controller.timer.isActive()
+        assert not visible()
+        qtbot.wait(60)
+        assert not visible()
+
+    class DockingWindow(QMainWindow):
+        def closeEvent(self, event):
+            super().closeEvent(event)
+            if close_to_dock:
+                dock()
+
+    floating = DockingWindow()
+    floating.setAttribute(Qt.WA_DeleteOnClose)
+    try:
+        focus_and_start(main)
+        floating.setCentralWidget(main.editor)
+        _process_events()
+        assert_cancelled()
+        focus_and_start(floating)
+        if close_to_dock:
+            floating.close()
+        else:
+            dock()
+            floating.close()
+        _process_events()
+        assert _widget_is_deleted(floating)
+        assert_cancelled()
+        focus_and_start(main)
+    finally:
+        controller.cancel()
+        dock()
+        if not _widget_is_deleted(floating):
+            floating.close()
+            floating.deleteLater()
+            _process_events()

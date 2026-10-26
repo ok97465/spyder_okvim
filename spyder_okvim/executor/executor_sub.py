@@ -3,6 +3,7 @@
 
 # Standard Libraries
 import math
+import os.path as osp
 import re
 
 # Third Party Libraries
@@ -557,11 +558,14 @@ class ExecutorSubMotion_y(ExecutorSubMotion_d):
 class ExecutorSubSubCmd_g(ExecutorSubBase):
     """Submode of Submode of g."""
 
+    hint_prefix = "g"
+    hint_candidates = (("g", "Go to line"),)
+
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
-        cmds = "g"
+        cmds = "".join(key for key, _ in self.hint_candidates)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def g(self, num=1, num_str=""):
@@ -576,11 +580,23 @@ class ExecutorSubSubCmd_g(ExecutorSubBase):
 class ExecutorSubCmd_g(ExecutorSubBase):
     """Submode of g."""
 
+    hint_prefix = "g"
+    hint_candidates = (
+        ("g", "Go to line"),
+        ("d", "Go to definition"),
+        ("t", "Next file"),
+        ("T", "Previous file"),
+        ("u", "Lowercase"),
+        ("U", "Uppercase"),
+        ("c", "Toggle comment"),
+        ("~", "Swap case"),
+    )
+
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
-        cmds = "gdtTuUc~"
+        cmds = "".join(key for key, _ in self.hint_candidates)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_motion = ExecutorSubMotion(vim_status)
 
@@ -680,9 +696,45 @@ class ExecutorSubCmd_g(ExecutorSubBase):
 class ExecutorSubCmd_register(ExecutorSubBase):
     """Set register name."""
 
+    hint_prefix = '"'
+    hint_candidates = (
+        ('"', "Unnamed register"),
+        ("0", "Last yank"),
+        ("-", "Small delete"),
+        ("+", "Clipboard"),
+        ("_", "Black hole"),
+        ("1-9", "Delete history"),
+        ("a-z", "Named registers"),
+        ("A-Z", "Append to named register"),
+    )
+
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
+
+    def get_hint_candidates(self):
+        """Describe register names without creating or reading clipboard values."""
+        registers = self.vim_status.register_dict
+
+        def with_preview(description, info):
+            content = info.content if info is not None else ""
+            preview = " ".join(content[:160].split())
+            if len(preview) > 40 or len(content) > 160:
+                preview = preview[:39] + "…"
+            return f"{description}: {preview}" if preview else description
+
+        candidates = [
+            (key, with_preview(description, registers.get(key)))
+            for key, description in self.hint_candidates
+        ]
+        for key, info in sorted(registers.items()):
+            if len(key) == 1 and ("1" <= key <= "9" or "a" <= key <= "z"):
+                if info.content:
+                    description = (
+                        "Delete history" if key.isdigit() else "Named register"
+                    )
+                    candidates.append((key, with_preview(description, info)))
+        return candidates
 
     def __call__(self, ch: str):
         """Update command to vim status."""
@@ -1113,6 +1165,25 @@ class ExecutorSubCmd_alnum(ExecutorSubBase):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
+    @property
+    def hint_prefix(self):
+        """Offer mark hints only while waiting for an apostrophe motion."""
+        return "'" if self.vim_status.input_cmd.cmd.endswith("'") else None
+
+    def get_hint_candidates(self):
+        """List marks reachable by the pending direct jump or operator motion."""
+        if self.hint_prefix is None:
+            return []
+        current = self.get_editorstack().get_current_filename()
+        can_change_file = len(self.parent_num) == 1
+        return [
+            (name, f"{osp.basename(info['file'])}:{info['line'] + 1}")
+            for name, info in self.vim_status.bookmark_manager.list_bookmarks()
+            if len(name) == 1
+            and name.isalnum()
+            and (can_change_file or info["file"] == current)
+        ]
+
     def __call__(self, ch: str):
         """Return deferred result when ``ch`` is alphanumeric."""
         self.update_input_cmd_info(None, None, ch)
@@ -1234,6 +1305,13 @@ class ExecutorSubCmd_closebrace(ExecutorSubBase):
 class ExecutorSubCmd_z(ExecutorSubBase):
     """Submode of z."""
 
+    hint_prefix = "z"
+    hint_candidates = (
+        ("z", "Center cursor line"),
+        ("t", "Cursor line to top"),
+        ("b", "Cursor line to bottom"),
+    )
+
     def __init__(self, vim_status):
         """Initialize submode for ``z`` commands."""
         super().__init__(vim_status)
@@ -1241,7 +1319,7 @@ class ExecutorSubCmd_z(ExecutorSubBase):
 
         self.has_zero_cmd = False
 
-        cmds = "ztb"
+        cmds = "".join(key for key, _ in self.hint_candidates)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def scroll_cursor_to_center(self, offset: int):

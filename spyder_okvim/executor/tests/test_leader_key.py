@@ -10,6 +10,104 @@ import pytest
 from qtpy.QtCore import Qt, QTimer
 from spyder.api.plugins import Plugins
 
+# Project Libraries
+from spyder_okvim.executor.executor_leader import ExecutorLeaderKey
+
+
+def test_leader_hint_candidates_match_dispatch(vim_bot):
+    """Hints preserve command order, case and the executable Enter key."""
+    _, _, _, vim, _ = vim_bot
+    executor = ExecutorLeaderKey(vim.vim_cmd.vim_status)
+    candidates = executor.get_hint_candidates()
+
+    assert candidates == [
+        ("i", "Auto import"),
+        ("I", "Search imports"),
+        ("b", "Toggle breakpoint"),
+        ("d", "Debug cell"),
+        ("D", "Debug selection or line"),
+        ("\r", "Run cell and advance"),
+        ("r", "Run selection or line"),
+        ("f", "Format document or selection"),
+        ("p", "Switch file"),
+        ("s", "Switch symbol"),
+    ]
+    assert [key for key, _ in candidates] == list(executor.dispatcher)
+    assert executor.dispatcher["i"] == executor.auto_import
+    assert executor.dispatcher["I"] == executor.search_imports
+    assert executor.dispatcher["d"] == executor.debug_cell
+    assert executor.dispatcher["D"] == executor.debug_selection
+    assert executor.dispatcher["\r"] == executor.run_cell_and_advance
+
+
+def test_leader_hint_candidates_are_read_only(vim_bot):
+    """Inspecting or modifying returned hints cannot change input or dispatch."""
+    _, _, _, vim, _ = vim_bot
+    status = vim.vim_cmd.vim_status
+    executor = ExecutorLeaderKey(status)
+    dispatcher = executor.dispatcher.copy()
+    input_cmd = status.input_cmd.cmd
+    sub_mode = status.sub_mode
+    candidates = executor.get_hint_candidates()
+    candidates.clear()
+
+    assert executor.get_hint_candidates()
+    assert executor.dispatcher == dispatcher
+    assert status.input_cmd.cmd == input_cmd
+    assert status.sub_mode is sub_mode
+    assert executor.prev_executor is None
+
+
+@pytest.mark.parametrize("key", [" ", "\r", "\b", "b", "I"])
+def test_easymotion_hint_uses_current_key(vim_bot, key):
+    """EasyMotion replaces collisions in place and retains raw special keys."""
+    _, _, _, vim, _ = vim_bot
+    executor = ExecutorLeaderKey(vim.vim_cmd.vim_status)
+    original_keys = list(executor.dispatcher)
+    expected_keys = original_keys if key in original_keys else original_keys + [key]
+
+    executor.set_easymotion_key(key)
+    candidates = executor.get_hint_candidates()
+    executor.set_easymotion_key(key)
+
+    assert executor.get_hint_candidates() == candidates
+    assert [candidate_key for candidate_key, _ in candidates] == expected_keys
+    assert list(executor.dispatcher) == expected_keys
+    assert dict(candidates)[key] == "EasyMotion"
+    assert executor.dispatcher[key] == executor.execute_easymotion
+
+
+def test_easymotion_key_change_restores_commands(vim_bot, monkeypatch):
+    """Changing leader restores each overridden handler and its description."""
+    _, _, _, vim, _ = vim_bot
+    breakpoint_command = Mock(return_value=None)
+    easymotion_command = Mock(return_value=None)
+    monkeypatch.setattr(ExecutorLeaderKey, "toggle_breakpoint", breakpoint_command)
+    monkeypatch.setattr(ExecutorLeaderKey, "execute_easymotion", easymotion_command)
+    executor = ExecutorLeaderKey(vim.vim_cmd.vim_status)
+    default_candidates = executor.get_hint_candidates()
+    default_dispatcher = executor.dispatcher.copy()
+
+    executor.set_easymotion_key("b")
+    assert executor("b") is True
+    easymotion_command.assert_called_once_with(1, "")
+    breakpoint_command.assert_not_called()
+
+    executor.set_easymotion_key("I")
+    assert executor("b") is True
+    breakpoint_command.assert_called_once_with(1, "")
+    assert dict(executor.get_hint_candidates())["b"] == "Toggle breakpoint"
+    executor.set_easymotion_key("\b")
+    assert executor.dispatcher["I"] == default_dispatcher["I"]
+    assert dict(executor.get_hint_candidates())["I"] == "Search imports"
+
+    executor.set_easymotion_key(" ")
+    assert executor.get_hint_candidates() == default_candidates + [(" ", "EasyMotion")]
+    assert "\b" not in executor.dispatcher
+    assert {key: executor.dispatcher[key] for key in default_dispatcher} == (
+        default_dispatcher
+    )
+
 
 def test_auto_import(vim_bot):
     """Test auto_import."""

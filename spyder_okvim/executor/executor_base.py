@@ -25,6 +25,8 @@ class ExecutorBase:
     """Baseclass Executor."""
 
     accepts_input_method = False
+    hint_prefix = None
+    hint_candidates = ()
 
     SYMBOLS_REPLACEMENT = {
         "!": "exclamation",
@@ -84,6 +86,10 @@ class ExecutorBase:
         self.has_zero_cmd = True
         self.pattern_cmd = None
         self.allow_leaderkey = True
+
+    def get_hint_candidates(self):
+        """Return read-only descriptions of the next supported keys."""
+        return list(self.hint_candidates)
 
     def update_input_cmd_info(self, num_str, cmd, input_txt):
         """Update input cmd to vim_status."""

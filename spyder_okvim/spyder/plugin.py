@@ -8,6 +8,7 @@
 """OkVim Plugin."""
 
 # Standard Libraries
+import sys
 import weakref
 
 # Third Party Libraries
@@ -15,7 +16,10 @@ import qtawesome as qta
 from qtpy.QtCore import QCoreApplication, QEvent, Qt, Signal
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut
-from spyder.api.plugin_registration.decorators import on_plugin_available
+from spyder.api.plugin_registration.decorators import (
+    on_plugin_available,
+    on_plugin_teardown,
+)
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
 # Project Libraries
@@ -118,7 +122,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         Plugins.Application,
         Plugins.Editor,
     ]
-    OPTIONAL = []
+    OPTIONAL = [Plugins.Switcher]
     WIDGET_CLASS = VimPane
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
@@ -174,6 +178,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._vim_focus = weakref.WeakKeyDictionary()
         self._editors = weakref.WeakSet()
         self._closing_windows = weakref.WeakSet()
+        self._switcher = None
         vim_cmd.commandline.installEventFilter(self)
         self._editor_widget.installEventFilter(self)
         signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
@@ -183,7 +188,28 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._sync_statusbar()
 
     def eventFilter(self, watched, event):
-        """Follow pane reparenting and rescue shared UI before a view closes."""
+        """Handle switcher navigation and track the active editor view."""
+        switcher = self._live(self._switcher)
+        if (
+            switcher is not None
+            and watched is switcher.edit
+            and switcher.isVisible()
+            and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
+        ):
+            modifiers = (Qt.ControlModifier,)
+            if sys.platform == "darwin" and not QCoreApplication.testAttribute(
+                Qt.AA_MacDontSwapCtrlAndMeta
+            ):
+                # Hosts using Qt's default macOS mapping report Control as Meta.
+                modifiers += (Qt.MetaModifier,)
+            if event.modifiers() in modifiers and event.key() in (Qt.Key_P, Qt.Key_N):
+                event.accept()
+                if event.type() == QEvent.KeyPress and switcher.count():
+                    if event.key() == Qt.Key_P:
+                        switcher.previous_row()
+                    else:
+                        switcher.next_row()
+                return True
         if event.type() == QEvent.FocusIn:
             if watched is self.vim_cmd.commandline:
                 self._vim_focus[watched.window()] = True
@@ -243,6 +269,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None
         self.vim_cmd.vim_status.cursor.set_editorstack(stack)
+        self.vim_cmd.which_key.set_editor(editor)
         if editor is not None and editor not in self._editors:
             self._editors.add(editor)
             editor.installEventFilter(self)
@@ -271,6 +298,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _reset_view(self):
         """Cancel partial commands before they can cross into another view."""
+        self.vim_cmd.which_key.cancel()
+        self.vim_cmd.which_key.set_editor(None)
         status = self.vim_cmd.vim_status
         self.vim_cmd.cancel_macro()
         if status.is_recording_macro():
@@ -331,6 +360,22 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         preferences = self.get_plugin(Plugins.Preferences)
         preferences.register_plugin_preferences(self)
 
+    @on_plugin_available(plugin=Plugins.Switcher)
+    def on_switcher_available(self) -> None:
+        """Add Vim navigation to Spyder's shared file and symbol switcher."""
+        self.on_switcher_teardown()
+        switcher = self.get_plugin(Plugins.Switcher).get_container().switcher
+        self._switcher = weakref.ref(switcher)
+        switcher.edit.installEventFilter(self)
+
+    @on_plugin_teardown(plugin=Plugins.Switcher)
+    def on_switcher_teardown(self) -> None:
+        """Remove navigation when the switcher or OkVim is disabled."""
+        switcher = self._live(getattr(self, "_switcher", None))
+        if switcher is not None:
+            switcher.edit.removeEventFilter(self)
+        self._switcher = None
+
     @staticmethod
     def check_compatibility():
         """Check plugin compatibility."""
@@ -340,6 +385,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def on_close(self, cancellable: bool = True) -> bool:
         """Handle plugin shutdown."""
+        self.on_switcher_teardown()
         if hasattr(self, "_editor_widget"):
             self._editor_widget.removeEventFilter(self)
             self.vim_cmd.commandline.removeEventFilter(self)
