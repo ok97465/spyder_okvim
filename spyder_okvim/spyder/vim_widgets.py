@@ -8,6 +8,7 @@
 """OkVim Widget."""
 
 # Standard Libraries
+import os
 import os.path as osp
 import re
 import sys
@@ -375,6 +376,7 @@ class VimLineEdit(QLineEdit):
         self._history_draft = None
         self._completion_candidates = []
         self._completion_index = -1
+        self._completion_directory = None
         self._updating_commandline = False
         self.textChanged.connect(self._reset_navigation)
         self.cursorPositionChanged.connect(self._reset_completion)
@@ -481,19 +483,22 @@ class VimLineEdit(QLineEdit):
         context = self._history_context(self.text())
         if context is None or context[0] != "ex":
             return
+        working_directory = os.getcwd()
+        if self._completion_directory != working_directory:
+            self._completion_candidates = []
         if not self._completion_candidates:
+            self._completion_directory = working_directory
             # Qt cursor offsets count UTF-16 units; the helper uses Python indices.
             cursor = len(
                 self.text()
                 .encode("utf-16-le")[: self.cursorPosition() * 2]
                 .decode("utf-16-le", errors="ignore")
             )
-            filename = self.vim_status.get_editorstack().get_current_filename()
             self._completion_candidates = completion_candidates(
                 self.text(),
                 cursor,
                 self.vim_status.sub_mode.SUPPORTED_COMMANDS,
-                osp.dirname(filename) if filename else osp.curdir,
+                working_directory,
             )
             self._completion_index = (
                 len(self._completion_candidates) - 1 if backward else 0

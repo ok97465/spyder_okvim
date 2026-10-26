@@ -5,6 +5,9 @@ import os
 import re
 from collections.abc import Iterable
 
+# Third Party Libraries
+from spyder.utils.encoding import is_text_file
+
 
 def completion_candidates(
     text: str,
@@ -16,7 +19,8 @@ def completion_candidates(
 
     Arguments are treated as one path so spaces need no shell escaping. An
     existing opening/closing quote is preserved. Only the directory containing
-    the current path component is read, and only when this function is called.
+    the current path component is scanned, and only when this function is called.
+    Paths include text files and directories, excluding ``__pycache__`` folders.
     """
     if not 0 <= cursor_position <= len(text):
         return []
@@ -79,6 +83,15 @@ def completion_candidates(
                     continue
                 try:
                     is_directory = entry.is_dir()
+                    if is_directory:
+                        if entry.name == "__pycache__":
+                            continue
+                    elif (
+                        suffix.startswith(separators)
+                        or not entry.is_file()
+                        or not is_text_file(entry.path)
+                    ):
+                        continue
                 except OSError:
                     continue
                 name = entry.name
@@ -86,8 +99,6 @@ def completion_candidates(
                 # completing an intermediate directory component.
                 if is_directory and not suffix.startswith(separators):
                     name += os.sep
-                if suffix.startswith(separators) and not is_directory:
-                    continue
                 replacement = text[:path_start] + directory_prefix + name
                 results.append((replacement + suffix, len(replacement)))
     except OSError:

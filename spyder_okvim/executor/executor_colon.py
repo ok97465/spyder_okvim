@@ -82,7 +82,7 @@ class ExecutorColon(ExecutorSubBase):
         return True
 
     def e(self, arg=""):
-        """Open an existing path using the same base folder as completion."""
+        """Open an existing path relative to the current working directory."""
         vs = self.vim_status
         path = arg
         if len(path) >= 2 and path[0] in "\"'" and path[-1] == path[0]:
@@ -90,9 +90,7 @@ class ExecutorColon(ExecutorSubBase):
         if not path:
             vs.set_message("Specify a file path")
             return
-        filename = self.get_editorstack().get_current_filename()
-        base_directory = osp.dirname(filename) if filename else osp.curdir
-        path = osp.abspath(osp.join(base_directory, osp.expanduser(path)))
+        path = osp.abspath(osp.expanduser(path))
         if not osp.isfile(path):
             vs.set_message(f"Not a file: {path}")
             return

@@ -8,6 +8,8 @@ from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtGui import QInputMethodEvent
 from qtpy.QtWidgets import QApplication
 
+from spyder_okvim.executor.executor_colon import ExecutorColon
+
 
 @pytest.fixture
 def completion_bot(vim_bot):
@@ -189,23 +191,28 @@ def test_completing_command_in_middle_preserves_its_argument(completion_bot):
 @pytest.mark.parametrize(
     "filename, prefix", [("한글 보고서.py", "한"), ("😀 보고서.py", "😀")]
 )
-def test_relative_unicode_path_completion_uses_editor_folder(
-    completion_bot, monkeypatch, tmp_path, filename, prefix
+@pytest.mark.parametrize("command", ExecutorColon.SUPPORTED_COMMANDS)
+def test_relative_unicode_path_completion_uses_working_directory(
+    completion_bot, monkeypatch, tmp_path, filename, prefix, command
 ):
-    """Filesystem lookup and Qt caret offsets handle Hangul, spaces, and emoji."""
+    """Every command completes from cwd, independently of the active file."""
     _, _, commandline, qtbot, stack = completion_bot
-    folder = tmp_path / "editor folder"
+    folder = tmp_path / "working directory"
     folder.mkdir()
     (folder / filename).touch()
+    editor_folder = tmp_path / "editor folder"
+    editor_folder.mkdir()
+    (editor_folder / (prefix + " editor only.py")).touch()
+    monkeypatch.chdir(folder)
     monkeypatch.setattr(
-        stack, "get_current_filename", lambda: str(folder / "active.py")
+        stack, "get_current_filename", lambda: str(editor_folder / "active.py")
     )
-    qtbot.keyClicks(commandline, ":w ")
+    qtbot.keyClicks(commandline, ":" + command + " ")
     send_input_method(commandline, commit=prefix)
 
     qtbot.keyPress(commandline, Qt.Key_Tab)
 
-    expected = ":w " + filename
+    expected = ":" + command + " " + filename
     assert commandline.text() == expected
     assert commandline.cursorPosition() == utf16_position(expected)
     assert commandline.hasFocus()
@@ -215,11 +222,9 @@ def test_completion_inside_quoted_non_bmp_path_keeps_suffix(
     completion_bot, monkeypatch, tmp_path
 ):
     """UTF-16 input offsets and output offsets preserve a closing path quote."""
-    _, _, commandline, qtbot, stack = completion_bot
+    _, _, commandline, qtbot, _ = completion_bot
     (tmp_path / "😀 자료.py").touch()
-    monkeypatch.setattr(
-        stack, "get_current_filename", lambda: str(tmp_path / "active.py")
-    )
+    monkeypatch.chdir(tmp_path)
     qtbot.keyClicks(commandline, ":w ")
     commandline.setText(':w "😀 자WRONG"')
     commandline.setCursorPosition(utf16_position(':w "😀 자'))
@@ -234,13 +239,11 @@ def test_next_tab_enters_a_uniquely_completed_directory(
     completion_bot, monkeypatch, tmp_path
 ):
     """A unique directory result becomes the base for the next explicit Tab."""
-    _, _, commandline, qtbot, stack = completion_bot
+    _, _, commandline, qtbot, _ = completion_bot
     folder = tmp_path / "한글 폴더"
     folder.mkdir()
     (folder / "완료 파일.py").touch()
-    monkeypatch.setattr(
-        stack, "get_current_filename", lambda: str(tmp_path / "active.py")
-    )
+    monkeypatch.chdir(tmp_path)
     qtbot.keyClicks(commandline, ":w ")
     send_input_method(commandline, commit="한")
 
@@ -253,16 +256,32 @@ def test_next_tab_enters_a_uniquely_completed_directory(
     assert commandline.hasFocus()
 
 
+def test_tab_skips_cache_directories_and_binary_files(
+    completion_bot, monkeypatch, tmp_path
+):
+    """Tab cycles through text paths and ordinary directories only."""
+    _, _, commandline, qtbot, _ = completion_bot
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "binary.py").write_bytes(b"\x00\x01\x02\x03")
+    (tmp_path / "notes").write_text("Project notes\n", encoding="utf-8")
+    (tmp_path / "source").mkdir()
+    monkeypatch.chdir(tmp_path)
+    qtbot.keyClicks(commandline, ":e ")
+
+    for expected in (":e notes", ":e source" + os.sep, ":e notes"):
+        qtbot.keyPress(commandline, Qt.Key_Tab)
+        assert commandline.text() == expected
+        assert commandline.hasFocus()
+
+
 def test_tab_commits_composition_before_completing_path(
     completion_bot, monkeypatch, tmp_path
 ):
     """The final composing syllable participates in the path prefix."""
-    _, _, commandline, qtbot, stack = completion_bot
+    _, _, commandline, qtbot, _ = completion_bot
     (tmp_path / "한글 파일.py").touch()
     (tmp_path / "other.py").touch()
-    monkeypatch.setattr(
-        stack, "get_current_filename", lambda: str(tmp_path / "active.py")
-    )
+    monkeypatch.chdir(tmp_path)
     qtbot.keyClicks(commandline, ":w ")
     send_input_method(commandline, preedit="한")
     commits = []
@@ -308,12 +327,10 @@ def test_path_lookup_runs_on_tab_and_reuses_cycle_candidates(
     completion_bot, monkeypatch, tmp_path
 ):
     """Typing performs no directory I/O and repeated Tab reuses one listing."""
-    _, _, commandline, qtbot, stack = completion_bot
+    _, _, commandline, qtbot, _ = completion_bot
     (tmp_path / "alpha.py").touch()
     (tmp_path / "alpine.py").touch()
-    monkeypatch.setattr(
-        stack, "get_current_filename", lambda: str(tmp_path / "active.py")
-    )
+    monkeypatch.chdir(tmp_path)
     from spyder_okvim.utils import commandline as helpers
 
     scandir = helpers.os.scandir
@@ -333,17 +350,44 @@ def test_path_lookup_runs_on_tab_and_reuses_cycle_candidates(
     assert len(lookups) == 1
 
 
+def test_changing_working_directory_discards_old_path_candidates(
+    completion_bot, monkeypatch, tmp_path
+):
+    """Changing cwd during completion cannot cycle into the old directory."""
+    _, _, commandline, qtbot, _ = completion_bot
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "alpha.py").touch()
+    (first / "alpine.py").touch()
+    (second / "alpha.py").touch()
+    monkeypatch.chdir(first)
+    qtbot.keyClicks(commandline, ":e al")
+    qtbot.keyPress(commandline, Qt.Key_Tab)
+    assert commandline.text() == ":e alpha.py"
+
+    monkeypatch.chdir(second)
+    qtbot.keyPress(commandline, Qt.Key_Tab)
+
+    assert commandline.text() == ":e alpha.py"
+
+
 def test_edit_path_tab_cycle_opens_the_chosen_file(
     completion_bot, vim_bot, monkeypatch, tmp_path
 ):
     """The requested :e a<Tab> workflow opens a file and targets its editor."""
     editor, status, commandline, qtbot, stack = completion_bot
     main = vim_bot[0]
-    source = tmp_path / "active.py"
+    editor_folder = tmp_path / "editor folder"
+    editor_folder.mkdir()
+    source = editor_folder / "active.py"
+    (editor_folder / "a_editor_only.py").touch()
     first = tmp_path / "a_first.py"
     second = tmp_path / "a_second.py"
     first.write_text("abcd", encoding="utf-8")
     second.touch()
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(stack, "get_main_widget", lambda: main.editor)
     monkeypatch.setattr(
         main.editor, "can_close_file", Mock(return_value=True), raising=False
@@ -398,23 +442,54 @@ def test_edit_path_tab_cycle_opens_the_chosen_file(
         stack.set_current_filename(str(source))
 
 
-@pytest.mark.parametrize("path_kind", ["relative", "absolute"])
+@pytest.mark.parametrize(
+    "path_kind", ["relative", "dot", "parent", "nested", "absolute", "home"]
+)
 @pytest.mark.parametrize("quote", ["", "'", '"'])
 def test_edit_completed_unicode_path_opens_matching_file(
     completion_bot, vim_bot, monkeypatch, tmp_path, path_kind, quote
 ):
-    """Enter resolves completed Hangul paths and matching outer quotes."""
+    """Completed relative paths open from cwd, preserving Unicode and quotes."""
     _, status, commandline, qtbot, stack = completion_bot
     main = vim_bot[0]
-    base = tmp_path / "editor folder"
+    base = tmp_path / "working directory"
     base.mkdir()
-    target = base / "한글 초안.py"
+    editor_folder = tmp_path / "editor folder"
+    editor_folder.mkdir()
+    (editor_folder / "한글 초안.py").touch()
+    monkeypatch.chdir(base)
+    target_folder = base
+    path_prefix = ""
+    if path_kind == "dot":
+        path_prefix = "." + os.sep
+    elif path_kind == "parent":
+        target_folder = tmp_path
+        path_prefix = ".." + os.sep
+    elif path_kind == "nested":
+        target_folder = base / "자료 폴더"
+        target_folder.mkdir()
+        path_prefix = target_folder.name + os.sep
+    elif path_kind == "absolute":
+        path_prefix = str(base) + os.sep
+    elif path_kind == "home":
+        expanduser = os.path.expanduser
+
+        def expand(path):
+            if path.startswith("~" + os.sep):
+                return str(base / path[2:])
+            return expanduser(path)
+
+        monkeypatch.setattr(os.path, "expanduser", expand)
+        path_prefix = "~" + os.sep
+    target = target_folder / "한글 초안.py"
     target.touch()
-    monkeypatch.setattr(stack, "get_current_filename", lambda: str(base / "active.py"))
+    monkeypatch.setattr(
+        stack, "get_current_filename", lambda: str(editor_folder / "active.py")
+    )
     opener = Mock()
     monkeypatch.setattr(main.editor, "load", opener, raising=False)
-    prefix = "한" if path_kind == "relative" else str(base / "한")
-    completed = target.name if path_kind == "relative" else str(target)
+    prefix = path_prefix + "한"
+    completed = path_prefix + target.name
     qtbot.keyClicks(commandline, ":e ")
     commandline.setText(":e " + quote + prefix + quote)
     commandline.setCursorPosition(utf16_position(":e " + quote + prefix))
@@ -437,12 +512,10 @@ def test_edit_invalid_path_reports_problem_without_opening(
     completion_bot, vim_bot, monkeypatch, tmp_path, argument
 ):
     """Empty, nonexistent, and directory arguments leave the current file open."""
-    editor, status, commandline, qtbot, stack = completion_bot
+    editor, status, commandline, qtbot, _ = completion_bot
     main = vim_bot[0]
     (tmp_path / "folder").mkdir()
-    monkeypatch.setattr(
-        stack, "get_current_filename", lambda: str(tmp_path / "active.py")
-    )
+    monkeypatch.chdir(tmp_path)
     opener = Mock()
     monkeypatch.setattr(main.editor, "load", opener, raising=False)
     original = editor.toPlainText()

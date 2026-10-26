@@ -68,7 +68,37 @@ def test_completion_after_closing_quote(tmp_path, quote):
     assert complete(text, tmp_path) == [(expected, len(expected) - 1)]
 
 
-def test_absolute_and_home_paths(tmp_path, monkeypatch):
+@pytest.mark.parametrize("command", COMMANDS)
+@pytest.mark.parametrize(
+    "path_prefix, target_directory",
+    [
+        ("", "."),
+        ("." + os.sep, "."),
+        (".." + os.sep, ".."),
+        ("nested" + os.sep, "nested"),
+    ],
+)
+def test_all_commands_complete_relative_paths_from_working_directory(
+    tmp_path, monkeypatch, command, path_prefix, target_directory
+):
+    """Every path completer uses the supplied working directory consistently."""
+    working_directory = tmp_path / "working"
+    working_directory.mkdir()
+    (working_directory / "nested").mkdir()
+    target = working_directory / target_directory / "report_work.py"
+    target.touch()
+    unrelated_directory = tmp_path / "unrelated"
+    unrelated_directory.mkdir()
+    (unrelated_directory / "report_other.py").touch()
+    monkeypatch.chdir(unrelated_directory)
+
+    text = ":" + command + " " + path_prefix + "report"
+    expected = ":" + command + " " + path_prefix + target.name
+    assert complete(text, working_directory) == [(expected, len(expected))]
+
+
+@pytest.mark.parametrize("command", COMMANDS)
+def test_absolute_and_home_paths(tmp_path, monkeypatch, command):
     """Lookup expands the home directory without rewriting the typed spelling."""
     (tmp_path / "home file.py").touch()
     expanduser = os.path.expanduser
@@ -79,12 +109,17 @@ def test_absolute_and_home_paths(tmp_path, monkeypatch):
         return expanduser(path)
 
     monkeypatch.setattr(os.path, "expanduser", expand)
-    expected = ":w " + str(tmp_path / "home file.py")
-    assert complete(":w " + str(tmp_path / "ho"), tmp_path) == [
+    unrelated_directory = tmp_path / "unrelated"
+    unrelated_directory.mkdir()
+    prompt = ":" + command + " "
+    expected = prompt + str(tmp_path / "home file.py")
+    assert complete(prompt + str(tmp_path / "ho"), unrelated_directory) == [
         (expected, len(expected))
     ]
-    expected = ":w ~" + os.sep + "home file.py"
-    assert complete(":w ~" + os.sep + "ho", tmp_path) == [(expected, len(expected))]
+    expected = prompt + "~" + os.sep + "home file.py"
+    assert complete(prompt + "~" + os.sep + "ho", unrelated_directory) == [
+        (expected, len(expected))
+    ]
 
 
 def test_directory_lookup_is_not_recursive(tmp_path):
@@ -115,6 +150,47 @@ def test_hidden_files_require_dot_prefix(tmp_path):
     (tmp_path / "visible").touch()
     assert complete(":w ", tmp_path) == [(":w visible", len(":w visible"))]
     assert complete(":w .", tmp_path) == [(":w .hidden", len(":w .hidden"))]
+
+
+@pytest.mark.parametrize("command", [":e ", ":w "])
+def test_path_completion_keeps_text_files_and_normal_directories(tmp_path, command):
+    """Content filtering retains text regardless of extension or encoding."""
+    (tmp_path / "source").mkdir()
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "README").write_text("Project notes\n", encoding="utf-8")
+    (tmp_path / "한글.py").write_text("print('안녕')\n", encoding="utf-8")
+    (tmp_path / "utf16.txt").write_text("안녕하세요\n", encoding="utf-16")
+    (tmp_path / "empty.txt").touch()
+    (tmp_path / "module.pyc").write_bytes(b"\x00\x01\x02\x03")
+    (tmp_path / "binary.py").write_bytes(b"\x00\x01\x02\x03")
+    (tmp_path / "binary").write_bytes(b"\x00\x01\x02\x03")
+
+    expected = [
+        command + name
+        for name in ("README", "empty.txt", "source" + os.sep, "utf16.txt", "한글.py")
+    ]
+    assert complete(command, tmp_path) == [(text, len(text)) for text in expected]
+
+
+@pytest.mark.parametrize("prefix", ["", "__", "__pycache__"])
+def test_cache_directories_are_not_completed(tmp_path, prefix):
+    """Cache folders stay excluded even when their name is explicitly started."""
+    (tmp_path / "__pycache__").mkdir()
+    assert complete(":e " + prefix, tmp_path) == []
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires named pipes")
+def test_special_files_are_not_opened_for_text_detection(tmp_path, monkeypatch):
+    """Completing a FIFO must not block waiting for a writer."""
+    os.mkfifo(tmp_path / "pipe")
+
+    def unexpected_read(path):
+        pytest.fail("Special files must not be opened to detect text")
+
+    monkeypatch.setattr(
+        "spyder_okvim.utils.commandline.is_text_file", unexpected_read
+    )
+    assert complete(":e ", tmp_path) == []
 
 
 def test_missing_or_unreadable_directory(tmp_path, monkeypatch):
