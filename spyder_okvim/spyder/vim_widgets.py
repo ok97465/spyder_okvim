@@ -39,6 +39,7 @@ from spyder_okvim.executor import (
     ExecutorVisualCmd,
     ExecutorVlineCmd,
 )
+from spyder_okvim.executor.executor_sub import ExecutorSubCmd_window
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
 from spyder_okvim.utils.commandline import completion_candidates
@@ -111,6 +112,7 @@ class VimShortcut(QObject):
         self.vim_status = vim_status
         self.get_editor = self.vim_status.get_editor
         self.cmd_line = None
+        self.executor_window = ExecutorSubCmd_window(vim_status)
 
     def _scroll(self, half: bool, up: bool) -> None:
         """Scroll the editor window.
@@ -294,6 +296,19 @@ class VimShortcut(QObject):
         self.vim_status.jump_forward()
         self.vim_status.set_focus_to_vim()
 
+    def window_command(self) -> None:
+        """Wait for an editor split command after Ctrl+w."""
+        if self.vim_status.sub_mode:
+            self.cmd_line.esc_pressed()
+            return
+        if not self.vim_status.is_normal():
+            return
+        count = self.cmd_line.text()
+        self.vim_status.input_cmd.set(InputCmdInfo(count, "<C-w>"))
+        self.executor_window.parent_num = [int(count) if count else 1]
+        self.vim_status.sub_mode = self.executor_window
+        self.cmd_line.clear()
+
 
 class VimStateLabel(QLabel):
     """Display state of vim."""
@@ -368,6 +383,7 @@ class VimLineEdit(QLineEdit):
             Qt.Key_C: vim_shortcut.clear_tip_search,
             Qt.Key_O: vim_shortcut.jump_backward,
             Qt.Key_I: vim_shortcut.jump_forward,
+            Qt.Key_W: vim_shortcut.window_command,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
 

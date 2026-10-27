@@ -26,6 +26,7 @@ from spyder_okvim.executor.executor_surround import (
     ExecutorDeleteSurround,
 )
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.editor_windows import focus_neighbor
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.vim.state import VimState
 
@@ -1296,6 +1297,39 @@ class ExecutorSubCmd_closebrace(ExecutorSubBase):
         num = num * self.parent_num[0]
         motion_info = self.helper_motion.next_pyblock(num)
         return self.execute_func_deferred(motion_info)
+
+
+class ExecutorSubCmd_window(ExecutorSubBase):
+    """Manage editor splits after Ctrl+w."""
+
+    hint_prefix = "Ctrl+w"
+    command_specs = (
+        CommandSpec("h", "move", "Focus left split"),
+        CommandSpec("j", "move", "Focus split below"),
+        CommandSpec("k", "move", "Focus split above"),
+        CommandSpec("l", "move", "Focus right split"),
+        CommandSpec("c", "close", "Close current split"),
+    )
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+    def move(self, num=1, num_str=""):
+        """Focus the neighboring split, stopping at the window edge."""
+        direction = self.vim_status.input_cmd.cmd[-1]
+        for _ in range(num * self.parent_num[0]):
+            if not focus_neighbor(self.vim_status, direction):
+                break
+
+    def close(self, num=1, num_str=""):
+        """Close the current split when Spyder allows it."""
+        stack = self.get_editorstack()
+        if stack.is_closable:
+            stack.destroyed.connect(
+                lambda: self.vim_status.set_focus_to_vim_after_delay(0)
+            )
+            stack.close_split()
 
 
 class ExecutorSubCmd_z(ExecutorSubBase):

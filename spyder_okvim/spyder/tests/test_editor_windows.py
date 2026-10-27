@@ -202,6 +202,136 @@ def _exercise_vim(state, stack):
     status.hide_annotate_on_txt()
 
 
+@pytest.mark.parametrize(
+    "host, command", [("main", "vs"), ("undocked", "vsp"), ("window", "vsplit")]
+)
+def test_vsplit_uses_active_pane(editor_windows, host, command):
+    """Split the current pane in each host, including an existing right pane."""
+    state = editor_windows
+    if host == "undocked":
+        state.widget.create_window()
+    elif host == "window":
+        state.widget.create_new_window()
+    _settle()
+    stack = state.widget.editorstacks[-1]
+    _focus_stack(state, stack)
+    status = state.vim.vim_cmd.vim_status
+
+    for index in range(2):
+        stack.set_stack_index(index)
+        _focus_stack(state, stack)
+        status.cursor.set_cursor_pos(2)
+        parent = stack.parentWidget()
+        previous_count = parent.count()
+        previous_stacks = set(state.widget.editorstacks)
+        filename = stack.get_current_filename()
+        state.qtbot.keyClicks(state.commandline, ":" + command)
+        state.qtbot.keyClick(state.commandline, Qt.Key_Return)
+        _settle()
+
+        added = set(state.widget.editorstacks) - previous_stacks
+        assert len(added) == 1
+        target = added.pop()
+        assert parent.count() == previous_count + 1
+        assert parent.orientation() == Qt.Horizontal
+        assert target.window() is stack.window()
+        assert target.get_current_filename() == filename
+        assert target.get_current_editor().textCursor().position() == 2
+        assert status.get_editorstack() is target
+        assert status.is_normal()
+        assert state.commandline.hasFocus()
+        assert state.commandline.text() == ""
+        stack = target
+
+
+def test_control_w_navigates_nested_splits(editor_windows):
+    """Direction keys switch panes, stop at edges, and keep Normal input."""
+    state = editor_windows
+    left = state.widget.editorstacks[0]
+    _focus_stack(state, left)
+    state.qtbot.keyClicks(state.commandline, ":vs")
+    state.qtbot.keyClick(state.commandline, Qt.Key_Return)
+    _settle()
+    status = state.vim.vim_cmd.vim_status
+    upper_right = status.get_editorstack()
+    upper_right.sig_split_vertically.emit()
+    _settle()
+    lower_right = state.widget.editorstacks[-1]
+    _focus_stack(state, upper_right)
+
+    def navigate(key, expected):
+        state.qtbot.keyClick(state.commandline, Qt.Key_W, Qt.ControlModifier)
+        state.qtbot.keyClicks(state.commandline, key)
+        _settle()
+        assert status.get_editorstack() in expected
+        assert status.is_normal()
+        assert status.sub_mode is None
+        assert state.commandline.hasFocus()
+        assert state.commandline.text() == ""
+
+    navigate("k", (upper_right,))
+    navigate("l", (upper_right,))
+    navigate("j", (lower_right,))
+    navigate("j", (lower_right,))
+    navigate("k", (upper_right,))
+    navigate("h", (left,))
+    navigate("h", (left,))
+    navigate("j", (left,))
+    navigate("k", (left,))
+    navigate("l", (upper_right, lower_right))
+    target = status.get_editor()
+    status.cursor.set_cursor_pos(0)
+    state.qtbot.keyClicks(state.commandline, "l")
+    assert target.textCursor().position() == 1
+
+
+@pytest.mark.parametrize("host", ["main", "undocked", "window"])
+def test_control_w_closes_current_split(editor_windows, host):
+    """Close the selected split and keep the final pane and its files open."""
+    state = editor_windows
+    if host == "undocked":
+        state.widget.create_window()
+    elif host == "window":
+        state.widget.create_new_window()
+    _settle()
+    remaining = state.widget.editorstacks[-1]
+    _focus_stack(state, remaining)
+    status = state.vim.vim_cmd.vim_status
+    filenames = remaining.get_filenames()
+    state.qtbot.keyClicks(state.commandline, ":vs")
+    state.qtbot.keyClick(state.commandline, Qt.Key_Return)
+    _settle()
+    closing = status.get_editorstack()
+    assert closing is not remaining
+
+    state.qtbot.keyClick(state.commandline, Qt.Key_W, Qt.ControlModifier)
+    state.qtbot.keyClicks(state.commandline, "c")
+    _settle()
+
+    assert widget_is_deleted(closing)
+    assert status.get_editorstack() is remaining
+    assert remaining.get_filenames() == filenames
+    assert status.is_normal()
+    assert state.commandline.hasFocus()
+    assert state.commandline.text() == ""
+    status.cursor.set_cursor_pos(0)
+    state.qtbot.keyClicks(state.commandline, "l")
+    assert remaining.get_current_editor().textCursor().position() == 1
+
+    stacks = list(state.widget.editorstacks)
+    state.qtbot.keyClick(state.commandline, Qt.Key_W, Qt.ControlModifier)
+    state.qtbot.keyClicks(state.commandline, "c")
+    _settle()
+
+    assert not widget_is_deleted(remaining)
+    assert remaining.window().isVisible()
+    assert state.widget.editorstacks == stacks
+    assert remaining.get_filenames() == filenames
+    assert status.get_editorstack() is remaining
+    assert status.is_normal()
+    assert state.commandline.hasFocus()
+
+
 @pytest.fixture
 def which_key_windows(editor_windows):
     """Enable hints only for their window-routing tests."""

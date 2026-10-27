@@ -20,7 +20,19 @@ class ExecutorColon(ExecutorSubBase):
 
     accepts_input_method = True
     history_kind = "ex"
-    SUPPORTED_COMMANDS = ("e", "w", "q", "q!", "wq", "n", "marks", "jumps")
+    SUPPORTED_COMMANDS = (
+        "e",
+        "w",
+        "q",
+        "q!",
+        "wq",
+        "n",
+        "marks",
+        "jumps",
+        "vs",
+        "vsp",
+        "vsplit",
+    )
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -125,6 +137,19 @@ class ExecutorColon(ExecutorSubBase):
         """Create new file."""
         self.create_new_file()
         self.vim_status.set_focus_to_vim()
+
+    def vs(self, arg=""):
+        """Split the active editor into side-by-side views."""
+        stack = self.get_editorstack()
+        filename = stack.get_current_filename()
+        position = self.vim_status.get_cursor().position()
+        stack.sig_split_horizontally.emit()
+        self.get_editorstack().set_current_filename(filename)
+        self.vim_status.cursor.set_cursor_pos(position)
+        self.vim_status.set_focus_to_vim()
+
+    vsp = vs
+    vsplit = vs
 
     def marks(self, arg=""):
         """Show bookmarks and jump to the selected one."""

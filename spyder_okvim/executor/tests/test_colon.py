@@ -138,6 +138,39 @@ def test_colon_n_command(vim_bot):
     main.editor.new.assert_called_once_with()
 
 
+@pytest.mark.parametrize("command", ["vs", "vsp", "vsplit"])
+def test_colon_vsplit_command(vim_bot, command):
+    """Each alias splits the active stack from left to right."""
+    _, stack, _, vim, qtbot = vim_bot
+    status = vim.vim_cmd.vim_status
+    commandline = vim.vim_cmd.commandline
+    commandline.setFocus()
+    commandline.esc_pressed()
+
+    with qtbot.waitSignal(stack.sig_split_horizontally):
+        qtbot.keyClicks(commandline, ":" + command)
+        qtbot.keyPress(commandline, Qt.Key_Return)
+
+    assert status.is_normal()
+    assert status.sub_mode is None
+    assert commandline.text() == ""
+    assert commandline.hasFocus()
+
+
+def test_colon_vsplit_completion(vim_bot):
+    """The split aliases participate in the existing command completer."""
+    _, _, _, vim, qtbot = vim_bot
+    commandline = vim.vim_cmd.commandline
+    commandline.setFocus()
+    commandline.esc_pressed()
+    qtbot.keyClicks(commandline, ":v")
+
+    for expected in (":vs", ":vsp", ":vsplit"):
+        qtbot.keyPress(commandline, Qt.Key_Tab)
+        assert commandline.text() == expected
+    commandline.esc_pressed()
+
+
 def test_colon_backspace_command(vim_bot):
     """Test backspace in ex cmd."""
     main, editor_stack, editor, vim, qtbot = vim_bot

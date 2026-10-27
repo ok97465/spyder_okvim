@@ -120,6 +120,10 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 - q, @: macro
 - :marks: Displays the list of currently set marks.
 - :jumps: Displays the list of currently set jumplist.
+- :vs, :vsp, :vsplit: Splits the current editor into side-by-side views.
+- Ctrl+w then h/j/k/l: Moves to the left/down/up/right editor split in Normal mode.
+  Disable Spyder's Ctrl+w shortcut to use this sequence.
+- Ctrl+w then c: Closes the current split if Spyder permits closing it.
 
 ## Jump list
 

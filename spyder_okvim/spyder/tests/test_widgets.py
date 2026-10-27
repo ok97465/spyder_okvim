@@ -5,6 +5,9 @@
 #
 """Tests for the plugin."""
 
+# Standard Libraries
+from unittest.mock import Mock
+
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
@@ -12,8 +15,66 @@ from qtpy.QtGui import QFocusEvent, QKeyEvent
 from spyder.config.manager import CONF
 
 # Project Libraries
+from spyder_okvim.executor import executor_sub
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
+
+
+@pytest.mark.parametrize("direction", list("hjkl"))
+@pytest.mark.parametrize("before, after, count", [("", "", 1), ("2", "3", 6)])
+def test_ctrl_w_direction_and_count(
+    vim_bot, monkeypatch, direction, before, after, count
+):
+    """Ctrl+w consumes its direction and reuses the normal prefix hint path."""
+    _, stack, _, vim, qtbot = vim_bot
+    commandline = vim.vim_cmd.commandline
+    status = vim.vim_cmd.vim_status
+    commandline.esc_pressed()
+    editor = stack.get_current_editor()
+    editor.set_text("abc\n")
+    status.reset_for_test()
+    status.cursor.set_cursor_pos(1)
+    commandline.setFocus()
+    move = Mock(return_value=True)
+    monkeypatch.setattr(executor_sub, "focus_neighbor", move)
+
+    qtbot.keyClicks(commandline, before)
+    qtbot.keyPress(commandline, Qt.Key_W, Qt.ControlModifier)
+    pending = vim.vim_cmd.pending_hint()
+    assert pending is not None
+    assert pending.prefix == "Ctrl+w"
+    assert [key for key, _ in pending.executor.get_hint_candidates()] == list("hjklc")
+    qtbot.keyClicks(commandline, after + direction)
+
+    assert move.call_count == count
+    move.assert_called_with(status, direction)
+    assert status.sub_mode is None
+    assert commandline.text() == ""
+    assert status.is_normal()
+    assert editor.textCursor().position() == 1
+    assert editor.toPlainText() == "abc\n"
+
+
+@pytest.mark.parametrize("cancel_key", [Qt.Key_Escape, Qt.Key_X])
+def test_ctrl_w_cancel_does_not_edit(vim_bot, cancel_key):
+    """Escape and an unknown direction discard the prefix without editing."""
+    _, stack, _, vim, qtbot = vim_bot
+    commandline = vim.vim_cmd.commandline
+    status = vim.vim_cmd.vim_status
+    commandline.esc_pressed()
+    editor = stack.get_current_editor()
+    editor.set_text("abc\n")
+    status.reset_for_test()
+    status.cursor.set_cursor_pos(0)
+    commandline.setFocus()
+
+    qtbot.keyPress(commandline, Qt.Key_W, Qt.ControlModifier)
+    qtbot.keyPress(commandline, cancel_key)
+    assert status.sub_mode is None
+    assert commandline.text() == ""
+    qtbot.keyClicks(commandline, "l")
+    assert editor.textCursor().position() == 1
+    assert editor.toPlainText() == "abc\n"
 
 
 def test_conf_page(vim_bot):
