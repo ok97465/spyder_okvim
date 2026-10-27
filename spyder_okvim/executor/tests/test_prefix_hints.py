@@ -7,8 +7,31 @@ import os.path as osp
 import pytest
 
 # Project Libraries
+from spyder_okvim.executor.executor_base import CommandSpec, ExecutorSubBase
 from spyder_okvim.executor.executor_sub import ExecutorSubCmd_alnum
 from spyder_okvim.vim.state import InputCmdInfo
+
+
+def test_declared_command_supports_custom_method_and_special_key(vim_bot):
+    """A new prefix command supplies its parser, handler and hint in one place."""
+    _, _, _, vim, _ = vim_bot
+    calls = []
+
+    class PrefixExecutor(ExecutorSubBase):
+        command_specs = (CommandSpec("]", "perform_action", "Custom action"),)
+
+        def perform_action(self, num=1, num_str=""):
+            calls.append((num, num_str))
+
+    executor = PrefixExecutor(vim.vim_cmd.vim_status)
+
+    assert executor.get_hint_candidates() == [("]", "Custom action")]
+    assert executor("12") is False
+    assert calls == []
+    assert executor("12]") is True
+    assert calls == [(12, "12")]
+    assert executor("[") is True
+    assert calls == [(12, "12")]
 
 
 @pytest.mark.parametrize(

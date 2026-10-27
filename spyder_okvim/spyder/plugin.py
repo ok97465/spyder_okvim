@@ -8,7 +8,6 @@
 """OkVim Plugin."""
 
 # Standard Libraries
-import sys
 import weakref
 
 # Third Party Libraries
@@ -31,7 +30,9 @@ from spyder.utils.icon_manager import MAIN_FG_COLOR
 from spyder_okvim.spyder.api import CustomLayout
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
-from spyder_okvim.spyder.vim_widgets import VimPane, _widget_is_deleted
+from spyder_okvim.spyder.switcher import SwitcherNavigation
+from spyder_okvim.spyder.vim_widgets import VimPane
+from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -178,7 +179,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._vim_focus = weakref.WeakKeyDictionary()
         self._editors = weakref.WeakSet()
         self._closing_windows = weakref.WeakSet()
-        self._switcher = None
+        self._switcher_navigation = SwitcherNavigation(self)
         vim_cmd.commandline.installEventFilter(self)
         self._editor_widget.installEventFilter(self)
         signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
@@ -188,28 +189,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._sync_statusbar()
 
     def eventFilter(self, watched, event):
-        """Handle switcher navigation and track the active editor view."""
-        switcher = self._live(self._switcher)
-        if (
-            switcher is not None
-            and watched is switcher.edit
-            and switcher.isVisible()
-            and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
-        ):
-            modifiers = (Qt.ControlModifier,)
-            if sys.platform == "darwin" and not QCoreApplication.testAttribute(
-                Qt.AA_MacDontSwapCtrlAndMeta
-            ):
-                # Hosts using Qt's default macOS mapping report Control as Meta.
-                modifiers += (Qt.MetaModifier,)
-            if event.modifiers() in modifiers and event.key() in (Qt.Key_P, Qt.Key_N):
-                event.accept()
-                if event.type() == QEvent.KeyPress and switcher.count():
-                    if event.key() == Qt.Key_P:
-                        switcher.previous_row()
-                    else:
-                        switcher.next_row()
-                return True
+        """Track the active editor view and rescue shared UI before it closes."""
         if event.type() == QEvent.FocusIn:
             if watched is self.vim_cmd.commandline:
                 self._vim_focus[watched.window()] = True
@@ -219,7 +199,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             ):
                 self._vim_focus[watched.window()] = False
         if event.type() == QEvent.WindowActivate and watched in self._window_stacks:
-            stack = self._live(self._window_stacks[watched])
+            stack = live_widget(self._window_stacks[watched])
             if stack is not None and watched not in self._closing_windows:
                 self._use_stack(stack)
                 if self._vim_focus.get(watched, False):
@@ -228,8 +208,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             if watched is not self._main:
                 self._closing_windows.add(watched)
         if event.type() == QEvent.Close and (
-            watched is self._live(self._status_window)
-            or watched is self._live(self._active_stack)
+            watched is live_widget(self._status_window)
+            or watched is live_widget(self._active_stack)
         ):
             if watched is not self._main and isinstance(watched, QMainWindow):
                 self._closing_windows.add(watched)
@@ -246,14 +226,6 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             self._sync_statusbar()
         return super().eventFilter(watched, event)
 
-    @staticmethod
-    def _live(reference):
-        """Dereference a view without keeping closed Qt widgets alive."""
-        widget = reference() if reference is not None else None
-        if widget is not None and not _widget_is_deleted(widget):
-            return widget
-        return None
-
     def _on_editor_focus_changed(self):
         """Discover new windows/splits through Spyder's editor focus signal."""
         stack = self.vim_cmd.editor_widget.get_current_editorstack()
@@ -264,7 +236,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if stack is None or stack.window() in self._closing_windows:
             return
         editor = stack.get_current_editor()
-        if editor is not self._live(self._active_editor):
+        if editor is not live_widget(self._active_editor):
             self._reset_view()
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None
@@ -306,7 +278,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             status.stop_recording_macro()
         status.finish_insert(apply_count=False)
         status.disconnect_from_editor()
-        editor = self._live(self._active_editor)
+        editor = live_widget(self._active_editor)
         if editor is not None:
             editor.clear_extra_selections("vim_selection")
             editor.clear_extra_selections("vim_cursor")
@@ -336,7 +308,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _sync_statusbar(self):
         """Move the existing Vim UI without recreating widgets or shortcuts."""
-        stack = self._live(self._active_stack)
+        stack = live_widget(self._active_stack)
         window = stack.window() if stack is not None else self._editor_widget.window()
         if window is self._main:
             statusbar = self._main_statusbar
@@ -363,18 +335,15 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     @on_plugin_available(plugin=Plugins.Switcher)
     def on_switcher_available(self) -> None:
         """Add Vim navigation to Spyder's shared file and symbol switcher."""
-        self.on_switcher_teardown()
         switcher = self.get_plugin(Plugins.Switcher).get_container().switcher
-        self._switcher = weakref.ref(switcher)
-        switcher.edit.installEventFilter(self)
+        self._switcher_navigation.attach(switcher)
 
     @on_plugin_teardown(plugin=Plugins.Switcher)
     def on_switcher_teardown(self) -> None:
         """Remove navigation when the switcher or OkVim is disabled."""
-        switcher = self._live(getattr(self, "_switcher", None))
-        if switcher is not None:
-            switcher.edit.removeEventFilter(self)
-        self._switcher = None
+        navigation = getattr(self, "_switcher_navigation", None)
+        if navigation is not None:
+            navigation.detach()
 
     @staticmethod
     def check_compatibility():
@@ -390,19 +359,19 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             self._editor_widget.removeEventFilter(self)
             self.vim_cmd.commandline.removeEventFilter(self)
             for editor in self._editors:
-                if not _widget_is_deleted(editor):
+                if not widget_is_deleted(editor):
                     editor.removeEventFilter(self)
             signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
             if signal is not None:
                 signal.disconnect(self._on_editor_focus_changed)
             for window in self._window_stacks:
-                if not _widget_is_deleted(window):
+                if not widget_is_deleted(window):
                     window.removeEventFilter(self)
             stacks = getattr(self._editor_widget, "editorstacks", None)
             if stacks is None:
                 stacks = [self.vim_cmd.editor_widget.get_current_editorstack()]
             for stack in stacks:
-                if not _widget_is_deleted(stack):
+                if not widget_is_deleted(stack):
                     stack.removeEventFilter(self)
                     shortcut = stack.findChild(
                         QShortcut, "okvim_escape", Qt.FindDirectChildrenOnly

@@ -7,7 +7,7 @@ from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QAbstractScrollArea, QScrollArea, QWidget
 
 # Project Libraries
-from spyder_okvim.spyder.which_key import WhichKeyPopup
+from spyder_okvim.spyder.which_key_popup import WhichKeyPopup
 
 
 @pytest.fixture
@@ -73,3 +73,32 @@ def test_small_menu_releases_the_overflow_surface(popup):
             bounds = QRect(label.mapTo(panel, QPoint(0, 0)), label.size())
             assert panel.contentsRect().contains(bounds)
     assert panel.height() < viewport.height() // 2
+
+
+def test_resizing_restores_scrollable_and_compact_layouts(popup):
+    viewport, panel = popup
+    panel.set_candidates(
+        '"',
+        [(str(index), f"Register {index}: content preview") for index in range(14)],
+    )
+    for height in (600, 120, 600, 120):
+        viewport.resize(360, height)
+        panel.update_geometry()
+        panel.show()
+        QCoreApplication.processEvents()
+        assert viewport.rect().contains(panel.geometry())
+        scroll = panel.findChild(QScrollArea)
+        if height == 600:
+            assert scroll is None
+            continue
+        assert scroll is not None
+        scrollbar = scroll.verticalScrollBar()
+        assert scrollbar.maximum() > 0
+        scrollbar.setValue(scrollbar.maximum())
+        QCoreApplication.processEvents()
+        last_description = panel.candidate_labels[-1][1]
+        bounds = QRect(
+            last_description.mapTo(scroll.viewport(), QPoint(0, 0)),
+            last_description.size(),
+        )
+        assert scroll.viewport().rect().contains(bounds)

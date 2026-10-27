@@ -16,6 +16,7 @@ from spyder.config.manager import CONF
 from spyder_okvim.executor.executor_base import (
     FUNC_INFO,
     RETURN_EXECUTOR_METHOD_INFO,
+    CommandSpec,
     ExecutorSubBase,
 )
 from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
@@ -559,14 +560,11 @@ class ExecutorSubSubCmd_g(ExecutorSubBase):
     """Submode of Submode of g."""
 
     hint_prefix = "g"
-    hint_candidates = (("g", "Go to line"),)
+    command_specs = (CommandSpec("g", "g", "Go to line"),)
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
-
-        cmds = "".join(key for key, _ in self.hint_candidates)
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def g(self, num=1, num_str=""):
         """Goto line (gg)."""
@@ -581,23 +579,21 @@ class ExecutorSubCmd_g(ExecutorSubBase):
     """Submode of g."""
 
     hint_prefix = "g"
-    hint_candidates = (
-        ("g", "Go to line"),
-        ("d", "Go to definition"),
-        ("t", "Next file"),
-        ("T", "Previous file"),
-        ("u", "Lowercase"),
-        ("U", "Uppercase"),
-        ("c", "Toggle comment"),
-        ("~", "Swap case"),
+    command_specs = (
+        CommandSpec("g", "g", "Go to line"),
+        CommandSpec("d", "d", "Go to definition"),
+        CommandSpec("t", "t", "Next file"),
+        CommandSpec("T", "T", "Previous file"),
+        CommandSpec("u", "u", "Lowercase"),
+        CommandSpec("U", "U", "Uppercase"),
+        CommandSpec("c", "c", "Toggle comment"),
+        CommandSpec("~", "tilde", "Swap case"),
     )
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
-        cmds = "".join(key for key, _ in self.hint_candidates)
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.executor_sub_motion = ExecutorSubMotion(vim_status)
 
     def g(self, num=1, num_str=""):
@@ -697,7 +693,7 @@ class ExecutorSubCmd_register(ExecutorSubBase):
     """Set register name."""
 
     hint_prefix = '"'
-    hint_candidates = (
+    register_hints = (
         ('"', "Unnamed register"),
         ("0", "Last yank"),
         ("-", "Small delete"),
@@ -725,15 +721,15 @@ class ExecutorSubCmd_register(ExecutorSubBase):
 
         candidates = [
             (key, with_preview(description, registers.get(key)))
-            for key, description in self.hint_candidates
+            for key, description in self.register_hints
         ]
         for key, info in sorted(registers.items()):
-            if len(key) == 1 and ("1" <= key <= "9" or "a" <= key <= "z"):
-                if info.content:
-                    description = (
-                        "Delete history" if key.isdigit() else "Named register"
-                    )
-                    candidates.append((key, with_preview(description, info)))
+            is_numbered = len(key) == 1 and "1" <= key <= "9"
+            is_named = len(key) == 1 and "a" <= key <= "z"
+            if not (is_numbered or is_named) or not info.content:
+                continue
+            description = "Delete history" if is_numbered else "Named register"
+            candidates.append((key, with_preview(description, info)))
         return candidates
 
     def __call__(self, ch: str):
@@ -1306,10 +1302,10 @@ class ExecutorSubCmd_z(ExecutorSubBase):
     """Submode of z."""
 
     hint_prefix = "z"
-    hint_candidates = (
-        ("z", "Center cursor line"),
-        ("t", "Cursor line to top"),
-        ("b", "Cursor line to bottom"),
+    command_specs = (
+        CommandSpec("z", "z", "Center cursor line"),
+        CommandSpec("t", "t", "Cursor line to top"),
+        CommandSpec("b", "b", "Cursor line to bottom"),
     )
 
     def __init__(self, vim_status):
@@ -1318,9 +1314,6 @@ class ExecutorSubCmd_z(ExecutorSubBase):
         self.allow_leaderkey = False
 
         self.has_zero_cmd = False
-
-        cmds = "".join(key for key, _ in self.hint_candidates)
-        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
 
     def scroll_cursor_to_center(self, offset: int):
         """Scroll cursor line to center."""

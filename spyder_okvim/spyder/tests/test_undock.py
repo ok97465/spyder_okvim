@@ -13,7 +13,7 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.plugin import StatusBarVimWidget
-from spyder_okvim.spyder.vim_widgets import _widget_is_deleted
+from spyder_okvim.utils.qtcompat import widget_is_deleted
 
 
 def _process_events():
@@ -173,8 +173,8 @@ def test_repeated_undock_dock_vim_and_widget_lifetime(undock_bot, close_to_dock)
                 dock()
                 floating.close()
             _process_events()
-            assert _widget_is_deleted(floating)
-            assert not _widget_is_deleted(commandline)
+            assert widget_is_deleted(floating)
+            assert not widget_is_deleted(commandline)
             assert status_widget.window() is main
             _exercise_vim(main, editor, vim, qtbot, main)
             assert tuple(stack.findChildren(QShortcut)) == shortcuts
@@ -186,7 +186,7 @@ def test_repeated_undock_dock_vim_and_widget_lifetime(undock_bot, close_to_dock)
             } == status_widgets
         finally:
             dock()
-            if not _widget_is_deleted(floating):
+            if not widget_is_deleted(floating):
                 floating.close()
                 floating.deleteLater()
                 _process_events()
@@ -261,7 +261,7 @@ def test_which_key_cancels_when_docking_host_changes(
         popup = controller.popup
         return (
             popup is not None
-            and not _widget_is_deleted(popup)
+            and not widget_is_deleted(popup)
             and popup.isVisible()
         )
 
@@ -310,13 +310,13 @@ def test_which_key_cancels_when_docking_host_changes(
             dock()
             floating.close()
         _process_events()
-        assert _widget_is_deleted(floating)
+        assert widget_is_deleted(floating)
         assert_cancelled()
         focus_and_start(main)
     finally:
         controller.cancel()
         dock()
-        if not _widget_is_deleted(floating):
+        if not widget_is_deleted(floating):
             floating.close()
             floating.deleteLater()
             _process_events()

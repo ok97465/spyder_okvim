@@ -13,7 +13,7 @@ from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.spyder.which_key import display_key
+from spyder_okvim.spyder.which_key_popup import display_key
 from spyder_okvim.vim import KeyInfo, VimState
 
 
@@ -75,7 +75,7 @@ def which_key(vim_bot, qtbot):
         editor.set_text(previous_text)
         for key, value in previous_config.items():
             CONF.set(CONF_SECTION, key, value)
-        widget.set_leader_key()
+        widget.apply_settings()
         controller.cancel()
         stack.set_stack_index(previous_index)
         vim._use_stack(stack)
@@ -562,18 +562,18 @@ def test_macro_suppression_lasts_through_final_gui_key(which_key, monkeypatch):
 
     def process_text(text):
         original(text)
-        if text == " " and state.widget._macro_playing:
+        if text == " " and state.widget.is_playing_macro:
             # The thread can already be finished while its final GUI slot and
             # queued completion signal still have work to do.
             state.qtbot.wait(35)
-            assert state.widget._macro_playing
+            assert state.widget.is_playing_macro
             assert not _shown(state)
             last_key.append(True)
 
     monkeypatch.setattr(state.widget, "_process_text", process_text)
     state.qtbot.keyClicks(state.commandline, "@a")
-    assert state.widget._macro_playing
-    state.qtbot.waitUntil(lambda: not state.widget._macro_playing)
+    assert state.widget.is_playing_macro
+    state.qtbot.waitUntil(lambda: not state.widget.is_playing_macro)
     assert last_key
     assert state.status.sub_mode is state.widget.executor_leader_key
     state.qtbot.waitUntil(lambda: _shown(state))
@@ -584,22 +584,20 @@ def test_cancelled_or_old_macro_completion_cannot_release_current_playback(which
     widget = state.widget
     widget._macro_generation = 12
     widget._macro_editor = weakref.ref(state.editor)
-    widget._macro_playing = True
     with widget.input_processing():
         widget._finish_macro(11)
-        assert widget._macro_playing
+        assert widget.is_playing_macro
         widget._finish_macro(12)
         assert widget._macro_completion == 12
         widget.cancel_macro()
         assert widget._macro_completion is None
         widget._macro_generation = 13
         widget._macro_editor = weakref.ref(state.editor)
-        widget._macro_playing = True
         widget._finish_macro(12)
-    assert widget._macro_playing
+    assert widget.is_playing_macro
     assert widget._macro_generation == 13
     widget._finish_macro(13)
-    assert not widget._macro_playing
+    assert not widget.is_playing_macro
 
 
 def test_easymotion_transition_hides_leader_hints(which_key):

@@ -9,6 +9,8 @@ decide whether submodes should be entered.
 """
 
 # Standard Libraries
+import re
+from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 # Project Libraries
@@ -21,12 +23,21 @@ RETURN_EXECUTOR_METHOD_INFO = NamedTuple(
 )
 
 
+@dataclass(frozen=True)
+class CommandSpec:
+    """A raw command key, its executor method and its hint description."""
+
+    key: str
+    method_name: str
+    description: str
+
+
 class ExecutorBase:
     """Baseclass Executor."""
 
     accepts_input_method = False
     hint_prefix = None
-    hint_candidates = ()
+    command_specs = ()
 
     SYMBOLS_REPLACEMENT = {
         "!": "exclamation",
@@ -86,10 +97,28 @@ class ExecutorBase:
         self.has_zero_cmd = True
         self.pattern_cmd = None
         self.allow_leaderkey = True
+        self._command_specs = ()
+        if self.command_specs:
+            self._set_command_specs(self.command_specs)
+
+    def _set_command_specs(self, commands):
+        """Build accepted keys, dispatch and hints from one command declaration.
+
+        Other executors can keep their existing parsers. Discrete prefix
+        commands opt in by declaring ``command_specs``; descriptive ranges and
+        context-dependent hints belong in ``get_hint_candidates`` instead.
+        """
+        self._command_specs = tuple(commands)
+        keys = "".join(re.escape(command.key) for command in self._command_specs)
+        self.pattern_cmd = re.compile(r"(\d*)([{}])".format(keys))
+        self.dispatcher = {
+            command.key: getattr(self, command.method_name)
+            for command in self._command_specs
+        }
 
     def get_hint_candidates(self):
         """Return read-only descriptions of the next supported keys."""
-        return list(self.hint_candidates)
+        return [(command.key, command.description) for command in self._command_specs]
 
     def update_input_cmd_info(self, num_str, cmd, input_txt):
         """Update input cmd to vim_status."""
@@ -127,12 +156,13 @@ class ExecutorBase:
         num = int(num_str) if num_str else 1
         self.update_input_cmd_info(num_str, key, txt)
 
-        key = self.SYMBOLS_REPLACEMENT.get(key, key)
-
         ret = None
-        try:
-            method = self.__getattribute__(key)
-        except AttributeError:
+        if self._command_specs:
+            method = self.dispatcher.get(key)
+        else:
+            method_name = self.SYMBOLS_REPLACEMENT.get(key, key)
+            method = getattr(self, method_name, None)
+        if method is None:
             print("unknown key", key)
         else:
             ret = method(num=num, num_str=num_str)

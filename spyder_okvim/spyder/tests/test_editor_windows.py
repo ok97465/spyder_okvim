@@ -19,7 +19,7 @@ from spyder.plugins.outlineexplorer.plugin import OutlineExplorer
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.plugin import OkVim, StatusBarVimWidget
-from spyder_okvim.spyder.vim_widgets import _widget_is_deleted
+from spyder_okvim.utils.qtcompat import widget_is_deleted
 
 
 pytestmark = pytest.mark.skipif(
@@ -123,7 +123,7 @@ def editor_windows(qtbot, tmp_path, vim_bot):
         if widget.windowwidget is not None:
             widget.dock_window()
         for window in list(widget.editorwindows):
-            if not _widget_is_deleted(window):
+            if not widget_is_deleted(window):
                 window.close()
         _settle()
         if not state.vim_closed:
@@ -227,7 +227,7 @@ def which_key_windows(editor_windows):
 
 def _which_key_visible(controller):
     popup = controller.popup
-    return popup is not None and not _widget_is_deleted(popup) and popup.isVisible()
+    return popup is not None and not widget_is_deleted(popup) and popup.isVisible()
 
 
 def _start_which_key(state, displayed):
@@ -274,7 +274,7 @@ def test_which_key_cancels_on_view_change(which_key_windows, displayed, target):
     assert not _which_key_visible(controller)
     assert state.vim.vim_cmd.vim_status.sub_mode is None
     if old_popup is not None:
-        assert _widget_is_deleted(old_popup) or not old_popup.isVisible()
+        assert widget_is_deleted(old_popup) or not old_popup.isVisible()
     state.qtbot.wait(60)
     assert not _which_key_visible(controller)
 
@@ -300,11 +300,11 @@ def test_which_key_releases_closed_window(which_key_windows, displayed):
     window.close()
     _settle()
 
-    assert _widget_is_deleted(window)
+    assert widget_is_deleted(window)
     assert not controller.timer.isActive()
     assert not _which_key_visible(controller)
     if popup is not None:
-        assert _widget_is_deleted(popup)
+        assert widget_is_deleted(popup)
     state.qtbot.wait(60)
     assert not _which_key_visible(controller)
     code = _focus_stack(state, state.widget.editorstacks[0])
@@ -370,7 +370,7 @@ def test_new_windows_splits_and_cloned_tabs(editor_windows, undocked, window_cou
         _settle()
         for stack in all_stacks:
             code = stack.get_current_editor()
-            assert not _widget_is_deleted(code.completion_widget)
+            assert not widget_is_deleted(code.completion_widget)
             assert code.completion_widget.parentWidget().window() is code.window()
         _exercise_vim(state, owner)
     detached = widget.windowwidget
@@ -408,7 +408,7 @@ def test_new_windows_splits_and_cloned_tabs(editor_windows, undocked, window_cou
         _focus_stack(state, stack)
         stack.close_split()
         _settle()
-        assert _widget_is_deleted(stack)
+        assert widget_is_deleted(stack)
     assert len(widget.editorstacks) == window_count + 1
 
     # Closing a file from a secondary window updates every clone and keeps
@@ -430,10 +430,10 @@ def test_new_windows_splits_and_cloned_tabs(editor_windows, undocked, window_cou
             _focus_stack(state, original_stack)
         window.close()
         _settle()
-        assert _widget_is_deleted(window)
+        assert widget_is_deleted(window)
         assert widget.windowwidget is detached
         if detached is not None:
-            assert not _widget_is_deleted(detached)
+            assert not widget_is_deleted(detached)
     assert not widget.editorwindows
     _exercise_vim(state, original_stack)
     if undocked:
@@ -473,7 +473,7 @@ def test_repeated_new_window_creation_and_close(editor_windows):
             old_windows.append(weakref.ref(window))
             window.close()
             _settle()
-            assert _widget_is_deleted(window)
+            assert widget_is_deleted(window)
             assert widget.windowwidget is detached
         _exercise_vim(state, original_stack)
         if detached is not None:
@@ -640,7 +640,7 @@ def test_queued_search_cannot_mutate_another_window(editor_windows):
     target.insertPlainText(" ")
     new_window.close()
     _settle()
-    assert _widget_is_deleted(new_window)
+    assert widget_is_deleted(new_window)
     source = _focus_stack(state, source_stack)
     position = source.textCursor().position()
     state.qtbot.wait(200)
@@ -734,7 +734,7 @@ def test_recording_stops_and_disconnects_on_window_change(editor_windows):
     recorded = list(manager.registers["a"])
     window.close()
     _settle()
-    assert _widget_is_deleted(window)
+    assert widget_is_deleted(window)
     state.qtbot.keyClicks(state.commandline, "i")
     state.qtbot.keyClicks(target, "X")
     state.qtbot.keyClick(target, Qt.Key_Escape)
@@ -765,23 +765,23 @@ def test_plugin_shutdown_with_shared_ui_in_new_window(
     timer = controller.timer
     state.vim.on_close()
     state.vim_closed = True
-    if not _widget_is_deleted(timer):
+    if not widget_is_deleted(timer):
         assert not timer.isActive()
     _settle()
-    if not _widget_is_deleted(controller):
+    if not widget_is_deleted(controller):
         assert not controller.timer.isActive()
         assert controller.popup is None
     if popup is not None:
-        assert _widget_is_deleted(popup)
-    assert _widget_is_deleted(state.commandline)
+        assert widget_is_deleted(popup)
+    assert widget_is_deleted(state.commandline)
     assert not manager.is_recording
     assert manager.editor_connected is None
     for window in windows:
         window.close()
         _settle()
-        assert _widget_is_deleted(window)
+        assert widget_is_deleted(window)
         assert state.widget.windowwidget is detached
     if detached is not None:
         state.widget.dock_window()
         _settle()
-        assert _widget_is_deleted(detached)
+        assert widget_is_deleted(detached)

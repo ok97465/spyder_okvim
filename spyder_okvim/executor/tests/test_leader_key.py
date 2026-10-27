@@ -75,6 +75,7 @@ def test_easymotion_hint_uses_current_key(vim_bot, key):
     assert list(executor.dispatcher) == expected_keys
     assert dict(candidates)[key] == "EasyMotion"
     assert executor.dispatcher[key] == executor.execute_easymotion
+    assert executor.hint_prefix == key
 
 
 def test_easymotion_key_change_restores_commands(vim_bot, monkeypatch):
@@ -346,6 +347,30 @@ def test_run_or_debug_selection(
     finally:
         signal.disconnect(capture_action)
         cmd_line.to_normal()
+
+
+@pytest.mark.parametrize("method_name", ["run_selection", "debug_selection"])
+def test_selection_and_focus_restored_when_run_action_fails(vim_bot, method_name):
+    """Spyder action failures cannot leave the temporary native selection set."""
+    _, _, _, vim, _ = vim_bot
+    executor = ExecutorLeaderKey(vim.vim_cmd.vim_status)
+    original_cursor = object()
+    editor = Mock()
+    executor.get_editor = Mock(return_value=editor)
+    executor.set_selection_to_editor_using_vim_selection = Mock(
+        return_value=original_cursor
+    )
+    emit = Mock(side_effect=RuntimeError("action failed"))
+    executor.get_editorstack = Mock(
+        return_value=SimpleNamespace(sig_trigger_action=SimpleNamespace(emit=emit))
+    )
+    executor.vim_status = SimpleNamespace(set_focus_to_vim=Mock())
+
+    with pytest.raises(RuntimeError, match="action failed"):
+        getattr(executor, method_name)()
+
+    editor.setTextCursor.assert_called_once_with(original_cursor)
+    executor.vim_status.set_focus_to_vim.assert_called_once_with()
 
 
 def test_formatting(vim_bot):

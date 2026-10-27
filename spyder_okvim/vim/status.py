@@ -166,7 +166,6 @@ class VimStatus(QObject):
 
     def reset_for_test(self):
         """Reset status for test."""
-        self.cmd_line.vim_widget.which_key.cancel()
         self.finish_insert(apply_count=False)
         # Remove any pending EasyMotion overlays before processing Qt events.
         self.remove_marker_of_easymotion()

@@ -15,8 +15,9 @@ from spyder.plugins.switcher.container import SwitcherContainer
 from spyder.plugins.switcher.widgets.switcher import Switcher
 
 # Project Libraries
-from spyder_okvim.spyder import plugin as plugin_module
+from spyder_okvim.spyder import switcher as switcher_module
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.switcher import SwitcherNavigation
 
 
 @pytest.fixture
@@ -208,6 +209,45 @@ def test_switcher_consumes_navigation_with_no_results(switcher_navigation):
     assert QApplication.focusWidget() is switcher.edit
 
 
+def test_switcher_replacement_releases_the_previous_popup(qtbot):
+    """Changing the attached switcher restores keys on the previous one."""
+    host = QMainWindow()
+    qtbot.addWidget(host)
+    navigation = SwitcherNavigation(host)
+    previous = Switcher(host)
+    current = Switcher(host)
+    for switcher in (previous, current):
+        switcher.add_item(title="alpha", last_item=False)
+        switcher.add_item(title="beta")
+        switcher.set_current_row(0)
+        switcher.show()
+
+    navigation.attach(previous)
+    navigation.attach(current)
+    qtbot.keyClick(previous.edit, Qt.Key_N, Qt.ControlModifier)
+    assert previous.current_row() == 0
+    qtbot.keyClick(current.edit, Qt.Key_N, Qt.ControlModifier)
+    assert current.current_row() == 1
+    navigation.detach()
+
+
+def test_switcher_can_be_destroyed_before_navigation_detaches(qtbot):
+    """A weak reference does not make teardown access a deleted Qt object."""
+    host = QMainWindow()
+    qtbot.addWidget(host)
+    navigation = SwitcherNavigation(host)
+    switcher = Switcher(host)
+    navigation.attach(switcher)
+    switcher.deleteLater()
+    QCoreApplication.sendPostedEvents(switcher, QEvent.DeferredDelete)
+
+    navigation.detach()
+    navigation.detach()
+    replacement = Switcher(host)
+    navigation.attach(replacement)
+    navigation.detach()
+
+
 @pytest.mark.parametrize("dont_swap", [True, False])
 def test_mac_physical_control_respects_qt_modifier_mapping(
     switcher_navigation, monkeypatch, dont_swap
@@ -215,12 +255,12 @@ def test_mac_physical_control_respects_qt_modifier_mapping(
     """Spyder's macOS mapping keeps Command free; default Qt also accepts Control."""
     state = switcher_navigation
     switcher = state.open()
-    monkeypatch.setattr(plugin_module, "sys", SimpleNamespace(platform="darwin"))
+    monkeypatch.setattr(switcher_module, "sys", SimpleNamespace(platform="darwin"))
     monkeypatch.setattr(
-        plugin_module.QCoreApplication, "testAttribute", lambda attribute: dont_swap
+        switcher_module.QCoreApplication, "testAttribute", lambda attribute: dont_swap
     )
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_N, Qt.MetaModifier)
-    state.vim.eventFilter(switcher.edit, event)
+    state.vim._switcher_navigation.eventFilter(switcher.edit, event)
     assert switcher.current_row() == (0 if dont_swap else 2)
     switcher.set_current_row(0)
     state.qtbot.keyClick(switcher.edit, Qt.Key_N, Qt.ControlModifier)
