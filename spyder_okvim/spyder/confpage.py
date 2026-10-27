@@ -39,7 +39,9 @@ class OkvimConfigPage(PluginConfigPage):
             label, clayout = newce(name, option_name, without_layout=True)
             label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             clayout.lineedit.setValidator(
-                QRegularExpressionValidator(QRegularExpression(r"#[0-9abcdefABCDEF]{6}"))
+                QRegularExpressionValidator(
+                    QRegularExpression(r"#[0-9abcdefABCDEF]{6}")
+                )
             )
             color_layout.addWidget(label, idx_row, idx_col)
             color_layout.addLayout(clayout, idx_row, idx_col + 1)
@@ -66,6 +68,32 @@ class OkvimConfigPage(PluginConfigPage):
         options_layout.addLayout(hl_yank_layout)
 
         options_group.setLayout(options_layout)
+
+        yanky_group = QGroupBox("Yank history")
+        yanky_layout = QVBoxLayout()
+        self.yanky_enabled = newcb(
+            "Enable yank history and paste cycling", "yanky_enabled", default=True
+        )
+        self.yank_history_length = newsb(
+            "Maximum entries",
+            "",
+            "yank_history_length",
+            default=100,
+            min_=1,
+            max_=10000,
+            step=10,
+        )
+        self.highlight_put = newcb(
+            "Highlight pasted text (uses yank colors and duration)",
+            "highlight_put",
+            default=True,
+        )
+        self.yanky_enabled.checkbox.toggled.connect(self.yank_history_length.setEnabled)
+        self.yank_history_length.setEnabled(self.yanky_enabled.checkbox.isChecked())
+        yanky_layout.addWidget(self.yanky_enabled)
+        yanky_layout.addWidget(self.yank_history_length)
+        yanky_layout.addWidget(self.highlight_put)
+        yanky_group.setLayout(yanky_layout)
 
         leaderkey_group = QGroupBox("Leader Key Mapping")
         leaderkey_layout = QHBoxLayout()
@@ -105,6 +133,7 @@ class OkvimConfigPage(PluginConfigPage):
         layout = QVBoxLayout()
         layout.addWidget(color_group)
         layout.addWidget(options_group)
+        layout.addWidget(yanky_group)
         layout.addWidget(leaderkey_group)
         layout.addWidget(which_key_group)
 

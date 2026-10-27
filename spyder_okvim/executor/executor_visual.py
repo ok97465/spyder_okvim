@@ -10,9 +10,6 @@ character motions and other modal operations.
 # Standard Libraries
 import re
 
-# Third Party Libraries
-from spyder.config.manager import CONF
-
 # Project Libraries
 from spyder_okvim.executor.decorators import submode
 from spyder_okvim.executor.executor_base import (
@@ -39,7 +36,6 @@ from spyder_okvim.executor.executor_sub import (
 )
 from spyder_okvim.executor.executor_surround import ExecutorAddSurround
 from spyder_okvim.executor.mixins import MovementMixin, SelectionMixin
-from spyder_okvim.spyder.config import CONF_SECTION
 
 
 class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
@@ -84,7 +80,6 @@ class ExecutorVisualCmd(SelectionMixin, MovementMixin, ExecutorBase):
         # SelectionMixin hooks
         self.apply_motion_info_in_sel = self.apply_motion_info_in_visual
         self.set_cursor_pos_in_sel = self.set_cursor_pos_in_visual
-        self.paste_in_sel = self.helper_action.paste_in_visual
 
     def V(self, num=1, num_str=""):
         """Start Visual mode per line."""

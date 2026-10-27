@@ -34,6 +34,16 @@ def test_command_completion_preserves_argument(tmp_path):
     assert complete("/w", tmp_path) == []
 
 
+def test_named_extension_commands_keep_builtin_completion_order(tmp_path):
+    commands = COMMANDS + ("YankyRingHistory", "YankyClearHistory")
+    candidates = completion_candidates(":", 1, commands, str(tmp_path))
+    assert candidates[0] == (":e", 2)
+    assert completion_candidates(":Yanky", 6, commands, str(tmp_path)) == [
+        (":YankyClearHistory", len(":YankyClearHistory")),
+        (":YankyRingHistory", len(":YankyRingHistory")),
+    ]
+
+
 def test_path_completion_with_korean_and_spaces(tmp_path):
     """An entire raw argument is one path, regardless of spaces or Unicode."""
     directory = tmp_path / "한글 폴더"

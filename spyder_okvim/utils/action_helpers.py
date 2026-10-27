@@ -527,6 +527,14 @@ class ActionHelper:
         force_numbered = self.vim_status.is_normal() and bool(
             re.match(r"^[dc]\d*[%()`/?nN{}]", self.vim_status.input_cmd.cmd)
         )
+
+        # Register updates can replace this count with a history limit warning.
+        doc = cursor.document()
+        nb_start = doc.findBlock(sel_start).blockNumber()
+        nb_end = doc.findBlock(sel_end).blockNumber()
+        if nb_start != nb_end:
+            self.vim_status.set_message(f"{nb_end - nb_start + 1} lines yanked")
+
         self.vim_status.update_registers(
             register_name,
             txt,
@@ -535,163 +543,11 @@ class ActionHelper:
             force_numbered=force_numbered,
         )
 
-        # Set message
-        doc = cursor.document()
-        nb_start = doc.findBlock(sel_start).blockNumber()
-        nb_end = doc.findBlock(sel_end).blockNumber()
-        if nb_start != nb_end:
-            self.vim_status.set_message(f"{nb_end - nb_start + 1} lines yanked")
-
         # highlight yank
-        if is_explicit is True and self.vim_status.is_normal():
-            if self.vim_status.running_dot_cmd is False:
-                self.vim_status.cursor.highlight_yank(sel_start, sel_end)
+        if is_explicit and not self.vim_status.running_dot_cmd:
+            self.vim_status.cursor.highlight_yank(sel_start, sel_end)
 
         return sel_start, sel_end
-
-    def _move_cursor_after_space(self, cursor):
-        """Return ``cursor`` positioned after leading spaces."""
-        txt = cursor.block().text()
-        n_space = len(txt) - len(txt.lstrip())
-        cursor.movePosition(QTextCursor.StartOfLine)
-        cursor.movePosition(QTextCursor.Right, n=n_space)
-        return cursor
-
-    def paste_in_normal(self, num, is_lower):
-        """Paste register content in normal mode."""
-        reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(
-            connect_editor=False, register_name=self.vim_status.get_register_name()
-        )
-
-        editor = self.get_editor()
-        n_block_old = editor.blockCount()
-
-        if reg.content:
-            content = reg.content * num
-        else:
-            content = ""
-
-        cursor = self.get_cursor()
-        if reg.type != VimState.VLINE:
-            if not cursor.atBlockEnd() and is_lower:
-                cursor.movePosition(QTextCursor.Right)
-            cursor.insertText(content)
-            pos_end = cursor.selectionEnd()
-            self.vim_status.to_normal()
-            self.set_cursor_pos(pos_end - 1)
-        elif is_lower is False:
-            cursor.movePosition(QTextCursor.StartOfLine)
-            block_number_old = cursor.block().blockNumber()
-            cursor.insertText(content)
-            block = self.get_editor().document().findBlockByNumber(block_number_old)
-            cursor.setPosition(block.position())
-            cursor = self._move_cursor_after_space(cursor)
-            self.set_cursor_pos(cursor.position())
-        else:
-            cursor.movePosition(QTextCursor.EndOfLine)
-            cursor_pos_old = cursor.position()
-            if cursor.atEnd():
-                cursor.insertText("\n" + content[:-1])
-            else:
-                cursor.movePosition(QTextCursor.Right)
-                cursor.insertText(content)
-            cursor.setPosition(cursor_pos_old)
-            cursor.movePosition(QTextCursor.Down)
-            cursor = self._move_cursor_after_space(cursor)
-            self.set_cursor_pos(cursor.position())
-
-        n_block_new = editor.blockCount()
-        if n_block_new != n_block_old:
-            self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
-
-        editor = self.get_editor()
-        editor.document_did_change()
-
-    def paste_in_visual(self, num):
-        """Paste over the current visual selection."""
-        editor = self.get_editor()
-        reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(
-            connect_editor=False, register_name=self.vim_status.get_register_name()
-        )
-
-        editor = self.get_editor()
-        n_block_old = editor.blockCount()
-
-        if reg.content:
-            content = reg.content * num
-            if reg.type == VimState.VLINE:
-                content = "\n" + content
-        else:
-            content = ""
-
-        cursor = self.get_cursor()
-        sel_start = self.get_pos_start_in_selection()
-        sel_end = self.get_pos_end_in_selection()
-        block_no_start = self.get_block_no_start_in_selection()
-
-        cursor.setPosition(sel_start)
-        cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
-        cursor.insertText(content)
-
-        if reg.type == VimState.VLINE:
-            block = editor.document().findBlockByNumber(block_no_start + 1)
-            cursor_pos_new = block.position()
-        else:
-            if "\n" in content:
-                cursor_pos_new = sel_start
-            else:
-                cursor_pos_new = sel_start + len(content) - 1
-
-        n_block_new = editor.blockCount()
-        if n_block_new != n_block_old:
-            self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
-
-        editor.document_did_change()
-
-        self.vim_status.to_normal()
-        self.vim_status.cursor.set_cursor_pos(cursor_pos_new)
-
-    def paste_in_vline(self, num):
-        """Paste register content in visual line mode."""
-        editor = self.get_editor()
-        reg = self.vim_status.get_register()
-        self.vim_status.update_dot_cmd(
-            connect_editor=False, register_name=self.vim_status.get_register_name()
-        )
-
-        editor = self.get_editor()
-        n_block_old = editor.blockCount()
-
-        if reg.content:
-            if reg.type == VimState.VLINE:
-                content = reg.content * num
-                content = content[:-1]
-            else:
-                content = reg.content
-                if num > 1:
-                    content = (reg.content + "\n") * num
-                    content = content[:-1]
-        else:
-            content = ""
-
-        cursor = self.get_cursor()
-        sel_start = self.get_pos_start_in_selection()
-        sel_end = self.get_pos_end_in_selection()
-
-        cursor.setPosition(sel_start)
-        cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
-        cursor.insertText(content)
-
-        n_block_new = editor.blockCount()
-        if n_block_new != n_block_old:
-            self.vim_status.set_message(f"{n_block_new - n_block_old} more lines")
-
-        editor.document_did_change()
-
-        self.vim_status.to_normal()
-        self.vim_status.cursor.set_cursor_pos(sel_start)
 
     def delete(self, motion_info: MotionInfo, is_insert, replace_txt=""):
         """Delete text defined by ``motion_info``.

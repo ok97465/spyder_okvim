@@ -32,6 +32,7 @@ from .state import (
     RegisterInfo,
     VimState,
 )
+from .yank_history import YankHistory
 
 
 class VimStatus(QObject):
@@ -83,6 +84,10 @@ class VimStatus(QObject):
 
         # register
         self.register_dict = defaultdict(RegisterInfo)
+        self.yank_history = YankHistory()
+        self.yanky_enabled = True
+        # VimWidget supplies the controller during initialization.
+        self.put_controller = None
 
         # search
         self.search = SearchInfo(self.cursor, self)
@@ -167,6 +172,11 @@ class VimStatus(QObject):
     def reset_for_test(self):
         """Reset status for test."""
         self.finish_insert(apply_count=False)
+        if self.put_controller is not None:
+            self.put_controller.cancel()
+        if self.cmd_line is not None:
+            self.cmd_line.vim_widget.cancel_yank_picker()
+        self.cursor.clear_highlights()
         # Remove any pending EasyMotion overlays before processing Qt events.
         self.remove_marker_of_easymotion()
         QCoreApplication.processEvents()
@@ -176,9 +186,12 @@ class VimStatus(QObject):
         self.input_cmd = InputCmdInfo("", "")
         self.input_cmd_prev = InputCmdInfo("", "")
         self.dot_cmd.clear_key_list()
+        self.dot_cmd.put_payload = None
         self.running_dot_cmd = False
 
         self.get_editor().clear_extra_selections("hl_yank")
+        self.get_editor().clear_extra_selections("hl_put")
+        self.yank_history.clear()
 
         # register
         self.register_dict = defaultdict(RegisterInfo)
@@ -408,6 +421,7 @@ class VimStatus(QObject):
         if self.running_dot_cmd is True:
             return
         dot_cmd = self.dot_cmd
+        dot_cmd.put_payload = None
         dot_cmd.vim_state = self.vim_state
         dot_cmd.num_str = self.input_cmd.num_str
         dot_cmd.cmd = self.input_cmd.cmd
@@ -497,6 +511,11 @@ class VimStatus(QObject):
 
         # Appends expose the combined value; deletion history keeps only this delete.
         self.set_register('"', info.content, info.type)
+        if self.yanky_enabled:
+            kind = "linewise" if register_type == VimState.VLINE else "charwise"
+            self.yank_history.record(content, kind, "yank" if is_yank else "delete")
+            if self.yank_history.last_skip_reason == "oversize":
+                self.set_message("Yank history: value exceeds the memory limit")
 
     def get_register(self):
         """Get content from register_dict."""

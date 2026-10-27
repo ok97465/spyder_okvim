@@ -30,7 +30,9 @@ def completion_candidates(
     command = match.group(1) if match.group(1) is not None else match.group(4)
     command_group = 1 if match.group(1) is not None else 4
     command_start, command_end = match.span(command_group)
-    supported = sorted(set(commands))
+    # Keep built-in lowercase commands first in alphabetical completion even
+    # when named extension commands start with uppercase letters.
+    supported = sorted(set(commands), key=lambda name: (name.casefold(), name))
     if command_start <= cursor_position <= command_end:
         prefix = text[command_start:cursor_position]
         return [

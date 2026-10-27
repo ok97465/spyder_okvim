@@ -284,6 +284,12 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def dot(self, num=1, num_str=""):
         """Run previous change."""
+        controller = self.vim_status.put_controller
+        if self.vim_status.dot_cmd.put_payload is not None:
+            # Keep the literal dot in macros when replaying a snapshot directly.
+            controller.repeat(num, num_str)
+            return
+        controller.cancel()
         # avoid to execute . command twice.
         self.vim_status.manager_macro.remove_last_key(".")
         cmd_str = self.vim_status.dot_cmd.to_cmd_string(num, num_str)
@@ -384,11 +390,11 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
     def p(self, num=1, num_str=""):
         """Put the text from register after the cursor."""
-        self.helper_action.paste_in_normal(num, is_lower=True)
+        self.vim_status.put_controller.put(num, is_lower=True)
 
     def P(self, num=1, num_str=""):
-        """Put the text from register after the cursor."""
-        self.helper_action.paste_in_normal(num, is_lower=False)
+        """Put the text from register before the cursor."""
+        self.vim_status.put_controller.put(num, is_lower=False)
 
     def y(self, num=1, num_str=""):
         """Yank {motion} text into register."""

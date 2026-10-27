@@ -45,8 +45,10 @@ from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
 from spyder_okvim.utils.commandline import completion_candidates
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.key_helpers import latin_command_key
+from spyder_okvim.utils.put import PutController
 from spyder_okvim.utils.qtcompat import exec_dialog, text_width, widget_is_deleted
 from spyder_okvim.utils.testing_env import running_in_pytest
+from spyder_okvim.utils.yank_dialog import YankHistoryPicker
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 
 running_coverage = "coverage" in sys.modules
@@ -97,7 +99,6 @@ class VimPane(PluginMainWidget):
     def apply_plugin_settings(self, options):
         """Apply the config settings."""
         self.vim_cmd.vim_status.search.set_color()
-        self.vim_cmd.vim_status.cursor.set_config_from_conf()
         self.vim_cmd.apply_settings()
 
 
@@ -504,6 +505,16 @@ class VimLineEdit(QLineEdit):
     def event(self, event) -> bool:
         """Keep Tab in the prompt instead of letting QWidget move focus."""
         if (
+            event.type() == QEvent.ShortcutOverride
+            and event.modifiers() == Qt.ControlModifier
+            and event.key() in (Qt.Key_P, Qt.Key_N)
+            and self._yank_cycle_context()
+            and self.vim_widget.put_controller.can_cycle()
+        ):
+            # Reserve a valid cycle without editing during ShortcutOverride.
+            event.accept()
+            return True
+        if (
             event.type() == QEvent.KeyPress
             and event.key() in (Qt.Key_Tab, Qt.Key_Backtab)
             and self._history_context(self.text()) is not None
@@ -563,9 +574,12 @@ class VimLineEdit(QLineEdit):
 
         key = e.key()
         pressed_ctrl = e.modifiers() == Qt.ControlModifier
+        if self.try_handle_yank_cycle(e):
+            return
         if key == Qt.Key_Escape:
             self.esc_pressed()
         elif pressed_ctrl and key in self.dispatcher.keys():
+            self.vim_widget.put_controller.cancel()
             self.dispatcher[key]()
         elif self.testAttribute(Qt.WA_InputMethodEnabled):
             if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Tab, Qt.Key_Backtab):
@@ -588,8 +602,41 @@ class VimLineEdit(QLineEdit):
         else:
             super().keyPressEvent(e)
 
+    def _yank_cycle_context(self):
+        """Only plain Normal input and an optional positive count can cycle."""
+        text = self.text()
+        return (
+            self.vim_status.is_normal()
+            and self.vim_status.sub_mode is None
+            and self.vim_widget._yank_picker is None
+            and (not text or re.fullmatch(r"[1-9][0-9]*", text) is not None)
+        )
+
+    def try_handle_yank_cycle(self, event):
+        """Consume valid cycles, including endpoints, before the file search."""
+        if event.modifiers() != Qt.ControlModifier or event.key() not in (
+            Qt.Key_P,
+            Qt.Key_N,
+        ):
+            return False
+        in_cycle_context = self._yank_cycle_context()
+        handled = in_cycle_context and self.vim_widget.put_controller.cycle(
+            1 if event.key() == Qt.Key_P else -1,
+            int(self.text()) if self.text() else 1,
+        )
+        if not handled:
+            if not self.vim_widget.is_playing_macro:
+                return False
+            self.vim_status.set_message("Yanky: no put to cycle in this macro")
+        if in_cycle_context:
+            self.clear()
+            self.vim_status.input_cmd.clear()
+        event.accept()
+        return True
+
     def esc_pressed(self) -> None:
         """Clear state."""
+        self.vim_widget.put_controller.cancel()
         self.vim_widget.sig_command_cancelled.emit()
         self.vim_status.input_cmd.clear()
         self.vim_status.remove_marker_of_easymotion()
@@ -608,6 +655,8 @@ class VimLineEdit(QLineEdit):
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
+        if self.vim_widget._yank_picker is not None:
+            return
         if self.vim_status.cursor.get_editor():
             self.to_normal()
         self.vim_status.set_message("")
@@ -615,6 +664,10 @@ class VimLineEdit(QLineEdit):
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
+        if self.vim_widget._yank_picker is not None:
+            super().focusOutEvent(event)
+            return
+        self.vim_widget.put_controller.cancel()
         self.vim_widget.sig_command_cancelled.emit()
         if self.testAttribute(Qt.WA_InputMethodEnabled):
             self.esc_pressed()
@@ -694,10 +747,13 @@ class VimWidget(QWidget):
         self.editor_widget = editor_widget
         self.main = main
         self._input_depth = 0
+        self._yank_picker = None
         self.status_label = VimStateLabel(main)
         self.msg_label = VimMessageLabel("", main)
 
         self.vim_status = VimStatus(editor_widget, main, self.msg_label)
+        self.put_controller = PutController(self.vim_status)
+        self.vim_status.put_controller = self.put_controller
         # # Avoid Qt crashes if the label is deleted by ignoring the signal
         # self.vim_status.change_label.connect(lambda state: None)
         self.vim_status.change_label.connect(self.status_label.change_state)
@@ -722,7 +778,6 @@ class VimWidget(QWidget):
         # leader key
         self.executor_leader_key = ExecutorLeaderKey(self.vim_status)
         self.leader_key = " "
-        self.set_leader_key()
 
         # macro
         self._macro_generation = -1
@@ -733,6 +788,7 @@ class VimWidget(QWidget):
         self.worker_macro.sig_focus_vim.connect(self._focus_macro_input)
         self.worker_macro.sig_playback_finished.connect(self._finish_macro)
         self.which_key = WhichKeyController(self)
+        self.apply_settings()
 
     @property
     def is_processing_input(self):
@@ -768,6 +824,52 @@ class VimWidget(QWidget):
         """Apply command bindings and hint preferences explicitly."""
         self.set_leader_key()
         self.which_key.apply_settings()
+        status = self.vim_status
+        enabled = bool(CONF.get(CONF_SECTION, "yanky_enabled", True))
+        length = CONF.get(CONF_SECTION, "yank_history_length", 100)
+        if not isinstance(length, int) or isinstance(length, bool) or length < 1:
+            length = 100
+        if enabled != status.yanky_enabled or length != status.yank_history.length:
+            self.cancel_yank_picker()
+            self.put_controller.cancel()
+        status.yanky_enabled = enabled
+        status.yank_history.resize(length)
+        status.cursor.set_config_from_conf()
+
+    def clear_yank_history(self):
+        """Clear memory explicitly, including while Yanky is disabled."""
+        self.cancel_yank_picker()
+        self.put_controller.cancel()
+        self.vim_status.yank_history.clear()
+        self.vim_status.set_message("Yanky: history cleared")
+
+    def cancel_yank_picker(self):
+        """Invalidate callbacks before closing a popup that may delete itself."""
+        picker, self._yank_picker = self._yank_picker, None
+        if picker is not None:
+            picker.cancel()
+
+    def show_yank_history(self):
+        """Pick one immutable history entry against a captured editor context."""
+        status = self.vim_status
+        self.cancel_yank_picker()
+        self.put_controller.cancel()
+        if not status.yanky_enabled:
+            status.set_message("Yanky is disabled")
+            return
+        if self.is_playing_macro or status.is_recording_macro():
+            status.set_message("Yanky: history picker is unavailable in macros")
+            return
+        editor = status.get_editor()
+        if editor is None or widget_is_deleted(editor) or editor.isReadOnly():
+            return
+        entries = status.yank_history.snapshot()
+        if not entries:
+            status.set_message("Yanky: history is empty")
+            return
+        self.put_controller.bind_editor(editor)
+        self._yank_picker = YankHistoryPicker(self, editor, entries)
+        self._yank_picker.show()
 
     @contextmanager
     def input_processing(self):
@@ -777,6 +879,9 @@ class VimWidget(QWidget):
             self.sig_input_started.emit()
         try:
             yield
+        except BaseException:
+            self.put_controller.cancel()
+            raise
         finally:
             self._input_depth -= 1
             if self._input_depth == 0:
@@ -786,6 +891,7 @@ class VimWidget(QWidget):
 
     def cancel_macro(self) -> None:
         """Invalidate queued playback when its editor is left or closed."""
+        self.put_controller.cancel()
         self._macro_generation = -1
         self._macro_editor = None
         self._macro_completion = None
@@ -815,6 +921,7 @@ class VimWidget(QWidget):
         self._macro_completion = None
         self._macro_generation = -1
         self._macro_editor = None
+        self.put_controller.cancel()
         self.sig_command_changed.emit()
 
     @Slot(object, int)
@@ -863,6 +970,13 @@ class VimWidget(QWidget):
             self.commandline.sync_input_method()
             return
 
+        if not (
+            self.vim_status.is_normal()
+            and self.vim_status.sub_mode is None
+            and re.fullmatch(r"[1-9][0-9]*", txt)
+        ):
+            self.put_controller.cancel()
+
         executor = self.executors[self.vim_status.vim_state]
         if self.vim_status.sub_mode:
             executor = self.vim_status.sub_mode
@@ -886,6 +1000,7 @@ class VimWidget(QWidget):
         self.commandline.sync_input_method()
 
         if self.vim_status.manager_macro.reg_name_for_execute:
+            self.put_controller.cancel()
             mm = self.vim_status.manager_macro
             ch = mm.reg_name_for_execute
             if self.worker_macro.isRunning():
@@ -901,6 +1016,8 @@ class VimWidget(QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        self.cancel_yank_picker()
+        self.put_controller.cleanup()
         self.which_key.cleanup()
         self.cancel_macro()
         if self.vim_status.is_recording_macro():

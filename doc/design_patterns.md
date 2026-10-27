@@ -93,3 +93,36 @@ filter; the main plugin event filter remains responsible for editor lifecycle.
 `utils/qtcompat.py` provides `widget_is_deleted()` and `live_widget()` for safe
 access to weak Qt references across PyQt/PySide bindings. A live Python wrapper
 can still refer to a deleted C++ widget, so weak references alone are insufficient.
+
+## Yank history and put sessions
+
+`VimStatus` owns one `YankHistory` for the plugin instance. Its immutable
+`YankEntry` values contain text, explicit character/line type, source, and bounded
+payload metadata, with no Qt references. Record each logical yank or deletion
+once in `update_registers()` after the existing register updates; individual
+`set_register()` writes, puts, and history reads do not record entries.
+
+`VimWidget` owns the `PutController`; executors call it directly through
+`VimStatus.put_controller`, without mode-specific forwarding helpers. The
+controller plans puts from the original mode, selection, direction, and count,
+and retains a reversible local patch.
+Cycling joins replacements to the original put's undo group. It uses a fixed
+entry snapshot and never changes register values or history order. Document,
+view, cursor, command, and undo validity determine whether a session can cycle;
+syntax-highlighter revision changes alone do not imply text edits.
+Exact patch validation is still required because Qt can defer text-change
+notifications until an outer edit block ends. Reversible patch capture is
+skipped when cycling is disabled or the put exceeds the session budget.
+
+The history picker receives immutable entries and returns a selected value.
+`YankHistoryDialog` handles bounded display previews and table navigation only;
+it resolves selections by entry ID. `YankHistoryPicker` copies the result during
+the dialog's `finished` signal, before Qt deletes it, and owns target validation,
+focus/mode restoration, and the eventual put. `VimWidget` holds only the current
+picker; its identity guards queued callbacks without a separate request token.
+View changes and cleanup invalidate requests so callbacks cannot edit or refocus
+an old editor.
+
+Snapshot puts keep only their entry, direction, and count in `PutPayload`.
+The Visual selection shape remains in `DotCmdInfo`, whose
+`selection_to_cmd_string()` is shared by ordinary and snapshot dot repetition.

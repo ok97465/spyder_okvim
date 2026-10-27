@@ -71,6 +71,27 @@ def test_tab_cycles_commands_and_preserves_focus(completion_bot):
         assert editor.toPlainText() == original
 
 
+def test_yanky_command_completion_and_dispatch(completion_bot, vim_bot, monkeypatch):
+    """Yanky Ex commands complete and use the same widget entry points."""
+    _, _, commandline, qtbot, _ = completion_bot
+    widget = vim_bot[3].vim_cmd
+    show, clear = Mock(), Mock()
+    monkeypatch.setattr(widget, "show_yank_history", show, raising=False)
+    monkeypatch.setattr(widget, "clear_yank_history", clear, raising=False)
+    qtbot.keyClicks(commandline, ":YankyRing")
+    qtbot.keyClick(commandline, Qt.Key_Tab)
+    assert commandline.text() == ":YankyRingHistory"
+    show.assert_not_called()
+    qtbot.keyClick(commandline, Qt.Key_Return)
+    show.assert_called_once_with()
+    qtbot.keyClicks(commandline, ":YankyClear")
+    qtbot.keyClick(commandline, Qt.Key_Tab)
+    assert commandline.text() == ":YankyClearHistory"
+    qtbot.keyClick(commandline, Qt.Key_Return)
+    clear.assert_called_once_with()
+    assert commandline.text() == ""
+
+
 @pytest.mark.parametrize("backtab", [False, True])
 def test_shift_tab_cycles_commands_backwards(completion_bot, backtab):
     """Both shifted Tab and Qt's Backtab key move through names in reverse."""

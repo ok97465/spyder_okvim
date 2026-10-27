@@ -78,6 +78,7 @@ class DotCmdInfo:
         self.cmd: str = ""
         self.cmd_list_insertmode = None
         self.register_name = None
+        self.put_payload = None
         self.editor_connected = None
         self.key_list_from_editor = []
         self.key_list_to_cmd_line = []
@@ -87,6 +88,25 @@ class DotCmdInfo:
         self.key_list_from_editor.clear()
         self.key_list_to_cmd_line.clear()
 
+    def selection_to_cmd_string(self):
+        """Reconstruct the saved Visual shape before replaying a change."""
+        if self.vim_state == VimState.VLINE:
+            n_lines = self.sel_block_no_end - self.sel_block_no_start
+            return "V" + (f"{n_lines}j" if n_lines > 0 else "")
+        if self.vim_state == VimState.VISUAL:
+            cmd_str = "v"
+            n_lines = self.sel_block_no_end - self.sel_block_no_start
+            if n_lines > 0:
+                cmd_str += f"{n_lines}j0"
+                if self.sel_col_end > 1:
+                    cmd_str += f"{self.sel_col_end - 1}l"
+            else:
+                n = self.sel_col_end - self.sel_col_start - 1
+                if n > 0:
+                    cmd_str += f"{n}l"
+            return cmd_str
+        return ""
+
     def to_cmd_string(self, num, num_str):
         """Return the textual representation of this dot command.
 
@@ -95,31 +115,10 @@ class DotCmdInfo:
             num_str: Original numeric string typed by the user.
         """
         register_prefix = f'"{self.register_name}' if self.register_name else ""
-        cmd_str = ""
-
-        if self.vim_state == VimState.VLINE:
-            cmd_str += "V"
-            n_lines = self.sel_block_no_end - self.sel_block_no_start
-            if n_lines > 0:
-                cmd_str += f"{n_lines}j"
+        selection = self.selection_to_cmd_string()
+        if selection:
             # Select the register after reconstructing the Visual selection.
-            cmd_str += register_prefix + self.cmd
-            return cmd_str
-
-        if self.vim_state == VimState.VISUAL:
-            cmd_str += "v"
-            n_lines = self.sel_block_no_end - self.sel_block_no_start
-            if n_lines > 0:
-                cmd_str += f"{n_lines}j0"
-
-                if self.sel_col_end > 1:
-                    cmd_str += f"{self.sel_col_end - 1}l"
-            else:
-                n = self.sel_col_end - self.sel_col_start - 1
-                if n > 0:
-                    cmd_str += f"{n}l"
-            cmd_str += register_prefix + self.cmd
-            return cmd_str
+            return selection + register_prefix + self.cmd
 
         if num_str:
             return register_prefix + str(num) + self.cmd
@@ -182,5 +181,3 @@ class RegisterInfo:
         self.name = ""
         self.content = ""
         self.type = VimState.NORMAL
-
-

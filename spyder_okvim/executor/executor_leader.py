@@ -23,6 +23,7 @@ class ExecutorLeaderKey(ExecutorBase):
         CommandSpec("f", "formatting", "Format document or selection"),
         CommandSpec("p", "open_switcher", "Switch file"),
         CommandSpec("s", "open_symbol_swicher", "Switch symbol"),
+        CommandSpec("y", "show_yank_history", "Yank history"),
     )
 
     def __init__(self, vim_status):
@@ -145,3 +146,7 @@ class ExecutorLeaderKey(ExecutorBase):
     def execute_easymotion(self, num=1, num_str=""):
         """Execute easymotion."""
         return self.prev_executor.run_easymotion()
+
+    def show_yank_history(self, num=1, num_str=""):
+        """Choose a previous yank or deletion to put at the current selection."""
+        self.vim_status.cmd_line.vim_widget.show_yank_history()

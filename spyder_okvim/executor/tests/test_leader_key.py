@@ -31,6 +31,7 @@ def test_leader_hint_candidates_match_dispatch(vim_bot):
         ("f", "Format document or selection"),
         ("p", "Switch file"),
         ("s", "Switch symbol"),
+        ("y", "Yank history"),
     ]
     assert [key for key, _ in candidates] == list(executor.dispatcher)
     assert executor.dispatcher["i"] == executor.auto_import
@@ -56,6 +57,18 @@ def test_leader_hint_candidates_are_read_only(vim_bot):
     assert status.input_cmd.cmd == input_cmd
     assert status.sub_mode is sub_mode
     assert executor.prev_executor is None
+
+
+def test_yank_history_leader_dispatch(vim_bot, monkeypatch):
+    """The picker command shares the widget's managed popup entry point."""
+    _, _, _, vim, qtbot = vim_bot
+    widget = vim.vim_cmd
+    show = Mock()
+    monkeypatch.setattr(widget, "show_yank_history", show, raising=False)
+    widget.commandline.esc_pressed()
+    qtbot.keyClicks(widget.commandline, " y")
+    show.assert_called_once_with()
+    assert widget.commandline.text() == ""
 
 
 @pytest.mark.parametrize("key", [" ", "\r", "\b", "b", "I"])

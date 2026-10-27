@@ -32,6 +32,8 @@ class ExecutorColon(ExecutorSubBase):
         "vs",
         "vsp",
         "vsplit",
+        "YankyRingHistory",
+        "YankyClearHistory",
     )
 
     def __init__(self, vim_status):
@@ -185,6 +187,7 @@ class ExecutorColon(ExecutorSubBase):
         """Move cursor according to :number command."""
         vs = self.vim_status
         vs.push_jump()
+
         if vs.vim_state == VimState.NORMAL:
             motion_info = self.helper_motion.G(num, True)
             vs.cursor.apply_motion_info_in_normal(motion_info)
@@ -196,3 +199,11 @@ class ExecutorColon(ExecutorSubBase):
                 vs.cursor.apply_motion_info_in_vline(motion_info)
             vs.to_normal()
         vs.push_jump()
+
+    def YankyRingHistory(self, arg=""):
+        """Show the yank-history picker."""
+        self.vim_status.cmd_line.vim_widget.show_yank_history()
+
+    def YankyClearHistory(self, arg=""):
+        """Clear history, including an active put cycle or picker."""
+        self.vim_status.cmd_line.vim_widget.clear_yank_history()

@@ -149,7 +149,6 @@ class SelectionMixin:
     # Hooks provided by subclasses
     apply_motion_info_in_sel: Callable[[object], None]
     set_cursor_pos_in_sel: Callable[[int], None]
-    paste_in_sel: Callable[[int], None]
 
     # ------------------------------------------------------------------
     # Selection manipulation helpers
@@ -290,11 +289,9 @@ class SelectionMixin:
 
     def p(self, num: int = 1, num_str: str = ""):
         """Paste contents of register over the selection."""
-        self.paste_in_sel(num)
+        self.vim_status.put_controller.put(num)
 
-    def P(self, num: int = 1, num_str: str = ""):
-        """Paste contents of register over the selection."""
-        self.paste_in_sel(num)
+    P = p
 
     def m(self, num: int = 1, num_str: str = ""):
         """Set a bookmark name."""

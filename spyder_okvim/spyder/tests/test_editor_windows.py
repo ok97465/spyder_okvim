@@ -202,6 +202,66 @@ def _exercise_vim(state, stack):
     status.hide_annotate_on_txt()
 
 
+@pytest.mark.parametrize("host", ["main", "undocked", "window"])
+def test_yanky_shared_history_and_view_lifetime(editor_windows, host):
+    """Cycle and picker state belong to one view, including detached hosts."""
+    from spyder_okvim.vim.state import VimState
+
+    state = editor_windows
+    if host == "undocked":
+        state.widget.create_window()
+    elif host == "window":
+        state.widget.create_new_window()
+    _settle()
+    stack = state.widget.editorstacks[-1]
+    stack.sig_split_vertically.emit()
+    _settle()
+    clone = state.widget.editorstacks[-1]
+    assert clone is not stack
+    code = _focus_stack(state, stack)
+    widget = state.vim.vim_cmd
+    status = widget.vim_status
+    status.reset_for_test()
+    code.set_text("xy")
+    status.cursor.set_cursor_pos(0)
+    entry = status.yank_history.record("A", "charwise")
+    status.set_register('"', "B", VimState.NORMAL)
+    state.qtbot.keyClicks(state.commandline, "p")
+    assert widget.put_controller.can_cycle()
+    state.vim._use_stack(stack)
+    assert widget.put_controller.can_cycle()
+    code.highlighter.rehighlight()
+    _settle()
+    assert widget.put_controller.can_cycle()
+
+    # A shared-document edit can arrive from a split without changing focus.
+    other = clone.get_current_editor()
+    cursor = other.textCursor()
+    cursor.movePosition(cursor.End)
+    cursor.insertText("external")
+    assert not widget.put_controller.can_cycle()
+    assert status.yank_history.snapshot() == (entry,)
+
+    state.qtbot.keyClicks(state.commandline, "p")
+    widget.show_yank_history()
+    dialog = widget._yank_picker.dialog
+    assert dialog.parentWidget() is code.window()
+    state.qtbot.keyClick(dialog.list_viewer, Qt.Key_Return)
+    _settle()
+    assert widget.put_controller.can_cycle()
+    _focus_stack(state, clone)
+    assert not widget.put_controller.can_cycle()
+    assert status.yank_history.snapshot() == (entry,)
+    widget.show_yank_history()
+    request = widget._yank_picker
+    popup = request.dialog
+    before = other.toPlainText()
+    _focus_stack(state, stack)
+    assert widget._yank_picker is None
+    assert widget_is_deleted(popup) or not popup.isVisible()
+    assert other.toPlainText() == before
+
+
 @pytest.mark.parametrize(
     "host, command", [("main", "vs"), ("undocked", "vsp"), ("window", "vsplit")]
 )

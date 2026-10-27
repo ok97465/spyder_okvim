@@ -76,7 +76,6 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
         # SelectionMixin hooks
         self.apply_motion_info_in_sel = self.apply_motion_info_in_vline
         self.set_cursor_pos_in_sel = self.set_cursor_pos_in_vline
-        self.paste_in_sel = self.helper_action.paste_in_vline
 
     def v(self, num=1, num_str=""):
         """Start Visual mode per character."""

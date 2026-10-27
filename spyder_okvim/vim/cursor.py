@@ -14,6 +14,7 @@ from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.utils.qtcompat import live_widget
 
 
 class VimCursor:
@@ -35,11 +36,14 @@ class VimCursor:
         self.yank_bg_color = QBrush(QColor("#7D7920"))
         self.hl_yank_dur = 400  # duration of highlight after yank
         self.hl_yank = True
+        self.hl_put = True
+        self._highlight_timers = {}
 
         self.set_config_from_conf()
 
         # Order of Selections
         DRAW_ORDERS["vim_search"] = 6
+        DRAW_ORDERS["hl_put"] = 7
         DRAW_ORDERS["hl_yank"] = 7
         DRAW_ORDERS["vim_selection"] = 8
         DRAW_ORDERS["vim_cursor"] = 9
@@ -64,6 +68,11 @@ class VimCursor:
         self.yank_bg_color = QBrush(QColor(CONF.get(CONF_SECTION, "yank_bg_color")))
         self.hl_yank_dur = CONF.get(CONF_SECTION, "highlight_yank_duration")
         self.hl_yank = CONF.get(CONF_SECTION, "highlight_yank")
+        self.hl_put = CONF.get(CONF_SECTION, "highlight_put", default=True)
+        if not self.hl_yank:
+            self._clear_highlight("hl_yank")
+        if not self.hl_put:
+            self._clear_highlight("hl_put")
 
     def get_editor(self):
         """Get the editor focused."""
@@ -72,17 +81,16 @@ class VimCursor:
 
     def set_editorstack(self, editorstack):
         """Keep commands on their view while the command line has focus."""
-        self._editorstack = weakref.ref(editorstack) if editorstack is not None else None
+        self._editorstack = (
+            weakref.ref(editorstack) if editorstack is not None else None
+        )
 
     def get_editorstack(self):
         """Get the editorstack."""
-        stack = self._editorstack() if self._editorstack is not None else None
+        stack = live_widget(self._editorstack)
         if stack is not None:
-            try:
-                stack.parent()  # A Python wrapper can outlive its Qt object.
-                return stack
-            except RuntimeError:
-                self._editorstack = None
+            return stack
+        self._editorstack = None
         return self.editor_widget.get_current_editorstack()
 
     def get_cursor(self):
@@ -370,31 +378,52 @@ class VimCursor:
         editor.set_extra_selections(key, sels)
 
     def highlight_yank(self, pos_start: int, pos_end: int) -> None:
-        """Highlight yanked text.
+        """Highlight copied text, replacing the previous yank timer."""
+        if self.hl_yank:
+            self._highlight("hl_yank", pos_start, pos_end)
 
-        Args:
-            pos_start: Starting position of the yanked text.
-            pos_end: End position of the yanked text.
-        """
-        if self.hl_yank is False:
-            return
+    def highlight_put(self, pos_start: int, pos_end: int) -> None:
+        """Highlight the actual inserted patch independently from yank."""
+        if self.hl_put:
+            self._highlight("hl_put", pos_start, pos_end)
 
-        cursor = self.get_cursor()
+    def _highlight(self, group, start, end):
+        self._clear_highlight(group)
         editor = self.get_editor()
-
+        if editor is None or start == end:
+            return
         sel = QTextEdit.ExtraSelection()
         sel.format.setForeground(self.yank_fg_color)
         sel.format.setBackground(self.yank_bg_color)
-        sel.cursor = cursor
-
-        sel.cursor.setPosition(pos_start)
-        sel.cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
-        self.set_extra_selections("hl_yank", [sel])
+        sel.cursor = editor.textCursor()
+        sel.cursor.setPosition(start)
+        sel.cursor.setPosition(end, QTextCursor.KeepAnchor)
+        editor.set_extra_selections(group, [sel])
+        reference = weakref.ref(editor)
+        timer = QTimer()
+        timer.setSingleShot(True)
 
         def clear():
-            try:
-                editor.clear_extra_selections("hl_yank")
-            except RuntimeError:
-                pass
+            # A stopped timer cannot erase the selection from a newer put.
+            if self._highlight_timers.get(group, (None,))[0] is timer:
+                self._clear_highlight(group)
 
-        QTimer.singleShot(self.hl_yank_dur, clear)
+        timer.timeout.connect(clear)
+        self._highlight_timers[group] = (timer, reference)
+        timer.start(max(0, self.hl_yank_dur))
+
+    def _clear_highlight(self, group):
+        previous = self._highlight_timers.pop(group, None)
+        if previous is None:
+            return
+        timer, reference = previous
+        timer.stop()
+        timer.deleteLater()
+        editor = live_widget(reference)
+        if editor is not None:
+            editor.clear_extra_selections(group)
+
+    def clear_highlights(self):
+        """Stop callbacks before views or the plugin are destroyed."""
+        for group in tuple(self._highlight_timers):
+            self._clear_highlight(group)
