@@ -495,23 +495,23 @@ def test_gg_cmd_in_v(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
-        ("0\n2\n4\n", ["v", ":", "2", Qt.Key_Return], 4),
-        ("0\n     \n8\n", ["v", ":", "2", Qt.Key_Return], 8),
-        ("0\n\n2\n4\n", ["v", ":", "3", Qt.Key_Return], 5),
+        ("0\n2\n4\n", ["v", ":", "2", Qt.Key_Return], 2),
+        ("0\n     \n8\n", ["v", ":", "2", Qt.Key_Return], 6),
+        ("0\n\n2\n4\n", ["v", ":", "3", Qt.Key_Return], 3),
         (
             "aaa\nbbb\nccc\nddd\neee\n",
             ["j", "v", ":", "3", Qt.Key_Return],
-            16,
+            8,
         ),
         (
             "aaa\nbbb\nccc\nddd\neee\n",
             ["j", "l", "v", ":", "3", Qt.Key_Return],
-            17,
+            8,
         ),
     ],
 )
 def test_colon_num_cmd_in_v(vim_bot, text, cmd_list, cursor_pos):
-    """Test :num command in visual."""
+    """Removing the Visual range makes :num an absolute Normal-mode jump."""
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
@@ -521,6 +521,8 @@ def test_colon_num_cmd_in_v(vim_bot, text, cmd_list, cursor_pos):
     for cmd in cmd_list:
         if isinstance(cmd, str):
             qtbot.keyClicks(cmd_line, cmd)
+            if cmd == ":":
+                cmd_line.setText(":")
         else:
             if cmd == Qt.Key_Escape:
                 cmd_line.esc_pressed()

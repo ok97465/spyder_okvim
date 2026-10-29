@@ -10,6 +10,7 @@ from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
 
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.utils.search_helpers import compile_pattern, iter_block_matches
 
 
 @dataclass(frozen=True)
@@ -74,14 +75,14 @@ class SearchInfo(QObject):
             sel.format.setBackground(self.color_bg)
         self._display_selections()
 
-    def search(self, text, ignorecase=True, forward=True):
+    def search(self, text, ignorecase=True, forward=True, pattern=None):
         """Start a search using one compiled expression for all matches."""
         self.txt_searched = text
         self.ignorecase = ignorecase
         self.forward = forward
-        self._pattern = QRegularExpression(text)
-        if ignorecase:
-            self._pattern.setPatternOptions(QRegularExpression.CaseInsensitiveOption)
+        self._pattern = (
+            pattern if pattern is not None else compile_pattern(text, ignorecase)
+        )
         self._revision = None
         self._highlight_enabled = True
         self.refresh()
@@ -171,9 +172,7 @@ class SearchInfo(QObject):
                 # Match each paragraph, treating NBSP as a space, just like
                 # QTextDocument.find. Qt's iterator advances empty matches
                 # safely and retains UTF-16 offsets and combining marks.
-                matches = self._pattern.globalMatch(block.text().replace("\u00a0", " "))
-                while matches.hasNext():
-                    match = matches.next()
+                for match in iter_block_matches(self._pattern, block.text()):
                     cursor = QTextCursor(document)
                     cursor.setPosition(block.position() + match.capturedStart())
                     cursor.setPosition(

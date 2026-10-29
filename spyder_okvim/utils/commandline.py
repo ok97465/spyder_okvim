@@ -1,12 +1,15 @@
 """On-demand completion of Ex command names and single path arguments."""
 
+from __future__ import annotations
+
 # Standard Libraries
 import os
-import re
 from collections.abc import Iterable
 
 # Third Party Libraries
 from spyder.utils.encoding import is_text_file
+
+from spyder_okvim.utils.ex_parser import ExError, is_substitute, scan_header
 
 
 def completion_candidates(
@@ -22,17 +25,19 @@ def completion_candidates(
     the current path component is scanned, and only when this function is called.
     Paths include text files and directories, excluding ``__pycache__`` folders.
     """
-    if not 0 <= cursor_position <= len(text):
+    if not 0 <= cursor_position <= len(text) or not text.startswith(":"):
         return []
-    match = re.fullmatch(r":\s*(\S*)(\s+)(.*)|:\s*(\S*)", text, re.DOTALL)
-    if match is None:
+    try:
+        header = scan_header(text[1:], incomplete=True)
+    except ExError:
         return []
-    command = match.group(1) if match.group(1) is not None else match.group(4)
-    command_group = 1 if match.group(1) is not None else 4
-    command_start, command_end = match.span(command_group)
-    # Keep built-in lowercase commands first in alphabetical completion even
-    # when named extension commands start with uppercase letters.
-    supported = sorted(set(commands), key=lambda name: (name.casefold(), name))
+    command = header.command
+    command_start, command_end = header.command_start + 1, header.command_end + 1
+    # Keep existing command names first; single-symbol repeat commands need
+    # no abbreviation and follow them when completing an empty prompt.
+    supported = sorted(
+        set(commands), key=lambda name: (not name[0].isalpha(), name.casefold(), name)
+    )
     if command_start <= cursor_position <= command_end:
         prefix = text[command_start:cursor_position]
         return [
@@ -43,10 +48,15 @@ def completion_candidates(
             for item in supported
             if item.startswith(prefix)
         ]
-    if command not in supported or match.group(3) is None:
+    if (
+        command not in supported
+        or is_substitute(command)
+        or command_end == len(text)
+        or not text[command_end].isspace()
+    ):
         return []
 
-    path_start, path_end = match.span(3)
+    path_start, path_end = header.argument_start + 1, len(text)
     if path_start < path_end and text[path_start] in "\"'":
         quote = text[path_start]
         path_start += 1

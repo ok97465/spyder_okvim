@@ -199,11 +199,12 @@ def test_picker_escape_restores_visual_selection_mode_and_focus(picker, selectio
         ("Vj", "한글\n😀\tend\nthird line"),
     ],
 )
-def test_picker_put_uses_captured_visual_context(picker, selection, expected):
+@pytest.mark.parametrize("trigger", ["direct", "leader"])
+def test_picker_put_uses_captured_visual_context(picker, selection, expected, trigger):
     state = picker
     original = state.editor.toPlainText()
     state.bot.keyClicks(state.line, selection)
-    dialog, _ = _open(state, "ex")
+    dialog, _ = _open(state, trigger)
     state.bot.keyClick(dialog.list_viewer, Qt.Key_Return)
     state.bot.waitUntil(lambda: state.widget._yank_picker is None)
     QCoreApplication.processEvents()
@@ -212,6 +213,47 @@ def test_picker_put_uses_captured_visual_context(picker, selection, expected):
     assert state.widget.put_controller.can_cycle()
     state.editor.undo()
     assert state.editor.toPlainText() == original
+
+
+@pytest.mark.parametrize("selection, range_text", [("v3l", ":1,1"), ("Vj", ":1,2")])
+def test_visual_colon_rejects_yanky_range_and_erasing_it_opens_normal_picker(
+    picker, selection, range_text
+):
+    """Visual ':' fixes rows and leaves Visual mode for every Ex command."""
+    state = picker
+    original = state.editor.toPlainText()
+    undo_available = state.editor.document().isUndoAvailable()
+    history = state.status.yank_history.snapshot()
+    state.bot.keyClicks(state.line, selection + ":")
+    assert state.line.text() == range_text
+    assert state.status.is_normal()
+    assert not _selection(state)
+    state.bot.keyClicks(state.line, "YankyRingHistory")
+    state.bot.keyClick(state.line, Qt.Key_Return)
+
+    assert state.widget._yank_picker is None
+    assert "Range is not supported" in state.status.msg_label.text()
+    assert state.editor.toPlainText() == original
+    assert state.editor.document().isUndoAvailable() == undo_available
+    assert state.status.yank_history.snapshot() == history
+
+    state.status.cursor.set_cursor_pos(0)
+    state.bot.keyClicks(state.line, selection + ":")
+    state.line.setText(":YankyRingHistory")
+    state.bot.keyClick(state.line, Qt.Key_Return)
+    request = state.widget._yank_picker
+    assert request is not None
+    assert request.mode == VimState.NORMAL
+    assert request.selection is None
+    dialog = request.dialog
+    dialog.setAttribute(Qt.WA_DeleteOnClose, False)
+    state.bot.addWidget(dialog)
+    position = request.cursor[1] + 1
+    state.bot.keyClick(dialog.list_viewer, Qt.Key_Return)
+    state.bot.waitUntil(lambda: state.widget._yank_picker is None)
+    assert state.editor.toPlainText() == (
+        original[:position] + state.entry.text + original[position:]
+    )
 
 
 @pytest.mark.parametrize("reason", ["clear", "disable", "view", "edit"])

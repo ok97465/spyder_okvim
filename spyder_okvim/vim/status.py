@@ -91,6 +91,8 @@ class VimStatus(QObject):
 
         # search
         self.search = SearchInfo(self.cursor, self)
+        self.last_substitute = None
+        self.substitute_confirm = None
 
         # message
         self.msg_label = msg_label
@@ -171,6 +173,8 @@ class VimStatus(QObject):
 
     def reset_for_test(self):
         """Reset status for test."""
+        if self.substitute_confirm is not None:
+            self.substitute_confirm.cancel()
         self.finish_insert(apply_count=False)
         if self.put_controller is not None:
             self.put_controller.cancel()
@@ -200,6 +204,7 @@ class VimStatus(QObject):
         self.search.close()
         self.search.deleteLater()
         self.search = SearchInfo(self.cursor, self)
+        self.last_substitute = None
 
         # Macro
         self.manager_macro = MacroManager()

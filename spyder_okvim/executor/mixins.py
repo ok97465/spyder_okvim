@@ -30,8 +30,26 @@ class MovementMixin:
     # Generic commands shared by normal, visual and vline executors
     # ------------------------------------------------------------------
     def colon(self, num: int = 1, num_str: str = ""):
-        """Enter ``:`` command-line mode."""
-        self.vim_status.set_message("")
+        """Enter Ex mode, fixing a Visual selection to numeric line addresses."""
+        vs = self.vim_status
+        vs.set_message("")
+        self.executor_colon.pending_range_text = None
+        if vs.vim_state in (VimState.VISUAL, VimState.VLINE):
+            editor = self.get_editor()
+            selections = editor.get_extra_selections("vim_selection")
+            if selections:
+                selection = selections[0].cursor
+                start = selection.selectionStart()
+                end = selection.selectionEnd()
+                # Character selections are half-open. Line selections end at
+                # the last block's end and can include its final empty block.
+                if vs.vim_state == VimState.VISUAL and end > start:
+                    end -= 1
+                document = editor.document()
+                first = document.findBlock(start).blockNumber() + 1
+                last = document.findBlock(end).blockNumber() + 1
+                self.executor_colon.pending_range_text = f":{first},{last}"
+            vs.to_normal()
         return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
 
     # ------------------------------------------------------------------

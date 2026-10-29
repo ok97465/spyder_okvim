@@ -9,6 +9,7 @@ from qtpy.QtGui import QInputMethodEvent
 from qtpy.QtWidgets import QApplication
 
 from spyder_okvim.executor.executor_colon import ExecutorColon
+from spyder_okvim.utils.ex_parser import is_substitute
 
 
 @pytest.fixture
@@ -212,11 +213,14 @@ def test_completing_command_in_middle_preserves_its_argument(completion_bot):
 @pytest.mark.parametrize(
     "filename, prefix", [("한글 보고서.py", "한"), ("😀 보고서.py", "😀")]
 )
-@pytest.mark.parametrize("command", ExecutorColon.SUPPORTED_COMMANDS)
+@pytest.mark.parametrize(
+    "command",
+    [name for name in ExecutorColon.SUPPORTED_COMMANDS if not is_substitute(name)],
+)
 def test_relative_unicode_path_completion_uses_working_directory(
     completion_bot, monkeypatch, tmp_path, filename, prefix, command
 ):
-    """Every command completes from cwd, independently of the active file."""
+    """Path-enabled commands complete from cwd, independently of the active file."""
     _, _, commandline, qtbot, stack = completion_bot
     folder = tmp_path / "working directory"
     folder.mkdir()
@@ -552,3 +556,34 @@ def test_edit_invalid_path_reports_problem_without_opening(
     assert status.is_normal()
     assert commandline.text() == ""
     assert commandline.hasFocus()
+
+
+@pytest.mark.parametrize("prefix", [":", ":%", ":3,8", ":.,$"])
+def test_substitute_header_completion_preserves_range_and_body(completion_bot, prefix):
+    """Only the command span changes, including in an incomplete ranged header."""
+    _, _, commandline, qtbot, _ = completion_bot
+    qtbot.keyClicks(commandline, ":")
+    commandline.setText(prefix + "su/foo/bar/g")
+    commandline.setCursorPosition(len(prefix + "su"))
+
+    qtbot.keyPress(commandline, Qt.Key_Tab)
+
+    assert commandline.text() == prefix + "substitute/foo/bar/g"
+    assert commandline.cursorPosition() == len(prefix + "substitute")
+
+
+@pytest.mark.parametrize(
+    "body", ["s/foo/bar/g", "s/foo bar/new path/g", "substitute#foo#bar#", "s foo"]
+)
+def test_substitute_body_never_queries_paths(completion_bot, monkeypatch, body):
+    """Tab inside a substitute body leaves raw regex and replacement text alone."""
+    _, _, commandline, qtbot, _ = completion_bot
+    scandir = Mock(side_effect=AssertionError("substitute requested file completion"))
+    monkeypatch.setattr(os, "scandir", scandir)
+    qtbot.keyClicks(commandline, ":%" + body)
+
+    qtbot.keyPress(commandline, Qt.Key_Tab)
+    qtbot.keyPress(commandline, Qt.Key_Backtab)
+
+    assert commandline.text() == ":%" + body
+    scandir.assert_not_called()

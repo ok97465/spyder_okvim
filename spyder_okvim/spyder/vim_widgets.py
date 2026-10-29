@@ -504,6 +504,13 @@ class VimLineEdit(QLineEdit):
 
     def event(self, event) -> bool:
         """Keep Tab in the prompt instead of letting QWidget move focus."""
+        if self.vim_status.substitute_confirm is not None:
+            if event.type() == QEvent.ShortcutOverride:
+                event.accept()
+                return True
+            if event.type() == QEvent.KeyPress:
+                self.keyPressEvent(event)
+                return True
         if (
             event.type() == QEvent.ShortcutOverride
             and event.modifiers() == Qt.ControlModifier
@@ -570,6 +577,18 @@ class VimLineEdit(QLineEdit):
         """Process a key before synchronizing hints at the outer input boundary."""
         if not self.testAttribute(Qt.WA_InputMethodEnabled):
             e = latin_command_key(e)
+        confirmation = self.vim_status.substitute_confirm
+        if confirmation is not None:
+            if e.key() == Qt.Key_Escape or (
+                e.key() == Qt.Key_C and e.modifiers() == Qt.ControlModifier
+            ):
+                self.esc_pressed()
+            elif e.modifiers() in (Qt.NoModifier, Qt.ShiftModifier):
+                confirmation(e.text())
+            self.clear()
+            self.sync_input_method()
+            e.accept()
+            return
         self.vim_status.manager_macro.add_vim_keyevent(e)
 
         key = e.key()
@@ -636,6 +655,7 @@ class VimLineEdit(QLineEdit):
 
     def esc_pressed(self) -> None:
         """Clear state."""
+        self.vim_widget.cancel_substitute()
         self.vim_widget.put_controller.cancel()
         self.vim_widget.sig_command_cancelled.emit()
         self.vim_status.input_cmd.clear()
@@ -664,6 +684,7 @@ class VimLineEdit(QLineEdit):
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
+        self.vim_widget.cancel_substitute()
         if self.vim_widget._yank_picker is not None:
             super().focusOutEvent(event)
             return
@@ -849,6 +870,12 @@ class VimWidget(QWidget):
         if picker is not None:
             picker.cancel()
 
+    def cancel_substitute(self):
+        """End a pending confirmation without undoing accepted replacements."""
+        confirmation = self.vim_status.substitute_confirm
+        if confirmation is not None:
+            confirmation.cancel()
+
     def show_yank_history(self):
         """Pick one immutable history entry against a captured editor context."""
         status = self.vim_status
@@ -970,6 +997,13 @@ class VimWidget(QWidget):
             self.commandline.sync_input_method()
             return
 
+        confirmation = self.vim_status.substitute_confirm
+        if confirmation is not None:
+            confirmation(txt)
+            self.commandline.clear()
+            self.commandline.sync_input_method()
+            return
+
         if not (
             self.vim_status.is_normal()
             and self.vim_status.sub_mode is None
@@ -997,6 +1031,15 @@ class VimWidget(QWidget):
         if executor(txt):
             self.commandline.clear()
 
+        # Visual ':' captures rows before leaving Visual mode. Install its
+        # executor first: setText emits textChanged synchronously and otherwise
+        # re-enters the previous executor with the numeric range.
+        sub_mode = self.vim_status.sub_mode
+        pending_range = getattr(sub_mode, "pending_range_text", None)
+        if pending_range is not None:
+            sub_mode.pending_range_text = None
+            self.commandline.setText(pending_range)
+
         self.commandline.sync_input_method()
 
         if self.vim_status.manager_macro.reg_name_for_execute:
@@ -1016,6 +1059,7 @@ class VimWidget(QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        self.cancel_substitute()
         self.cancel_yank_picker()
         self.put_controller.cleanup()
         self.which_key.cleanup()

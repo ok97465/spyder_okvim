@@ -5,13 +5,27 @@
 import os.path as osp
 
 # Third Party Libraries
+from qtpy.QtGui import QTextCursor
 from qtpy.QtWidgets import QDialog
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
+from spyder_okvim.utils.ex_parser import (
+    ExError,
+    is_substitute,
+    resolve_range,
+    resolve_substitute,
+    scan_header,
+)
 from spyder_okvim.utils.jump_dialog import JumpListDialog
-from spyder_okvim.utils.qtcompat import exec_dialog
 from spyder_okvim.utils.mark_dialog import MarkListDialog
+from spyder_okvim.utils.qtcompat import exec_dialog
+from spyder_okvim.utils.search_helpers import compile_pattern, resolve_ignorecase
+from spyder_okvim.utils.substitute import (
+    build_substitution_plan,
+    tokenize_replacement,
+)
+from spyder_okvim.utils.substitute_confirm import SubstituteConfirm
 from spyder_okvim.vim import VimState
 
 
@@ -20,27 +34,34 @@ class ExecutorColon(ExecutorSubBase):
 
     accepts_input_method = True
     history_kind = "ex"
-    SUPPORTED_COMMANDS = (
-        "e",
-        "w",
-        "q",
-        "q!",
-        "wq",
-        "n",
-        "marks",
-        "jumps",
-        "vs",
-        "vsp",
-        "vsplit",
-        "YankyRingHistory",
-        "YankyClearHistory",
-    )
+    COMMANDS = {
+        "e": "e",
+        "w": "w",
+        "q": "q",
+        "q!": "qexclamation",
+        "wq": "wq",
+        "n": "n",
+        "marks": "marks",
+        "jumps": "jumps",
+        "vs": "vs",
+        "vsp": "vs",
+        "vsplit": "vs",
+        "YankyRingHistory": "YankyRingHistory",
+        "YankyClearHistory": "YankyClearHistory",
+        "s": "substitute",
+        "substitute": "substitute",
+        "&": "substitute",
+        "&&": "substitute",
+        "~": "substitute",
+    }
+    SUPPORTED_COMMANDS = tuple(COMMANDS)
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
         self.editor_widget = vim_status.editor_widget
+        self.pending_range_text = None
 
     def __call__(self, txt: str) -> bool:
         """Parse ``txt`` and execute the corresponding ex command.
@@ -52,6 +73,8 @@ class ExecutorColon(ExecutorSubBase):
             if return is True, Clear command line.
 
         """
+        if not txt:
+            return False
         if txt[-1] == "\b":
             cmd_line = self.vim_status.cmd_line
             if len(txt) <= 2:
@@ -70,30 +93,161 @@ class ExecutorColon(ExecutorSubBase):
         # So we need only txt[1:].
         self.update_input_cmd_info(None, None, txt[1:])
 
-        txt = txt[1:-1]  # remove :, \r
-        cmd = txt.split(None, 1)
-        if not cmd:
-            self.vim_status.sub_mode = None
-            return True
-        args = cmd[1] if len(cmd) > 1 else ""
-        cmd = cmd[0]
-
-        if cmd.isdigit():
-            self.goto_line(int(cmd))
-        else:
-            for symbol, text in self.SYMBOLS_REPLACEMENT.items():
-                cmd = cmd.replace(symbol, text)
-
-            try:
-                method = self.__getattribute__(cmd)
-            except AttributeError:
-                print("unknown command", cmd)
-            else:
-                method(args)
-
-        self.vim_status.sub_mode = None
+        try:
+            header = scan_header(txt[1:-1])
+            if header.line_number is not None:
+                self.goto_line(header.line_number)
+            elif is_substitute(header.command):
+                self.substitute(header)
+            elif header.command:
+                method = self.COMMANDS.get(header.command)
+                if method is None:
+                    raise ExError(f"Unknown command: {header.command}")
+                if header.explicit_range:
+                    raise ExError(f"Range is not supported for :{header.command}")
+                getattr(self, method)(header.argument)
+            elif header.explicit_range:
+                raise ExError("Specify a command after the range")
+        except ValueError as error:
+            widget = self.vim_status.cmd_line.vim_widget
+            if widget.is_playing_macro:
+                widget.cancel_macro()
+            self.vim_status.set_message(str(error))
+        finally:
+            if self.vim_status.sub_mode is self:
+                self.vim_status.sub_mode = None
 
         return True
+
+    def substitute(self, header):
+        """Validate and calculate all replacements before editing the document."""
+        vs = self.vim_status
+        editor = self.get_editor()
+        if editor is None:
+            raise ExError("No active editor")
+        document = editor.document()
+        cursor = self.get_cursor()
+        origin_block, origin_column = cursor.block(), cursor.positionInBlock()
+        current_line = cursor.blockNumber()
+        first, last = resolve_range(header, current_line, document.blockCount())
+        spec = resolve_substitute(header, vs.last_substitute, vs.search.txt_searched)
+        if spec.count is not None:
+            first, last = last, min(last + spec.count - 1, document.blockCount() - 1)
+        text = spec.pattern
+        override = next(
+            (flag == "i" for flag in reversed(spec.flags) if flag in "iI"), None
+        )
+        ignorecase = resolve_ignorecase(text, override)
+        pattern = compile_pattern(text, ignorecase)
+        if not pattern.isValid():
+            raise ExError(f"Invalid pattern: {pattern.errorString()}")
+        count_only = "n" in spec.flags
+        confirm = "c" in spec.flags and not count_only
+        if confirm and vs.cmd_line.vim_widget.is_playing_macro:
+            raise ExError("Confirmation substitutions are not supported in macros")
+        if editor.isReadOnly() and not count_only:
+            raise ExError("Document is read-only")
+        if spec.replacement.startswith(r"\="):
+            raise ExError("Expression replacements are not supported")
+        tokens = (
+            () if count_only else tokenize_replacement(spec.replacement, spec.delimiter)
+        )
+        plan = build_substitution_plan(
+            document,
+            first,
+            last,
+            pattern,
+            tokens,
+            global_matches="g" in spec.flags,
+            count_only=count_only,
+            confirm=confirm,
+        )
+        # Planning and applying run synchronously without processing UI events.
+        if plan.edits and not confirm:
+            self._apply_substitution(editor, plan.edits)
+        if plan.match_count and not confirm:
+            target_line = current_line if count_only else plan.last_line
+            block = document.findBlockByNumber(target_line)
+            line = block.text()
+            position = block.position() + len(line) - len(line.lstrip(" \t"))
+            vs.cursor.set_cursor_pos_without_end(position)
+            self._record_substitute_jump(origin_block, origin_column)
+
+        # i/I affect this substitution only; n/N use the normal search options.
+        search_ignorecase = resolve_ignorecase(text)
+        vs.search.search(
+            text,
+            ignorecase=search_ignorecase,
+            forward=vs.search.forward,
+            pattern=pattern if search_ignorecase == ignorecase else None,
+        )
+        vs.last_substitute = spec
+        if confirm and plan.match_count:
+            session = SubstituteConfirm(
+                vs,
+                editor,
+                plan.edits,
+                lambda session: self._finish_confirmation(
+                    session, origin_block, origin_column
+                ),
+            )
+            vs.substitute_confirm = vs.sub_mode = session
+            session.start()
+            return
+        if not plan.match_count:
+            if "e" not in spec.flags:
+                raise ExError(f"Pattern not found: {text}")
+            vs.set_message("")
+        elif count_only:
+            vs.set_message(
+                f"{plan.match_count} matches on {plan.line_count} lines (count only)"
+            )
+        else:
+            suffix = "" if plan.edits else " (no changes)"
+            vs.set_message(
+                f"{plan.match_count} substitutions on {plan.line_count} lines{suffix}"
+            )
+
+    def _record_substitute_jump(self, origin_block, origin_column):
+        """Keep the origin's line and column as substitutions change offsets."""
+        vs = self.vim_status
+        location = vs.get_current_location()
+        if location is not None:
+            column = min(origin_column, max(0, origin_block.length() - 2))
+            layout = origin_block.layout()
+            if column and not layout.isValidCursorPosition(column):
+                column = layout.previousCursorPosition(column)
+            vs.jump_list.push(location[0], origin_block.position() + column)
+            vs.push_jump()
+
+    def _finish_confirmation(self, session, origin_block, origin_column):
+        """Report approved targets after the session releases its input hooks."""
+        vs = self.vim_status
+        if session.valid():
+            self._record_substitute_jump(origin_block, origin_column)
+            vs.search.refresh()
+        vs.set_message(
+            f"{session.replacement_count} substitutions on {session.line_count} lines"
+        )
+
+    @staticmethod
+    def _apply_substitution(editor, edits):
+        """Apply the ordered edits backwards as a single undoable operation."""
+        cursor = QTextCursor(editor.document())
+        previous_skip_rstrip = editor.skip_rstrip
+        editor.skip_rstrip = True
+        try:
+            cursor.beginEditBlock()
+            try:
+                for start, end, replacement in reversed(edits):
+                    cursor.setPosition(start)
+                    cursor.setPosition(end, QTextCursor.KeepAnchor)
+                    cursor.insertText(replacement)
+            finally:
+                cursor.endEditBlock()
+        finally:
+            editor.skip_rstrip = previous_skip_rstrip
+        editor.document_did_change()
 
     def e(self, arg=""):
         """Open an existing path relative to the current working directory."""

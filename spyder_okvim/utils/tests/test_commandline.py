@@ -197,9 +197,7 @@ def test_special_files_are_not_opened_for_text_detection(tmp_path, monkeypatch):
     def unexpected_read(path):
         pytest.fail("Special files must not be opened to detect text")
 
-    monkeypatch.setattr(
-        "spyder_okvim.utils.commandline.is_text_file", unexpected_read
-    )
+    monkeypatch.setattr("spyder_okvim.utils.commandline.is_text_file", unexpected_read)
     assert complete(":e ", tmp_path) == []
 
 
@@ -212,3 +210,41 @@ def test_missing_or_unreadable_directory(tmp_path, monkeypatch):
 
     monkeypatch.setattr(os, "scandir", denied)
     assert complete(":w ", tmp_path) == []
+
+
+@pytest.mark.parametrize("prefix", [":", ":%", ":3,8", ":.,$"])
+def test_substitute_name_completion_preserves_range_and_body(tmp_path, prefix):
+    commands = COMMANDS + ("s", "substitute")
+    text = prefix + "su/foo/bar/g"
+    position = len(prefix + "su")
+    expected = prefix + "substitute/foo/bar/g"
+    assert completion_candidates(text, position, commands, str(tmp_path)) == [
+        (expected, len(prefix + "substitute"))
+    ]
+
+
+@pytest.mark.parametrize(
+    "body", ["/foo/bar/g", "/foo name/bar", " foo", "#old/path#new/path#g"]
+)
+@pytest.mark.parametrize("command", ["s", "su", "substit", "substitute"])
+def test_substitute_body_never_scans_files(tmp_path, monkeypatch, body, command):
+    def unexpected_scan(_):
+        pytest.fail("Substitution bodies must not request filesystem completion")
+
+    monkeypatch.setattr(os, "scandir", unexpected_scan)
+    text = ":%" + command + body
+    assert (
+        completion_candidates(
+            text, len(text), COMMANDS + ("s", "substitute"), str(tmp_path)
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize("prefix", [":s", ":%s", ":3,8s"])
+def test_bare_substitute_name_is_still_completable(tmp_path, prefix):
+    commands = COMMANDS + ("s", "substitute")
+    assert completion_candidates(prefix, len(prefix), commands, str(tmp_path)) == [
+        (prefix, len(prefix)),
+        (prefix[:-1] + "substitute", len(prefix) + len("ubstitute")),
+    ]

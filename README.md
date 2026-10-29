@@ -159,6 +159,47 @@ The default leader key is Space. Press Space then `d` to debug a cell, or
 Space then Shift+`d` to debug the visual selection (the current line when
 nothing is selected).
 
+## Search and replace
+
+Use `:s` or `:substitute` to replace
+matches in the current file. Each changing command is one undo step (`u`),
+with redo through `Ctrl+r`.
+
+| Command | Result |
+| --- | --- |
+| `:s/foo/bar/` | Replace the first match on the current line |
+| `:%s/foo/bar/g` | Replace every match on every line |
+| `:3,8s/foo/bar/g` | Replace within lines 3 through 8, inclusive |
+| `:.,$s/foo/bar/g` | Replace from the current line through the last line |
+| `:s#old/path#new/path#g` | Use an alternate delimiter |
+| `:s/foo//g` | Delete matches |
+| `:s/foo` | Delete the first match on the current line |
+| `:s//bar/g` | Reuse the last confirmed search pattern |
+| `:s/foo/bar/g 3` | Replace on the current line and the next two lines |
+| `:%s/(foo)+/[\1]/g` | Use Qt capture groups and replacement references |
+| `:%s/foo/bar/gn` | Count matches without changing text |
+| `:%s/foo/bar/ge` | Replace all matches, allowing macros to continue if none are found |
+| `:%s/foo/bar/gc` | Confirm each replacement |
+| `:s` or `:&` | Repeat the last substitution on the current line, without flags |
+| `:&&` | Repeat the last substitution, keeping its flags |
+| `:~` | Use the latest search pattern with the previous replacement |
+
+During confirmation, use `y` to replace, `n` to skip, `a` to replace all remaining
+matches, `l` to replace once and stop, or `q`/Escape to stop. Approved changes
+remain one undo step. `Ctrl+o` and `Ctrl+i` navigate between the substitution's
+origin and destination. Confirmation cannot be replayed in macros, and Vim's
+confirmation scrolling keys (`Ctrl+e`/`Ctrl+y`) are not supported.
+
+Patterns use the same **Qt regular expressions** as `/` search, rather than
+Vim's pattern syntax: use `(group)` and `+`, not `\(group\)` and `\+`.
+Replacements support `&`, `\0`–`\9`, `\&`, `\\`, `\t` and `\b`; missing captures
+expand to empty text and an unrecognized escape such as `\z` inserts `z`.
+Line breaks, case conversion, expression replacements (`\=`), and previous
+replacement expansion (`~` within replacement text) are not supported.
+Use numeric, `.`, `$`, or `%` line addresses; relative, mark, and search
+addresses are not supported. Unlike Vim, identical replacements do not add an
+undo step. A plain `~` in a replacement is currently literal.
+
 ## Vim Surround
 
 - Supported surroundings: '"()[]{}bB
