@@ -103,7 +103,7 @@ def test_guide_yields_to_overlay_then_returns_for_pattern_input(preview):
     enter_command(state, ":%s/foo")
     result(state)
     assert state.controller.guide_popup.isVisible()
-    enter_command(state, ":%s/foo/bar/g")
+    enter_command(state, ":%s/foo/bar")
     assert overlay_rows(state)
     assert not state.controller.guide_popup.isVisible()
     assert CONF.get(CONF_SECTION, "substitute_guide_enabled") is True
@@ -112,6 +112,66 @@ def test_guide_yields_to_overlay_then_returns_for_pattern_input(preview):
     assert_overlay_cleared(state)
     assert state.controller.guide_popup.isVisible()
     assert CONF.get(CONF_SECTION, "substitute_guide_enabled") is True
+
+
+@pytest.mark.parametrize("input_method", ["typing", "paste"])
+def test_final_delimiter_shows_options_before_and_after_preview(preview, input_method):
+    state = preview
+    enter_command(state, ":%s/foo/bar")
+    assert overlay_rows(state)
+    source = state.editor.toPlainText()
+    state.preview._timer.setInterval(150)
+    if input_method == "typing":
+        state.qtbot.keyClicks(state.line, "/")
+    else:
+        clipboard = QApplication.clipboard()
+        previous_clipboard = clipboard.text()
+        try:
+            clipboard.setText("/")
+            state.line.paste()
+        finally:
+            clipboard.setText(previous_clipboard)
+
+    assert state.line.text() == ":%s/foo/bar/"
+    assert state.preview._timer.isActive()
+    popup = state.controller.guide_popup
+    assert popup is not None and popup.isVisible()
+    assert popup.header.text() == "Substitution options"
+    assert popup.options_widget.isVisible()
+    assert overlay_rows(state)
+    assert popup.isVisible()
+    assert state.preview.overlay.widget.isVisible()
+    assert state.line.hasFocus()
+    assert state.editor.toPlainText() == source
+
+    state.qtbot.keyPress(state.line, Qt.Key_Backspace)
+    assert not popup.isVisible()
+    state.qtbot.keyClicks(state.line, "/g")
+    assert popup.isVisible()
+    assert popup.header.text() == "Substitution options"
+    assert popup.effective_label.text() == "Currently applied: g"
+    assert overlay_rows(state)
+    assert popup.isVisible()
+
+
+@pytest.mark.parametrize(
+    "tail, title",
+    [
+        ("g 3", "Line count"),
+        ("unsupported", "Unsupported substitution option"),
+    ],
+)
+def test_trailing_help_remains_visible_with_preview(preview, tail, title):
+    state = preview
+    enter_command(state, ":%s/foo/bar/")
+    assert overlay_rows(state)
+    state.qtbot.keyClicks(state.line, tail)
+    popup = state.controller.guide_popup
+    assert popup is not None and popup.isVisible()
+    assert popup.header.text() == title
+    QCoreApplication.processEvents()
+    assert popup.isVisible()
+    assert state.line.hasFocus()
 
 
 def test_guide_stays_hidden_while_closed_pattern_waits_for_debounce(preview):

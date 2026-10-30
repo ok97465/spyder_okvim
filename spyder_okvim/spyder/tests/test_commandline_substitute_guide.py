@@ -62,12 +62,14 @@ def test_stages_forward_backspace_and_middle_cursor(guide):
     assert_stage(state, "Search pattern")
     popup = state.controller.guide_popup
     state.qtbot.keyClicks(state.line, "foo/")
-    assert_stage(state, "Replacement")
+    assert not guide_shown(state)
+    assert not shown(state)
     state.qtbot.keyClicks(state.line, "bar/")
     assert_stage(state, "Substitution options")
     assert state.controller.guide_popup is popup
     state.qtbot.keyPress(state.line, Qt.Key_Backspace)
-    assert_stage(state, "Replacement")
+    assert not guide_shown(state)
+    assert not shown(state)
     for _ in range(4):
         state.qtbot.keyPress(state.line, Qt.Key_Backspace)
     assert_stage(state, "Search pattern")
@@ -75,7 +77,8 @@ def test_stages_forward_backspace_and_middle_cursor(guide):
     state.line.setCursorPosition(4)
     assert_stage(state, "Search pattern")
     state.line.setCursorPosition(7)
-    assert_stage(state, "Replacement")
+    assert not guide_shown(state)
+    assert not shown(state)
     state.line.setCursorPosition(11)
     assert_stage(state, "Substitution options")
     state.line.setCursorPosition(2)
@@ -92,7 +95,8 @@ def test_paste_delete_and_utf16_cursor(guide):
     text = state.line.text()
     replacement_start = text.index("/바꿈") + 1
     state.line.setCursorPosition(len(text[:replacement_start].encode("utf-16-le")) // 2)
-    assert_stage(state, "Replacement")
+    assert not guide_shown(state)
+    assert not shown(state)
     state.line.setCursorPosition(len(":s/😀한글".encode("utf-16-le")) // 2)
     assert_stage(state, "Search pattern")
     state.qtbot.keyPress(state.line, Qt.Key_Delete)
@@ -112,6 +116,31 @@ def test_clipboard_paste_selects_stage_from_complete_input(guide):
         assert_stage(state, "Substitution options")
     finally:
         clipboard.setText(previous)
+
+
+@pytest.mark.parametrize("preview_enabled", [False, True])
+def test_replacement_stage_has_no_guide_or_history_popup(guide, preview_enabled):
+    state = guide
+    CONF.set(CONF_SECTION, "substitute_preview_enabled", preview_enabled)
+    state.widget.apply_settings()
+    state.line.histories["ex"][:] = ["s/alpha/new/g"]
+    state.qtbot.keyClicks(state.line, ":s/alpha/")
+    assert not guide_shown(state)
+    assert not shown(state)
+    assert state.controller.candidates == []
+    state.qtbot.keyClicks(state.line, "new")
+    if preview_enabled:
+        state.qtbot.waitUntil(lambda: state.widget.substitute_preview.has_overlay)
+    QCoreApplication.processEvents()
+    assert not guide_shown(state)
+    assert not shown(state)
+    assert state.controller.candidates == []
+    assert state.line.hasFocus()
+    state.qtbot.keyClicks(state.line, "/")
+    assert_stage(state, "Substitution options")
+    state.line.setCursorPosition(state.line.text().index("new"))
+    assert not guide_shown(state)
+    assert not shown(state)
 
 
 def test_guide_is_read_only_and_does_not_search(guide, monkeypatch):
@@ -170,7 +199,7 @@ def test_selected_history_cannot_intercept_guide_enter(guide):
 def test_unclosed_substitutions_keep_deletion_execution(guide, command):
     state = guide
     state.qtbot.keyClicks(state.line, command)
-    assert guide_shown(state)
+    assert guide_shown(state) is (command == ":s/alpha")
     state.qtbot.keyPress(state.line, Qt.Key_Return)
     assert state.editor.toPlainText().startswith(" beta\n")
     assert not guide_shown(state)
@@ -243,7 +272,10 @@ def test_ime_preedit_hides_and_commit_restores_current_stage(guide):
     assert not guide_shown(state)
     send_ime(state, commit="글/")
     assert state.line.text() == ":s/한글/"
-    assert_stage(state, "Replacement")
+    assert not guide_shown(state)
+    assert not shown(state)
+    send_ime(state, commit="새글/")
+    assert_stage(state, "Substitution options")
 
 
 @pytest.mark.parametrize("suppression", ["recording", "playback", "dot"])
@@ -348,11 +380,11 @@ def test_nested_input_and_cleanup_release_both_popups(guide):
     assert popup.isVisible()
     with state.widget.input_processing():
         assert not popup.isVisible()
-        state.line.setText(":s/alpha/")
+        state.line.setText(":s/alpha/new/")
         QCoreApplication.processEvents()
         assert not popup.isVisible()
     assert popup.isVisible()
-    assert popup.header.text() == "Replacement"
+    assert popup.header.text() == "Substitution options"
     controller.cleanup()
     controller.cleanup()
     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
@@ -367,9 +399,9 @@ def test_nested_input_and_cleanup_release_both_popups(guide):
 
 def test_wheel_over_guide_scrolls_help_without_changing_input(guide, monkeypatch):
     state = guide
-    state.qtbot.keyClicks(state.line, ":s/alpha/new/")
+    state.qtbot.keyClicks(state.line, ":s/")
     popup = state.controller.guide_popup
-    monkeypatch.setattr(popup, "MAX_WIDTH", 160)
+    monkeypatch.setattr(popup, "MAX_WIDTH", 90)
     popup.update_geometry()
     QCoreApplication.processEvents()
     scrollbar = popup.scroll_area.verticalScrollBar()

@@ -16,13 +16,11 @@ from qtpy.QtWidgets import (
 from spyder.utils.palette import SpyderPalette
 
 SUBSTITUTION_OPTIONS = (
-    ("g", "Replace all matches in each line; otherwise only the first"),
-    ("c", "Confirm each replacement; n takes precedence"),
-    ("i", "Ignore case; the last i or I wins"),
-    ("I", "Match case; the last i or I wins"),
-    ("n", "Count matches without replacing; g controls which matches count"),
-    ("e", "Hide the no-match error only"),
-    ("&", "Reuse the previous substitution options; allowed first only"),
+    ("g", "Replace all"),
+    ("c", "Confirm"),
+    ("i", "Ignore case"),
+    ("I", "Match case"),
+    ("n", "Count"),
 )
 
 
@@ -116,23 +114,20 @@ class SubstituteGuidePopup(QFrame):
         if context.stage == "pattern":
             title = "Search pattern"
             explanation = (
-                "Use Qt regular expressions. An empty pattern uses the last "
-                f"confirmed search. Next {delimiter} starts the replacement."
-            )
-        elif context.stage == "replacement":
-            title = "Replacement"
-            explanation = (
-                "An empty replacement deletes matches. "
-                r"& = whole match; \1–\9 = capture groups; \& = literal &; "
-                f"\\{delimiter} = literal {delimiter}. "
-                f"Next {delimiter} starts the options."
+                ". = any character;\n"
+                "\\d = digit; \\w = word; \\s = whitespace\n"
+                "[abc] = one of a, b, c; [a-z] = character range\n"
+                "[^abc] = any character except a, b, c\n"
+                "^ = start of line; $ = end of line; "
+                r"\b = word boundary"
+                "\n"
+                "* = zero or more; + = one or more; ? = zero or one\n"
+                "{n,m} = n to m repetitions\n"
+                "(...) = capture group; a|b = a or b"
             )
         elif context.stage == "flags":
             title = "Substitution options"
-            explanation = (
-                "Without g, process the first match on each line. "
-                "Repeated g, c and e toggle their option. The last i or I wins."
-            )
+            explanation = ""
         elif context.stage == "count":
             title = "Line count"
             explanation = (
@@ -146,7 +141,9 @@ class SubstituteGuidePopup(QFrame):
                 f"Unsupported option or trailing input: {context.unsupported}. "
                 "The command executor will validate the input."
             )
-        if context.addresses == ("%",):
+        if context.stage in ("pattern", "flags"):
+            range_text = ""
+        elif context.addresses == ("%",):
             range_text = "Range: % selects the entire file."
         elif context.addresses:
             range_text = "Range: the specified lines. % selects the entire file."
@@ -157,28 +154,14 @@ class SubstituteGuidePopup(QFrame):
         effective_text = ""
         notes = []
         if show_options:
-            effective_text = "Currently applied: " + (context.effective_flags or "none")
-            if "n" in context.effective_flags:
-                target = (
-                    "every match"
-                    if "g" in context.effective_flags
-                    else "the first match"
-                )
-                notes.append(
-                    f"n counts {target} on each line and takes priority over c."
+            if context.raw_flags:
+                effective_text = "Currently applied: " + (
+                    context.effective_flags or "none"
                 )
             if context.missing_previous:
-                notes.append(
-                    "& needs a previous substitution; no previous record is available."
-                )
+                notes.append("&: no previous substitution.")
             if "r" in context.raw_flags:
-                notes.append(
-                    "r selects the search pattern for repeated substitutions; "
-                    "it has no effect with an explicit pattern."
-                )
-            notes.append(
-                "A number after the options specifies how many lines to process."
-            )
+                notes.append("r has no effect with an explicit pattern.")
         note = "\n".join(notes)
         content = title, explanation, range_text, show_options, effective_text, note
         if content == self._content:
@@ -227,6 +210,39 @@ class SubstituteGuidePopup(QFrame):
                 label.setFont(font)
         return font_changed or stylesheet_changed
 
+    def _preferred_text_width(self):
+        """Fit visible references without relying on ignored size hints."""
+
+        def text_width(label):
+            metrics = label.fontMetrics()
+            return max(
+                (metrics.horizontalAdvance(line) for line in label.text().splitlines()),
+                default=0,
+            )
+
+        width = max(
+            text_width(label)
+            for label in (
+                self.header,
+                self.description,
+                self.range_label,
+                self.effective_label,
+                self.note,
+            )
+        )
+        if not self.options_widget.isHidden():
+            flag_width = max(text_width(flag) for flag, _ in self.option_labels)
+            description_width = max(
+                text_width(description) for _, description in self.option_labels
+            )
+            width = max(
+                width,
+                flag_width
+                + self.options_widget.layout().horizontalSpacing()
+                + description_width,
+            )
+        return width + 2
+
     def update_geometry(self):
         """Wrap and scroll help within the active viewport's lower edge."""
         self.ensurePolished()
@@ -235,11 +251,15 @@ class SubstituteGuidePopup(QFrame):
         margin = min(8, max(0, (min(width, height) - 1) // 2))
         available_width = max(1, width - 2 * margin)
         available_height = max(1, height - 2 * margin)
-        popup_width = min(available_width, self.MAX_WIDTH)
         margins = self.layout().contentsMargins() + self.contentsMargins()
         horizontal_padding = margins.left() + margins.right()
         vertical_padding = margins.top() + margins.bottom()
         scrollbar_width = self.scroll_area.verticalScrollBar().sizeHint().width()
+        popup_width = min(
+            available_width,
+            self.MAX_WIDTH,
+            self._preferred_text_width() + horizontal_padding + scrollbar_width,
+        )
         text_width = max(1, popup_width - horizontal_padding - scrollbar_width)
         content_layout = self.content_widget.layout()
         content_layout.invalidate()

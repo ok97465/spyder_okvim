@@ -14,8 +14,9 @@ Set `SPYDER_OKVIM_PREVIEW_SCREENSHOT=/tmp/overlay.png` to capture the editor.
 The command prints JSON with calculation, publication and paint timings and
 retained buffer sizes. Timing is informational; source preservation, absence of
 a separate result panel, cancellation and stale-job cleanup are asserted. The
-substitution guide keeps its default enabled setting and yields while replacement
-results are drawn, leaving the editor preview unobscured.
+substitution guide keeps its default enabled setting and stays hidden while
+entering replacement text. After the closing delimiter, option help appears alongside
+the replacement preview.
 
 ## Environment and sample
 

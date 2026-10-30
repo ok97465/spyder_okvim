@@ -57,9 +57,8 @@ def show(popup, command, previous=None):
 @pytest.mark.parametrize(
     "command, title, description",
     [
-        (":s/", "Search pattern", "Qt regular expressions"),
-        (":s/foo/", "Replacement", "empty replacement deletes"),
-        (":s/foo/bar/", "Substitution options", "first match on each line"),
+        (":s/", "Search pattern", r"\d = digit"),
+        (":s/foo/bar/", "Substitution options", ""),
         (":s/foo/bar/g 3", "Line count", "number of lines"),
     ],
 )
@@ -92,21 +91,21 @@ def test_stage_help_is_plain_text_and_keeps_input_focus(
         assert widget.focusPolicy() == Qt.NoFocus
 
 
-def test_pattern_and_replacement_explain_search_history_and_delimiter(guide_panel):
+def test_pattern_shows_expression_references(guide_panel):
     _viewport, _line, popup = guide_panel
     show(popup, ":s#old/path")
-    assert "last confirmed search" in popup.description.text()
-    assert "Next #" in popup.description.text()
-    assert "current line" in popup.range_label.text()
-    show(popup, ":%s#old/path#new/path")
-    assert r"\1–\9" in popup.description.text()
-    assert r"\& = literal &" in popup.description.text()
-    assert r"\# = literal #" in popup.description.text()
-    assert "& = whole match" in popup.description.text()
+    assert "[a-z] = character range" in popup.description.text()
+    assert r"\b = word boundary" in popup.description.text()
+    assert "+ = one or more" in popup.description.text()
+    assert "(...) = capture group; a|b = a or b" in popup.description.text()
+    assert "Qt" not in popup.description.text()
+    assert "Next #" not in popup.description.text()
+    assert not popup.range_label.isVisible()
+    show(popup, ":%s#old/path#new/path#g 3")
     assert "% selects the entire file" in popup.range_label.text()
 
 
-def test_option_rows_keep_every_supported_option_and_show_effective_values(guide_panel):
+def test_basic_option_rows_show_effective_values(guide_panel):
     _viewport, _line, popup = guide_panel
     previous = SubstituteSpec("foo", "bar", "/", "gci")
     show(popup, ":s/foo/bar/&gInr", previous)
@@ -116,18 +115,32 @@ def test_option_rows_keep_every_supported_option_and_show_effective_values(guide
         flag for flag, _description in SUBSTITUTION_OPTIONS
     )
     assert "Currently applied: In" == popup.effective_label.text()
-    assert "priority over c" in popup.note.text()
-    assert "first match" in popup.note.text()
-    assert "r selects" in popup.note.text()
     assert "no effect with an explicit pattern" in popup.note.text()
-    assert "number after the options" in popup.note.text()
     assert "r" not in tuple(label.text() for label, _ in popup.option_labels)
     show(popup, ":s/foo/bar/ggccee")
     assert popup.effective_label.text() == "Currently applied: none"
     assert len(popup.option_labels) == len(SUBSTITUTION_OPTIONS)
 
 
-def test_option_descriptions_match_the_execution_parser():
+def test_default_options_show_only_compact_reference_and_fit_content(guide_panel):
+    _viewport, _line, popup = guide_panel
+    show(popup, ":s/")
+    pattern_width = popup.width()
+    show(popup, ":s/foo/bar/")
+    for label in (
+        popup.description,
+        popup.range_label,
+        popup.effective_label,
+        popup.note,
+    ):
+        assert not label.isVisible()
+    assert popup.width() < 400
+    assert popup.width() < pattern_width
+    assert popup.height() < 240
+    assert popup.scroll_area.verticalScrollBar().maximum() == 0
+
+
+def test_basic_option_descriptions_match_the_execution_parser():
     described = {flag for flag, description in SUBSTITUTION_OPTIONS if description}
     accepted = set()
     for flag in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&#":
@@ -136,13 +149,13 @@ def test_option_descriptions_match_the_execution_parser():
         except ExError:
             continue
         accepted.add(flag)
-    assert described == accepted - {"r"}
+    assert described == accepted - {"r", "e", "&"}
 
 
 def test_missing_previous_options_and_literal_unsupported_input(guide_panel):
     _viewport, _line, popup = guide_panel
     show(popup, ":s/foo/bar/&")
-    assert "no previous record" in popup.note.text()
+    assert "no previous substitution" in popup.note.text()
     popup.set_context(
         SubstituteGuideContext("unsupported", "/", unsupported="<b>literal</b>")
     )
@@ -160,7 +173,7 @@ def test_unchanged_stage_reuses_text_and_widgets(guide_panel):
     assert not popup.set_context(scan_substitute_guide(":s/longer", len(":s/longer")))
     assert popup.findChildren(QWidget) == labels
     assert (popup.header.text(), popup.description.text()) == content
-    assert popup.set_context(scan_substitute_guide(":s/foo/", len(":s/foo/")))
+    assert popup.set_context(scan_substitute_guide(":s/foo/bar/", len(":s/foo/bar/")))
     assert popup.findChildren(QWidget) == labels
 
 
@@ -173,11 +186,11 @@ def test_wrapping_and_scrolling_fit_narrow_viewports(guide_panel):
         QCoreApplication.processEvents()
         assert viewport.rect().contains(popup.geometry())
         assert QApplication.focusWidget() is line
-    viewport.resize(240, 160)
+    viewport.resize(120, 100)
     popup.update_geometry()
     QCoreApplication.processEvents()
     assert popup.scroll_area.verticalScrollBar().maximum() > 0
-    popup.scroll_area.ensureWidgetVisible(popup.note)
+    popup.scroll_area.ensureWidgetVisible(popup.option_labels[-1][1])
     QCoreApplication.processEvents()
     assert popup.scroll_area.verticalScrollBar().value() > 0
     for _flag, description in popup.option_labels:
@@ -198,7 +211,8 @@ def test_narrow_guide_wraps_content_inside_scroll_viewport(guide_panel, themed):
         assert popup.content_widget.width() == popup.scroll_area.viewport().width()
         assert popup.scroll_area.horizontalScrollBar().maximum() == 0
         for label in (popup.description, popup.range_label, popup.note):
-            assert label.height() >= label.heightForWidth(label.width())
+            if label.isVisible():
+                assert label.height() >= label.heightForWidth(label.width())
         for flag, description in popup.option_labels:
             assert flag.width() >= flag.sizeHint().width()
             assert description.height() >= description.heightForWidth(

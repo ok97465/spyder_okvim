@@ -262,13 +262,13 @@ class CommandlinePopupController(QObject):
                 )
             except ExError:
                 command = None
-            # Keep results unobscured while calculating as well as displaying.
+            # Keep field help out of the way while previewing replacement text.
             showing_overlay = preview.has_overlay or (
                 command is not None
                 and command.pattern_closed
                 and "n" not in command.spec.flags
             )
-        if self.guide_enabled and not showing_overlay and context[1] == "ex":
+        if self.guide_enabled and context[1] == "ex":
             # QLineEdit counts UTF-16 code units; the parser uses Python indices.
             cursor = len(
                 line.text()
@@ -278,7 +278,15 @@ class CommandlinePopupController(QObject):
             guide = scan_substitute_guide(
                 line.text(), cursor, vim.vim_status.last_substitute
             )
-            if guide is not None:
+            if guide is not None and guide.stage == "replacement":
+                self._hide()
+                self._clear_candidates()
+                return
+            # Options must remain discoverable after the final delimiter, even
+            # while the replacement preview is pending or already displayed.
+            if guide is not None and (
+                not showing_overlay or guide.stage in ("flags", "count", "unsupported")
+            ):
                 self._clear_candidates()
                 if self.guide_popup is None or widget_is_deleted(self.guide_popup):
                     self.guide_popup = SubstituteGuidePopup(live_widget(self._viewport))
