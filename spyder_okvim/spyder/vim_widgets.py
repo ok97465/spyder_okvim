@@ -47,6 +47,11 @@ from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
 from spyder_okvim.utils.commandline import completion_candidates
+from spyder_okvim.utils.commandline_history import (
+    HISTORY_LIMIT,
+    load_history,
+    save_history,
+)
 from spyder_okvim.utils.ex_parser import ExError, is_substitute, scan_header
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.key_helpers import latin_command_key
@@ -360,7 +365,11 @@ class VimLineEdit(QLineEdit):
         self.vim_widget = vim_widget
         self.vim_status = vim_status
         self.vim_shortcut = vim_shortcut
-        self.histories = {"ex": [], "search": []}
+        self._history_file = osp.join(
+            CONF.get_plugin_config_path(CONF_SECTION), "commandline_history.json"
+        )
+        self.histories = load_history(self._history_file)
+        self._history_dirty = False
         self._history_index = None
         self._history_draft = None
         self._completion_candidates = []
@@ -421,7 +430,7 @@ class VimLineEdit(QLineEdit):
         return None
 
     def remember_command(self, text) -> None:
-        """Keep confirmed, nonempty inputs in separate bounded histories."""
+        """Keep and persist confirmed, nonempty inputs in bounded histories."""
         context = self._history_context(text)
         if context is None:
             return
@@ -431,7 +440,10 @@ class VimLineEdit(QLineEdit):
         history = self.histories[kind]
         if not history or history[-1] != body:
             history.append(body)
-            del history[:-100]
+            del history[:-HISTORY_LIMIT]
+            self._history_dirty = True
+        if self._history_dirty:
+            self._history_dirty = not save_history(self._history_file, self.histories)
 
     def _replace_commandline(self, text, cursor_position=None) -> None:
         """Update a recalled/completed input without restarting navigation."""

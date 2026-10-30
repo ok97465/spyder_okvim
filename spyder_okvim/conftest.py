@@ -3,7 +3,7 @@
 # Standard Libraries
 import os
 import os.path as osp
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -120,7 +120,7 @@ def qtbot_module(qapp, request):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def vim_bot(qtbot_module):
+def vim_bot(qtbot_module, plugin_config_path):
     """Editorstack pytest fixture."""
     text = (
         "   123\n" "line 1\n" "line 2\n" "line 3\n" "line 4"
@@ -172,6 +172,21 @@ def vim_bot(qtbot_module):
     main.deleteLater()
     # Ensure deferred deletions are processed to avoid segmentation faults
     QCoreApplication.processEvents()
+
+
+@pytest.fixture(scope="session")
+def plugin_config_path(tmp_path_factory):
+    """Keep persistent plugin data out of the user's Spyder configuration."""
+    directory = tmp_path_factory.mktemp("okvim-config")
+    get_plugin_config_path = CONF.get_plugin_config_path
+
+    def isolated_path(plugin_name):
+        if plugin_name == CONF_SECTION:
+            return str(directory)
+        return get_plugin_config_path(plugin_name)
+
+    with patch.object(CONF, "get_plugin_config_path", side_effect=isolated_path):
+        yield directory
 
 
 @pytest.fixture(autouse=True)

@@ -1,18 +1,28 @@
 """Regression tests for separate Ex and search command-line histories."""
 
+import json
+from unittest.mock import Mock
+
 import pytest
 from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtGui import QInputMethodEvent
+from spyder.config.manager import CONF
 
+from spyder_okvim.spyder.vim_widgets import VimWidget
+from spyder_okvim.utils.commandline_history import load_history, save_history
 from spyder_okvim.vim import VimState
 
 
 @pytest.fixture
-def history_bot(vim_bot):
+def history_bot(vim_bot, tmp_path, monkeypatch):
     """Isolate command history, editor contents, current tab, and focus."""
     _, stack, _, vim, qtbot = vim_bot
     previous_index = stack.get_stack_index()
     commandline = vim.vim_cmd.commandline
+    monkeypatch.setattr(
+        commandline, "_history_file", tmp_path / "commandline_history.json"
+    )
+    monkeypatch.setattr(commandline, "_history_dirty", False)
     status = vim.vim_cmd.vim_status
     commandline.setFocus()
     QCoreApplication.processEvents()
@@ -188,6 +198,7 @@ def test_new_session_does_not_restore_a_cancelled_draft(
 
     assert commandline.text() == ""
     assert commandline.histories[kind] == ["old"]
+    assert not commandline._history_file.exists()
     qtbot.keyClicks(commandline, prefix + "fresh draft")
     qtbot.keyPress(commandline, Qt.Key_Down)
     assert commandline.text() == prefix + "fresh draft"
@@ -213,6 +224,40 @@ def test_only_adjacent_duplicate_entries_are_removed(
         submit(commandline, qtbot, command)
 
     assert commandline.histories[kind] == expected
+    assert load_history(commandline._history_file) == commandline.histories
+
+
+@pytest.mark.parametrize("text", [":2", "/foo"])
+def test_saved_duplicate_does_not_write_again(history_bot, monkeypatch, text):
+    """Repeated confirmed input does not rewrite an unchanged history file."""
+    _, _, commandline, qtbot = history_bot
+    save = Mock(wraps=save_history)
+    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+
+    submit(commandline, qtbot, text)
+    submit(commandline, qtbot, text)
+
+    save.assert_called_once()
+    assert load_history(commandline._history_file) == commandline.histories
+
+
+@pytest.mark.parametrize("entry", ["2\r", "2\n"])
+def test_damaged_history_cannot_execute_on_recall(history_bot, entry):
+    """Restored single-line entries wait for Enter before executing."""
+    editor, status, commandline, qtbot = history_bot
+    editor.set_text("one\ntwo")
+    status.cursor.set_cursor_pos(0)
+    commandline._history_file.write_text(
+        json.dumps({"ex": ["1", entry]}), encoding="utf-8"
+    )
+    commandline.histories = load_history(commandline._history_file)
+
+    qtbot.keyClicks(commandline, ":")
+    qtbot.keyPress(commandline, Qt.Key_Up)
+
+    assert commandline.text() == ":1"
+    assert editor.textCursor().position() == 0
+    assert status.sub_mode is not None
 
 
 @pytest.mark.parametrize("command", [":", ":   ", "/", "?"])
@@ -224,6 +269,7 @@ def test_empty_commands_do_not_create_history(history_bot, command):
     assert commandline.histories == {"ex": [], "search": []}
     assert status.sub_mode is None
     assert commandline.text() == ""
+    assert not commandline._history_file.exists()
 
 
 def test_repeated_empty_search_does_not_store_an_empty_entry(history_bot):
@@ -256,3 +302,85 @@ def test_ime_committed_search_word_round_trips_through_history(history_bot):
     assert commandline.text() == "?한글"
     qtbot.keyPress(commandline, Qt.Key_Down)
     assert commandline.text() == "?초안"
+    assert load_history(commandline._history_file)["search"] == ["한글"]
+
+
+def test_new_widget_restores_saved_histories(history_bot, monkeypatch):
+    """A new input widget loads confirmed entries and can recall both kinds."""
+    _, _, commandline, qtbot = history_bot
+    qtbot.keyClicks(commandline, ":2")
+    assert not commandline._history_file.exists()
+    qtbot.keyPress(commandline, Qt.Key_Return)
+    submit(commandline, qtbot, "/foo")
+    qtbot.keyClicks(commandline, "?")
+    commandline.insert("한글😀")
+    qtbot.keyPress(commandline, Qt.Key_Return)
+    expected = {"ex": ["2"], "search": ["foo", "한글😀"]}
+    assert load_history(commandline._history_file) == expected
+
+    monkeypatch.setattr(
+        CONF, "get_plugin_config_path", lambda _: str(commandline._history_file.parent)
+    )
+    original = commandline.vim_widget
+    restored = VimWidget(original.editor_widget, original.main)
+    qtbot.addWidget(restored)
+    try:
+        assert restored.commandline.histories == expected
+        restored.commandline.setFocus()
+        QCoreApplication.processEvents()
+        qtbot.keyClicks(restored.commandline, ":")
+        qtbot.keyPress(restored.commandline, Qt.Key_Up)
+        assert restored.commandline.text() == ":2"
+        qtbot.keyPress(restored.commandline, Qt.Key_Escape)
+        qtbot.keyClicks(restored.commandline, "/")
+        qtbot.keyPress(restored.commandline, Qt.Key_Up)
+        assert restored.commandline.text() == "/한글😀"
+    finally:
+        restored.cleanup()
+
+
+def test_saved_history_keeps_latest_100_entries(history_bot):
+    """Appending past the limit truncates the same oldest entry on disk."""
+    _, _, commandline, qtbot = history_bot
+    commandline.histories["ex"][:] = [str(index) for index in range(100)]
+    commandline.histories["search"][:] = ["foo"]
+
+    submit(commandline, qtbot, ":100")
+
+    expected = {
+        "ex": [str(index) for index in range(1, 101)],
+        "search": ["foo"],
+    }
+    assert commandline.histories == expected
+    assert load_history(commandline._history_file) == expected
+
+
+@pytest.mark.parametrize(
+    "text, kind, body", [(":2", "ex", "2"), ("/two", "search", "two")]
+)
+def test_save_failure_does_not_interrupt_execution(
+    history_bot, monkeypatch, caplog, text, kind, body
+):
+    """A full or unwritable disk must not stop an Ex command or search."""
+    editor, status, commandline, qtbot = history_bot
+    editor.set_text("one\ntwo")
+    status.cursor.set_cursor_pos(0)
+
+    def fail_replace(source, target):
+        raise OSError("disk is full")
+
+    with monkeypatch.context() as patch:
+        patch.setattr("spyder_okvim.utils.commandline_history.os.replace", fail_replace)
+        submit(commandline, qtbot, text)
+
+    assert editor.textCursor().position() == 4
+    assert commandline.histories[kind] == [body]
+    assert commandline.text() == ""
+    assert status.sub_mode is None
+    assert not commandline._history_file.exists()
+    assert "Unable to save command-line history" in caplog.text
+
+    submit(commandline, qtbot, text)
+
+    assert commandline.histories[kind] == [body]
+    assert load_history(commandline._history_file) == commandline.histories
