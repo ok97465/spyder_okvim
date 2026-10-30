@@ -242,6 +242,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._active_editor = weakref.ref(editor) if editor is not None else None
         self.vim_cmd.vim_status.cursor.set_editorstack(stack)
         self.vim_cmd.which_key.set_editor(editor)
+        self.vim_cmd.commandline_history.set_editor(editor)
         self.vim_cmd.put_controller.bind_editor(editor)
         if editor is not None and editor not in self._editors:
             self._editors.add(editor)
@@ -273,6 +274,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         """Cancel partial commands before they can cross into another view."""
         self.vim_cmd.which_key.cancel()
         self.vim_cmd.which_key.set_editor(None)
+        self.vim_cmd.commandline_history.set_editor(None)
         self.vim_cmd.cancel_yank_picker()
         self.vim_cmd.put_controller.bind_editor(None)
         status = self.vim_cmd.vim_status

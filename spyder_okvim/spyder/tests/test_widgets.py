@@ -182,6 +182,54 @@ def test_which_key_preferences_load_toggle_and_save(vim_bot, enabled, monkeypatc
         CONF.set(CONF_SECTION, "which_key_delay", old_delay)
 
 
+def test_commandline_history_preference_default(vim_bot, monkeypatch):
+    """Existing configuration files default to showing command history."""
+    main, _, _, vim, _ = vim_bot
+    assert dict(CONF_DEFAULTS)[CONF_SECTION]["commandline_history_enabled"] is True
+    monkeypatch.setattr(vim, "_conf", CONF)
+    page = OkvimConfigPage(vim, main)
+    get_option = page.get_option
+
+    def without_history_option(option, default, **kwargs):
+        if option == "commandline_history_enabled":
+            return default
+        return get_option(option, default, **kwargs)
+
+    monkeypatch.setattr(page, "get_option", without_history_option)
+    try:
+        page.initialize()
+        assert page.commandline_history_enabled.checkbox.isChecked()
+    finally:
+        page.deleteLater()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_commandline_history_preference_roundtrip(vim_bot, enabled, monkeypatch):
+    """The history preference can be loaded, toggled, saved, and reopened."""
+    main, _, _, vim, _ = vim_bot
+    monkeypatch.setattr(vim, "_conf", CONF)
+    previous = CONF.get(CONF_SECTION, "commandline_history_enabled")
+    pages = []
+    try:
+        CONF.set(CONF_SECTION, "commandline_history_enabled", enabled)
+        page = OkvimConfigPage(vim, main)
+        pages.append(page)
+        page.initialize()
+        assert page.commandline_history_enabled.checkbox.isChecked() is enabled
+        page.commandline_history_enabled.checkbox.click()
+        page.save_to_conf()
+
+        assert CONF.get(CONF_SECTION, "commandline_history_enabled") is not enabled
+        reopened = OkvimConfigPage(vim, main)
+        pages.append(reopened)
+        reopened.initialize()
+        assert reopened.commandline_history_enabled.checkbox.isChecked() is not enabled
+    finally:
+        for page in pages:
+            page.deleteLater()
+        CONF.set(CONF_SECTION, "commandline_history_enabled", previous)
+
+
 def test_apply_config(vim_bot):
     """Run apply_plugin_settings method."""
     _, _, editor, vim, qtbot = vim_bot

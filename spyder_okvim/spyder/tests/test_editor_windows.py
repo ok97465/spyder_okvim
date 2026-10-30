@@ -502,6 +502,187 @@ def test_which_key_releases_closed_window(which_key_windows, displayed):
     assert controller.popup.parentWidget() is code.viewport()
 
 
+@pytest.fixture
+def commandline_history_windows(editor_windows):
+    """Use real view routing with deterministic command history candidates."""
+    state = editor_windows
+    previous_enabled = CONF.get(CONF_SECTION, "commandline_history_enabled", True)
+    CONF.set(CONF_SECTION, "commandline_history_enabled", True)
+    state.vim.apply_plugin_settings([])
+    state.commandline.histories["ex"][:] = ["write", "2"]
+    try:
+        yield state
+    finally:
+        CONF.set(CONF_SECTION, "commandline_history_enabled", previous_enabled)
+        if not state.vim_closed:
+            state.commandline.esc_pressed()
+            state.vim.apply_plugin_settings([])
+
+
+def _history_visible(controller):
+    popup = controller.popup
+    return popup is not None and not widget_is_deleted(popup) and popup.isVisible()
+
+
+def _start_commandline_history(state):
+    """Show and select a row without accepting or executing its command."""
+    controller = state.vim.vim_cmd.commandline_history
+    state.commandline.esc_pressed()
+    state.qtbot.keyClicks(state.commandline, ":")
+    state.qtbot.waitUntil(lambda: _history_visible(controller))
+    state.qtbot.keyClick(state.commandline, Qt.Key_N, Qt.ControlModifier)
+    assert controller.selected_index == 0
+    assert state.commandline.text() == ":"
+    return controller
+
+
+@pytest.mark.parametrize("target", ["tab", "split", "window"])
+def test_commandline_history_follows_active_view(commandline_history_windows, target):
+    """View switches discard stale selection and bind the next panel locally."""
+    state = commandline_history_windows
+    source_stack = state.widget.editorstacks[0]
+    if target == "split":
+        state.widget.editorsplitter.split(Qt.Horizontal)
+        _settle()
+        target_stack = state.widget.editorstacks[-1]
+    elif target == "window":
+        window = state.widget.create_new_window()
+        _settle()
+        target_stack = window.editorwidget.editorstacks[0]
+    else:
+        target_stack = source_stack
+    source = _focus_stack(state, source_stack)
+    controller = _start_commandline_history(state)
+    old_popup = controller.popup
+
+    if target == "tab":
+        source_stack.set_stack_index(1 - source_stack.get_stack_index())
+    else:
+        target_editor = target_stack.get_current_editor()
+        target_editor.window().activateWindow()
+        target_editor.setFocus()
+    _settle()
+
+    assert not _history_visible(controller)
+    assert controller.selected_index is None
+    assert controller.candidates == []
+    assert widget_is_deleted(old_popup)
+    assert state.vim.vim_cmd.vim_status.sub_mode is None
+    code = _focus_stack(state, target_stack)
+    assert code is not source
+    _start_commandline_history(state)
+    assert controller.popup.parentWidget() is code.viewport()
+    assert controller.popup.window() is code.window()
+    assert code.viewport().rect().contains(controller.popup.geometry())
+    assert QApplication.focusWidget() is state.commandline
+
+
+def test_commandline_history_releases_closed_editor(commandline_history_windows):
+    """Closing the active tab disposes its panel before the editor is deleted."""
+    state = commandline_history_windows
+    stack = state.widget.editorstacks[0]
+    stack.set_stack_index(1)
+    code = _focus_stack(state, stack)
+    controller = _start_commandline_history(state)
+    popup = controller.popup
+
+    stack.close_file(1, force=True)
+    _settle()
+
+    assert stack.get_current_editor() is not code
+    # Spyder detaches closed editors before their final deferred deletion.
+    code.deleteLater()
+    _settle()
+    assert widget_is_deleted(code)
+    assert widget_is_deleted(popup)
+    assert not _history_visible(controller)
+    assert controller.selected_index is None
+    replacement = _focus_stack(state, stack)
+    _start_commandline_history(state)
+    assert controller.popup.parentWidget() is replacement.viewport()
+
+
+def test_commandline_history_releases_closed_window(commandline_history_windows):
+    """A detached window cannot retain its selected panel after closing."""
+    state = commandline_history_windows
+    window = state.widget.create_new_window()
+    _settle()
+    stack = window.editorwidget.editorstacks[0]
+    _focus_stack(state, stack)
+    controller = _start_commandline_history(state)
+    popup = controller.popup
+
+    window.close()
+    _settle()
+
+    assert widget_is_deleted(window)
+    assert widget_is_deleted(popup)
+    assert not _history_visible(controller)
+    assert controller.selected_index is None
+    code = _focus_stack(state, state.widget.editorstacks[0])
+    _start_commandline_history(state)
+    assert controller.popup.parentWidget() is code.viewport()
+
+
+def test_commandline_history_cleanup_disconnects_callbacks(commandline_history_windows):
+    """Cleanup removes the panel and ignores later input and viewport events."""
+    state = commandline_history_windows
+    code = _focus_stack(state, state.widget.editorstacks[0])
+    controller = _start_commandline_history(state)
+    popup = controller.popup
+
+    controller.cleanup()
+    _settle()
+    assert widget_is_deleted(popup)
+    assert controller.popup is None
+    assert controller.candidates == []
+    assert controller.selected_index is None
+    state.commandline.esc_pressed()
+    state.commandline.setText(":")
+    state.vim.vim_cmd.sig_input_finished.emit()
+    code.resize(max(1, code.width() - 1), code.height())
+    _settle()
+    controller.sync()
+    assert controller.popup is None
+    assert controller.candidates == []
+
+
+@pytest.mark.parametrize("close_to_dock", [False, True])
+def test_commandline_history_tracks_docking_host(
+    commandline_history_windows, close_to_dock
+):
+    """The same viewport follows docking and handles the new host's events."""
+    state = commandline_history_windows
+    stack = state.widget.editorstacks[0]
+    code = _focus_stack(state, stack)
+    controller = _start_commandline_history(state)
+
+    state.widget.create_window()
+    _settle()
+    floating = state.widget.windowwidget
+    assert not _history_visible(controller)
+    assert _focus_stack(state, stack) is code
+    _start_commandline_history(state)
+    assert controller.popup.window() is floating
+    QApplication.sendEvent(floating, QEvent(QEvent.WindowDeactivate))
+    assert not _history_visible(controller)
+    assert controller.selected_index is None
+
+    _start_commandline_history(state)
+    if close_to_dock:
+        floating.close()
+    else:
+        state.widget.dock_window()
+    _settle()
+    assert widget_is_deleted(floating)
+    assert not _history_visible(controller)
+    assert _focus_stack(state, stack) is code
+    _start_commandline_history(state)
+    assert controller.popup.window() is state.main
+    QApplication.sendEvent(state.main, QEvent(QEvent.WindowDeactivate))
+    assert not _history_visible(controller)
+
+
 @pytest.mark.parametrize("undocked", [False, True])
 @pytest.mark.parametrize("window_count", [1, 2])
 def test_new_windows_splits_and_cloned_tabs(editor_windows, undocked, window_count):

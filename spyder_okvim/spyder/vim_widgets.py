@@ -40,6 +40,9 @@ from spyder_okvim.executor import (
     ExecutorVlineCmd,
 )
 from spyder_okvim.executor.executor_sub import ExecutorSubCmd_window
+from spyder_okvim.spyder.commandline_history_controller import (
+    CommandlineHistoryController,
+)
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
 from spyder_okvim.utils.commandline import completion_candidates
@@ -362,6 +365,7 @@ class VimLineEdit(QLineEdit):
         self._completion_index = -1
         self._completion_directory = None
         self._updating_commandline = False
+        self._is_composing = False
         self.textChanged.connect(self._reset_navigation)
         self.cursorPositionChanged.connect(self._reset_completion)
 
@@ -428,19 +432,21 @@ class VimLineEdit(QLineEdit):
 
     def _replace_commandline(self, text, cursor_position=None) -> None:
         """Update a recalled/completed input without restarting navigation."""
-        self._updating_commandline = True
-        try:
-            self.setText(text)
-            if cursor_position is not None:
-                self.setCursorPosition(cursor_position)
-        finally:
-            self._updating_commandline = False
+        with self.vim_widget.input_processing():
+            self._updating_commandline = True
+            try:
+                self.setText(text)
+                if cursor_position is not None:
+                    self.setCursorPosition(cursor_position)
+            finally:
+                self._updating_commandline = False
 
     def _browse_history(self, backward) -> None:
         """Recall entries and restore the exact draft after the newest one."""
         context = self._history_context(self.text())
         if context is None:
             return
+        self.vim_widget.commandline_history.suppress()
         kind, prompt, _ = context
         history = self.histories[kind]
         if not history:
@@ -466,7 +472,10 @@ class VimLineEdit(QLineEdit):
     def _complete_commandline(self, backward=False) -> None:
         """Complete Ex commands or one directory of paths on explicit Tab."""
         context = self._history_context(self.text())
-        if context is None or context[0] != "ex":
+        if context is None:
+            return
+        self.vim_widget.commandline_history.suppress()
+        if context[0] != "ex":
             return
         working_directory = os.getcwd()
         if self._completion_directory != working_directory:
@@ -504,6 +513,12 @@ class VimLineEdit(QLineEdit):
 
     def event(self, event) -> bool:
         """Keep Tab in the prompt instead of letting QWidget move focus."""
+        if (
+            event.type() == QEvent.ShortcutOverride
+            and self.vim_widget.commandline_history.key_action(event) is not None
+        ):
+            event.accept()
+            return True
         if self.vim_status.substitute_confirm is not None:
             if event.type() == QEvent.ShortcutOverride:
                 event.accept()
@@ -551,6 +566,7 @@ class VimLineEdit(QLineEdit):
         # Disable delivery before resetting: some IMEs commit on reset.
         self.setAttribute(Qt.WA_InputMethodEnabled, enabled)
         if not enabled:
+            self._is_composing = False
             if self.hasFocus():
                 QApplication.inputMethod().reset()
             super().inputMethodEvent(QInputMethodEvent())
@@ -558,9 +574,16 @@ class VimLineEdit(QLineEdit):
     def inputMethodEvent(self, event: QInputMethodEvent) -> None:
         """Keep late IME commits from being interpreted as Normal commands."""
         if self.testAttribute(Qt.WA_InputMethodEnabled):
-            super().inputMethodEvent(event)
+            with self.vim_widget.input_processing():
+                self._is_composing = bool(event.preeditString())
+                super().inputMethodEvent(event)
         else:
             event.ignore()
+
+    @property
+    def is_composing(self):
+        """Whether the native input method still owns uncommitted text."""
+        return self._is_composing
 
     def to_normal(self) -> None:
         """Convert the state of vim to normal mode."""
@@ -570,11 +593,15 @@ class VimLineEdit(QLineEdit):
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Override Qt method."""
+        history_action = self.vim_widget.commandline_history.key_action(e)
         with self.vim_widget.input_processing():
-            self._handle_key_press(e)
+            self._handle_key_press(e, history_action)
 
-    def _handle_key_press(self, e: QKeyEvent) -> None:
+    def _handle_key_press(self, e: QKeyEvent, history_action=None) -> None:
         """Process a key before synchronizing hints at the outer input boundary."""
+        if history_action is not None:
+            self.vim_widget.commandline_history.handle_key(history_action, e)
+            return
         if not self.testAttribute(Qt.WA_InputMethodEnabled):
             e = latin_command_key(e)
         confirmation = self.vim_status.substitute_confirm
@@ -809,6 +836,7 @@ class VimWidget(QWidget):
         self.worker_macro.sig_focus_vim.connect(self._focus_macro_input)
         self.worker_macro.sig_playback_finished.connect(self._finish_macro)
         self.which_key = WhichKeyController(self)
+        self.commandline_history = CommandlineHistoryController(self)
         self.apply_settings()
 
     @property
@@ -845,6 +873,7 @@ class VimWidget(QWidget):
         """Apply command bindings and hint preferences explicitly."""
         self.set_leader_key()
         self.which_key.apply_settings()
+        self.commandline_history.apply_settings()
         status = self.vim_status
         enabled = bool(CONF.get(CONF_SECTION, "yanky_enabled", True))
         length = CONF.get(CONF_SECTION, "yank_history_length", 100)
@@ -1063,6 +1092,7 @@ class VimWidget(QWidget):
         self.cancel_yank_picker()
         self.put_controller.cleanup()
         self.which_key.cleanup()
+        self.commandline_history.cleanup()
         self.cancel_macro()
         if self.vim_status.is_recording_macro():
             self.vim_status.stop_recording_macro()
