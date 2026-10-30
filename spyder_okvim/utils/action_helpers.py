@@ -11,41 +11,16 @@ from spyder.utils.syntaxhighlighters import PythonSH
 
 # Project Libraries
 from spyder_okvim.utils.motion import MotionInfo, MotionType
-from spyder_okvim.utils.motion_helpers import MotionHelper
 from spyder_okvim.vim import VimState
-
-
-def _get_block_texts(editor, start_block: int, end_block: int) -> list[str]:
-    """Return the text of blocks between two numbers inclusive."""
-
-    return [
-        editor.document().findBlockByNumber(no).text()
-        for no in range(start_block, end_block + 1)
-    ]
 
 
 class ActionHelper:
     """Perform editing actions driven by Vim commands."""
 
-    def __init__(self, vim_status):
-        """Initialize helper with the shared Vim status.
-
-        Args:
-            vim_status: Object managing editor and cursor state.
-        """
-        self.vim_status = vim_status
-        self.get_editor = vim_status.get_editor
-        self.get_cursor = vim_status.get_cursor
-        self.set_cursor = vim_status.set_cursor
-        self.set_cursor_pos = vim_status.cursor.set_cursor_pos
-
-        self.get_block_no_start_in_selection = (
-            vim_status.get_block_no_start_in_selection
-        )
-        self.get_block_no_end_in_selection = vim_status.get_block_no_end_in_selection
-        self.get_pos_start_in_selection = vim_status.get_pos_start_in_selection
-        self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
-        self.helper_motion = MotionHelper(vim_status)
+    def __init__(self, helper_motion):
+        """Use the executor's motion helper for text-object boundaries."""
+        self.helper_motion = helper_motion
+        self.vim_status = helper_motion.vim_status
 
     def _get_block_range(
         self, pos_start: int, pos_end: int
@@ -65,8 +40,8 @@ class ActionHelper:
         """Return selection start, end and linewise flag for an action."""
 
         if not self.vim_status.is_normal():
-            start = self.get_pos_start_in_selection()
-            end = self.get_pos_end_in_selection()
+            start = self.vim_status.get_pos_start_in_selection()
+            end = self.vim_status.get_pos_end_in_selection()
             is_linewise = self.vim_status.vim_state == VimState.VLINE
             return start, end, is_linewise
 
@@ -82,7 +57,7 @@ class ActionHelper:
         ):
             return motion_info.sel_start, motion_info.sel_end, True
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
         cur_pos = cursor.position()
         new_pos = motion_info.cursor_pos
         if new_pos is None:
@@ -112,7 +87,7 @@ class ActionHelper:
         """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         cursor = editor.textCursor()
         n_block = editor.blockCount()
 
@@ -143,7 +118,7 @@ class ActionHelper:
         cursor.movePosition(QTextCursor.Left, n=len(text_list[-1]) + 1)
         pos = cursor.position()
 
-        self.set_cursor_pos(pos)
+        self.vim_status.cursor.set_cursor_pos(pos)
 
         editor.document_did_change()
 
@@ -161,7 +136,7 @@ class ActionHelper:
             self.vim_status.cursor.set_cursor_pos(pos_start)
             return
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText().replace("\u2029", "\n")
@@ -171,7 +146,7 @@ class ActionHelper:
         if self.vim_status.is_normal():
             self.vim_status.cursor.set_cursor_pos(pos_end - 1)
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         editor.document_did_change()
 
     def _add_surrounding(self, ch: str, text: str) -> str:
@@ -214,14 +189,14 @@ class ActionHelper:
             self.vim_status.cursor.set_cursor_pos(pos_start)
             return
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText().replace("\u2029", "\n")
         text_sub = self._add_surrounding(ch, text)
         cursor.insertText(text_sub)
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         editor.document_did_change()
 
     def _delete_surrounding(self, ch: str, text: str) -> str:
@@ -254,14 +229,14 @@ class ActionHelper:
         if motion_info.sel_start is None:
             return motion_info
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
         cursor.setPosition(motion_info.sel_start)
         cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText().replace("\u2029", "\n")
         text_sub = self._delete_surrounding(ch, text)
         cursor.insertText(text_sub)
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         editor.document_did_change()
 
         return motion_info
@@ -289,7 +264,7 @@ class ActionHelper:
         if motion_info.sel_start is None:
             return motion_info
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
         cursor.setPosition(motion_info.sel_start)
         cursor.setPosition(motion_info.sel_end, QTextCursor.KeepAnchor)
         text = cursor.selectedText().replace("\u2029", "\n")
@@ -297,7 +272,7 @@ class ActionHelper:
         text_sub = self._add_surrounding(ch_insert, text_sub)
         cursor.insertText(text_sub)
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         editor.document_did_change()
 
         return motion_info
@@ -312,8 +287,8 @@ class ActionHelper:
         self.vim_status.update_dot_cmd(connect_editor=False)
 
         if not self.vim_status.is_normal():
-            sel_start = self.get_pos_start_in_selection()
-            sel_end = self.get_pos_end_in_selection()
+            sel_start = self.vim_status.get_pos_start_in_selection()
+            sel_end = self.vim_status.get_pos_end_in_selection()
             self._handle_case(sel_start, sel_end, method)
             self.vim_status.to_normal()
             self.vim_status.cursor.set_cursor_pos(sel_start)
@@ -321,7 +296,7 @@ class ActionHelper:
             self._handle_case(motion_info.sel_start, motion_info.sel_end, method)
             self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)
         else:
-            cursor = self.get_cursor()
+            cursor = self.vim_status.get_cursor()
             cursor_pos_cur = cursor.position()
             cursor_pos_new = motion_info.cursor_pos
             if cursor_pos_new is None:
@@ -348,7 +323,7 @@ class ActionHelper:
         """Perform case transformation on the given range."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
 
         cursor.setPosition(pos_start)
         cursor.setPosition(pos_end, QTextCursor.KeepAnchor)
@@ -360,7 +335,7 @@ class ActionHelper:
         else:
             cursor.insertText(text.upper())
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         editor.document_did_change()
 
     def reindent(self, motion_info: MotionInfo) -> None:
@@ -374,12 +349,12 @@ class ActionHelper:
         block_no_start, block_no_end, _, _ = self._get_block_range(pos_start, pos_end)
         self.vim_status.update_dot_cmd(connect_editor=False)
 
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         document = editor.document()
         indent = self.vim_status.indent
         tab_width = editor.tab_stop_width_spaces
         is_python = editor.is_python_like()
-        edit_cursor = self.get_cursor()
+        edit_cursor = self.vim_status.get_cursor()
         previous_skip_rstrip = editor.skip_rstrip
         editor.skip_rstrip = True
         edit_cursor.beginEditBlock()
@@ -431,7 +406,9 @@ class ActionHelper:
 
             block = document.findBlockByNumber(block_no_start)
             text = block.text()
-            self.set_cursor_pos(block.position() + len(text) - len(text.lstrip(" \t")))
+            self.vim_status.cursor.set_cursor_pos(
+                block.position() + len(text) - len(text.lstrip(" \t"))
+            )
         finally:
             edit_cursor.endEditBlock()
             editor.skip_rstrip = previous_skip_rstrip
@@ -456,20 +433,21 @@ class ActionHelper:
         """Shift leading whitespace by one level using the document settings."""
         self.vim_status.update_dot_cmd(connect_editor=False)
 
-        editor = self.get_editor()
-        cursor = self.get_cursor()
+        editor = self.vim_status.get_editor()
+        cursor = self.vim_status.get_cursor()
 
         block_no_start, block_no_end, pos_start, pos_end = self._get_block_range(
             pos_start, pos_end
         )
 
-        text_list = _get_block_texts(editor, block_no_start, block_no_end)
+        document = editor.document()
 
         indent = self.vim_status.indent
         tab_width = editor.tab_stop_width_spaces
         shift_width = tab_width if indent == "\t" else len(indent)
         text_list_shifted = []
-        for text in text_list:
+        for block_no in range(block_no_start, block_no_end + 1):
+            text = document.findBlockByNumber(block_no).text()
             if not text:
                 text_list_shifted.append("")
                 continue
@@ -516,7 +494,7 @@ class ActionHelper:
 
         register_type = VimState.VLINE if is_linewise else VimState.NORMAL
 
-        cursor = self.get_cursor()
+        cursor = self.vim_status.get_cursor()
         cursor.setPosition(sel_start)
         cursor.setPosition(sel_end, QTextCursor.KeepAnchor)
         txt = cursor.selectedText().replace("\u2029", "\n")
@@ -568,8 +546,8 @@ class ActionHelper:
             elif motion_info.cursor_pos is None:
                 return
 
-        cursor = self.get_cursor()
-        editor = self.get_editor()
+        cursor = self.vim_status.get_cursor()
+        editor = self.vim_status.get_editor()
         n_block_old = editor.blockCount()
         sel_start, sel_end, is_linewise = self._get_selection_range(motion_info)
         if sel_start is None or sel_end is None:
@@ -615,7 +593,7 @@ class ActionHelper:
                 cursor.setPosition(cursor_pos_new)
 
             if is_insert:
-                self.set_cursor_pos(cursor_pos_new + len(replace_txt))
+                self.vim_status.cursor.set_cursor_pos(cursor_pos_new + len(replace_txt))
             else:
                 self.vim_status.cursor.set_cursor_pos_without_end(cursor_pos_new)
 
@@ -624,7 +602,7 @@ class ActionHelper:
     def toggle_comment(self, motion_info: MotionInfo):
         """Toggle comments for the selected lines."""
         self.vim_status.update_dot_cmd(connect_editor=False)
-        editor = self.get_editor()
+        editor = self.vim_status.get_editor()
         pos_start, pos_end, _ = self._get_selection_range(motion_info)
         if pos_start is None or pos_end is None:
             return

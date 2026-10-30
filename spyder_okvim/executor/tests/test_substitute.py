@@ -424,7 +424,7 @@ def test_crlf_and_cursors_outside_edits_are_preserved(substitute_bot):
     cursor = QTextCursor(editor.document().findBlockByNumber(1))
     cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, 2)
     status.cursor.set_cursor_pos(cursor.position())
-    status.set_bookmark("a")
+    status.bookmark_manager.set_bookmark("a")
     bookmark = status.bookmark_manager.get_bookmark("a").copy()
     status.cursor.set_cursor_pos(0)
     old_eol = editor.get_line_separator()
@@ -434,7 +434,7 @@ def test_crlf_and_cursors_outside_edits_are_preserved(substitute_bot):
     assert cursor.blockNumber() == 1
     assert cursor.positionInBlock() == 2
     assert status.bookmark_manager.get_bookmark("a") == bookmark
-    status.jump_to_bookmark("a")
+    status.bookmark_manager.jump_to_bookmark("a")
     assert editor.textCursor().position() == cursor.position()
     assert status.is_normal()
 

@@ -316,7 +316,7 @@ class SelectionMixin:
         executor_sub = self.executor_sub_alnum
         self.set_parent_info_to_submode(executor_sub, num, num_str)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.vim_status.set_bookmark, True)]
+            [FUNC_INFO(self.vim_status.bookmark_manager.set_bookmark, True)]
         )
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
@@ -328,7 +328,7 @@ class SelectionMixin:
         def run(ch: str):
             if ch.isupper():
                 cur = self.vim_status.get_editorstack().get_current_filename()
-                self.vim_status.jump_to_bookmark(ch)
+                self.vim_status.bookmark_manager.jump_to_bookmark(ch)
                 new = self.vim_status.get_editorstack().get_current_filename()
                 if cur == new:
                     cursor = self.get_cursor()
@@ -353,7 +353,7 @@ class SelectionMixin:
         def run(ch: str):
             if ch.isupper():
                 cur = self.vim_status.get_editorstack().get_current_filename()
-                self.vim_status.jump_to_bookmark(ch)
+                self.vim_status.bookmark_manager.jump_to_bookmark(ch)
                 new = self.vim_status.get_editorstack().get_current_filename()
                 if cur != new:
                     self.vim_status.to_normal()

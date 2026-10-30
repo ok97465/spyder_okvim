@@ -137,8 +137,15 @@ def _check_boundary(source: bytes, offset: int):
             raise ValueError("Pattern splits a UTF-16 surrogate pair")
 
 
-def _expand_replacement(tokens, source, match, *, max_chars=None):
-    """Expand only referenced captures, preserving original NBSP characters."""
+class ReplacementLimitExceeded(ValueError):
+    """A bounded preview expansion would exceed the available result budget."""
+
+
+def substitution_match(tokens, source, match, *, max_chars=None):
+    """Validate a UTF-16 edit and expand captures from the original paragraph."""
+    start, end = match.capturedStart(), match.capturedEnd()
+    _check_boundary(source, start)
+    _check_boundary(source, end)
     captures = {}
     pieces = []
     size = 0
@@ -147,14 +154,17 @@ def _expand_replacement(tokens, source, match, *, max_chars=None):
             piece = token
         else:
             if token not in captures:
-                start, end = match.capturedStart(token), match.capturedEnd(token)
-                if start == -1:
+                capture_start = match.capturedStart(token)
+                capture_end = match.capturedEnd(token)
+                if capture_start == -1:
                     # Vim expands both absent and unmatched groups to empty text.
                     captures[token] = ""
                 else:
-                    _check_boundary(source, start)
-                    _check_boundary(source, end)
-                    captures[token] = source[start * 2 : end * 2].decode("utf-16-le")
+                    _check_boundary(source, capture_start)
+                    _check_boundary(source, capture_end)
+                    captures[token] = source[
+                        capture_start * 2 : capture_end * 2
+                    ].decode("utf-16-le")
             piece = captures[token]
         if max_chars is not None:
             size += len(piece)
@@ -164,19 +174,6 @@ def _expand_replacement(tokens, source, match, *, max_chars=None):
     replacement = "".join(pieces)
     if any(char in _LINE_SEPARATORS for char in replacement):
         raise ValueError("Line breaks in replacements are not supported")
-    return replacement
-
-
-class ReplacementLimitExceeded(ValueError):
-    """A bounded preview expansion would exceed the available result budget."""
-
-
-def substitution_match(tokens, source, match, *, max_chars=None):
-    """Validate an edit and expand captures against the original paragraph."""
-    start, end = match.capturedStart(), match.capturedEnd()
-    _check_boundary(source, start)
-    _check_boundary(source, end)
-    replacement = _expand_replacement(tokens, source, match, max_chars=max_chars)
     return start, end, replacement
 
 
@@ -315,30 +312,20 @@ def build_substitution_plan(
                 confirm
                 or replacement.encode("utf-16-le") != source[start * 2 : end * 2]
             ):
-                block_edits.append(
-                    (
-                        block.position() + start,
-                        block.position() + end,
-                        replacement,
-                    )
-                )
+                block_edits.append((start, end, replacement))
         if found:
             line_count += 1
             last_target = line
         if block_edits:
-            if confirm:
-                edits.extend(block_edits)
-                block = block.next()
-                continue
             # Several adjacent replacements can cancel each other. Assemble a
             # single paragraph for comparison only, keeping small edit spans
             # for the actual document mutation and its cursor/mark tracking.
-            local_edits = (
-                (start - block.position(), end - block.position(), replacement)
-                for start, end, replacement in block_edits
-            )
-            if assemble_substitution_line(source, local_edits) != source:
-                edits.extend(block_edits)
+            if confirm or assemble_substitution_line(source, block_edits) != source:
+                position = block.position()
+                edits.extend(
+                    (position + start, position + end, replacement)
+                    for start, end, replacement in block_edits
+                )
         block = block.next()
     return SubstitutionPlan(
         tuple(edits) if edits is not None else (), match_count, line_count, last_target

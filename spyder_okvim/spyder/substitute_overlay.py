@@ -35,27 +35,6 @@ class RenderedRow:
     deletions: tuple[QPointF, ...]
 
 
-class _OverlayWidget(QWidget):
-    """Passive viewport child; existing guides and editor popups stay above it."""
-
-    def __init__(self, owner, viewport):
-        super().__init__(viewport)
-        self._owner = weakref.ref(owner)
-        self.setObjectName("vimSubstituteOverlay")
-        self.setFocusPolicy(Qt.NoFocus)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.setAttribute(Qt.WA_NoSystemBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.hide()
-
-    def paintEvent(self, event):
-        owner = live_widget(self._owner)
-        if owner is not None:
-            with QPainter(self) as painter:
-                painter.setClipRect(event.rect())
-                owner._paint(painter)
-
-
 class SubstituteOverlay(QObject):
     """Own rendering only; calculation and Ex session validation stay outside.
 
@@ -109,7 +88,14 @@ class SubstituteOverlay(QObject):
             return
         viewport = editor.viewport()
         self._editor = weakref.ref(editor)
-        self._widget = _OverlayWidget(self, viewport)
+        self._widget = QWidget(viewport)
+        self._widget.setObjectName("vimSubstituteOverlay")
+        self._widget.setFocusPolicy(Qt.NoFocus)
+        self._widget.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._widget.setAttribute(Qt.WA_NoSystemBackground)
+        self._widget.setAttribute(Qt.WA_ShowWithoutActivating)
+        self._widget.hide()
+        self._widget.installEventFilter(self)
         viewport.installEventFilter(self)
         self._connections = [
             (editor.updateRequest, self._view_changed),
@@ -171,6 +157,11 @@ class SubstituteOverlay(QObject):
 
     def eventFilter(self, watched, event):
         widget = self.widget
+        if widget is not None and watched is widget and event.type() == QEvent.Paint:
+            with QPainter(widget) as painter:
+                painter.setClipRect(event.rect())
+                self._paint(painter)
+            return True
         if widget is not None and watched is widget.parentWidget():
             if event.type() in (QEvent.Resize, QEvent.FontChange):
                 self._layouts.clear()

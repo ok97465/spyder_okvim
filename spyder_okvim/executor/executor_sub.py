@@ -820,7 +820,7 @@ class ExecutorSubCmdLeap(ExecutorSubBase):
             num = self.parent_num[0] * self.parent_num[-1]
 
         reverse = base_cmd in "LSZ"
-        positions = self.helper_motion.search_in_view(
+        positions = self.helper_motion.leap_helper.search_in_view(
             ch2, reverse=reverse, full_view=full_view
         )
         if base_cmd in "sS":

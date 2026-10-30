@@ -60,7 +60,6 @@ class ExecutorColon(ExecutorSubBase):
         super().__init__(vim_status)
         self.allow_leaderkey = False
 
-        self.editor_widget = vim_status.editor_widget
         self.pending_range_text = None
         self.origin_line = None
 
@@ -89,8 +88,7 @@ class ExecutorColon(ExecutorSubBase):
                 self.origin_line = None
                 self.vim_status.sub_mode = None
                 return True
-            else:
-                cmd_line.setText(txt[:-2])
+            cmd_line.setText(txt[:-2])
         if txt[-1] != "\r":
             return False
 
@@ -268,7 +266,7 @@ class ExecutorColon(ExecutorSubBase):
             return
         vs.to_normal()
         vs.push_jump()
-        self.editor_widget.load(path)
+        vs.editor_widget.load(path)
         vs.push_jump()
         vs.set_focus_to_vim()
         vs.cursor.draw_vim_cursor()
@@ -308,9 +306,6 @@ class ExecutorColon(ExecutorSubBase):
         self.vim_status.cursor.set_cursor_pos(position)
         self.vim_status.set_focus_to_vim()
 
-    vsp = vs
-    vsplit = vs
-
     def marks(self, arg=""):
         """Show bookmarks and jump to the selected one."""
         vs = self.vim_status
@@ -327,7 +322,7 @@ class ExecutorColon(ExecutorSubBase):
         )
         if mark:
             vs.push_jump()
-            vs.jump_to_bookmark(mark)
+            vs.bookmark_manager.jump_to_bookmark(mark)
             vs.push_jump()
 
         vs.set_focus_to_vim()

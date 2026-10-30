@@ -6,8 +6,7 @@ from unittest.mock import Mock
 
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import QEvent, Qt
-from qtpy.QtGui import QKeyEvent
+from qtpy.QtCore import Qt
 
 
 @pytest.mark.parametrize(
@@ -233,7 +232,9 @@ def test_colon_marks_escape_focus(vim_bot, monkeypatch):
     )
 
     called = []
-    monkeypatch.setattr(vs, "jump_to_bookmark", lambda *a: called.append(True))
+    monkeypatch.setattr(
+        vs.bookmark_manager, "jump_to_bookmark", lambda *a: called.append(True)
+    )
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, ":")

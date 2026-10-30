@@ -25,10 +25,6 @@ def _text(cursor, start, end):
     return cursor.selectedText().replace("\u2029", "\n")
 
 
-def _bytes(text):
-    return len(text.encode("utf-8"))
-
-
 @dataclass(frozen=True)
 class PutContext:
     mode: int
@@ -57,14 +53,6 @@ class PutResult:
     original: str
     end: int
     cursor_position: int
-
-    @property
-    def start(self):
-        return self.plan.start
-
-    @property
-    def text(self):
-        return self.plan.text
 
 
 @dataclass(frozen=True)
@@ -296,7 +284,7 @@ class PutController:
         self.status.to_normal()
         self.status.cursor.set_cursor_pos(result.cursor_position)
         if self.status.yanky_enabled:
-            self.status.cursor.highlight_put(result.start, result.end)
+            self.status.cursor.highlight_put(result.plan.start, result.end)
 
     def put(self, num=1, is_lower=True, entry=None):
         """Put a register or explicit immutable entry; return the resulting patch."""
@@ -325,7 +313,8 @@ class PutController:
         retain_original = (
             self.status.yanky_enabled
             and bool(entry.text)
-            and 3 * (plan.end - plan.start) + _bytes(plan.text) <= SESSION_BYTE_LIMIT
+            and 3 * (plan.end - plan.start) + len(plan.text.encode("utf-8"))
+            <= SESSION_BYTE_LIMIT
         )
         previous_length = editor.document().characterCount()
         with self._edit_block(plan.start, plan.end):
@@ -334,15 +323,14 @@ class PutController:
         if explicit and not self.status.running_dot_cmd:
             self.status.dot_cmd.put_payload = PutPayload(entry, is_lower, num)
         enabled = self.status.yanky_enabled
-        expected_length = (
-            previous_length - (plan.end - plan.start) + result.end - result.start
-        )
+        expected_length = previous_length + result.end - plan.end
         valid_patch = (
             not self._foreign_edit
             and editor.document().characterCount() == expected_length
             and (
                 not retain_original
-                or _text(editor.textCursor(), result.start, result.end) == result.text
+                or _text(editor.textCursor(), result.plan.start, result.end)
+                == result.plan.text
             )
         )
         if enabled and retain_original and valid_patch:
@@ -394,7 +382,10 @@ class PutController:
             return False
         result = session.result
         # Qt can defer contentsChange until an enclosing edit block ends.
-        return _text(editor.textCursor(), result.start, result.end) == result.text
+        return (
+            _text(editor.textCursor(), result.plan.start, result.end)
+            == result.plan.text
+        )
 
     def cycle(self, direction, count=1):
         """Replace once with the final bounded candidate; boundary keys are handled."""
@@ -430,7 +421,7 @@ class PutController:
         same_range = (plan.start, plan.end) == (old.plan.start, old.plan.end)
         same_result = (
             same_range
-            and plan.text == old.text
+            and plan.text == old.plan.text
             and self._cursor_position(plan, old.end) == old.cursor_position
         )
         if same_result:
@@ -439,9 +430,9 @@ class PutController:
             if not self.status.running_dot_cmd:
                 self.status.dot_cmd.put_payload = payload
             return True
-        original_bytes = _bytes(old.original)
-        planned_bytes = _bytes(plan.text)
-        cost = _bytes(old.text) + planned_bytes
+        original_bytes = len(old.original.encode("utf-8"))
+        planned_bytes = len(plan.text.encode("utf-8"))
+        cost = len(old.plan.text.encode("utf-8")) + planned_bytes
         if not same_range:
             cost += 2 * original_bytes
         if (
@@ -454,22 +445,24 @@ class PutController:
         editor = self.editor
         # The combined notification spans the old patch and the new original
         # range. Changes elsewhere during a reentrant Qt callback expire it.
-        shift = (old.end - old.start) - (old.plan.end - old.plan.start)
+        shift = old.end - old.plan.end
         mapped_start = plan.start + (shift if plan.start > old.plan.end else 0)
         mapped_end = plan.end + (shift if plan.end > old.plan.end else 0)
         previous_length = editor.document().characterCount()
         failed = False
         recovered = False
         with self._edit_block(
-            min(old.start, mapped_start), max(old.end, mapped_end), join_previous=True
+            min(old.plan.start, mapped_start),
+            max(old.end, mapped_end),
+            join_previous=True,
         ) as cursor:
             try:
                 if same_range:
-                    replacement = replace(plan, start=old.start, end=old.end)
+                    replacement = replace(plan, start=old.plan.start, end=old.end)
                     applied = self._apply(replacement, original=old.original)
                     result = replace(applied, plan=plan)
                 else:
-                    cursor.setPosition(old.start)
+                    cursor.setPosition(old.plan.start)
                     cursor.setPosition(old.end, QTextCursor.KeepAnchor)
                     cursor.insertText(old.original)
                     result = self._apply(plan)
@@ -484,17 +477,18 @@ class PutController:
                     and live_widget(session.editor_ref) is editor
                     and editor.document() is session.document
                     and patch is not None
-                    and _text(editor.textCursor(), patch.start, patch.end) == patch.text
+                    and _text(editor.textCursor(), patch.plan.start, patch.end)
+                    == patch.plan.text
                 ):
-                    cursor.setPosition(patch.start)
+                    cursor.setPosition(patch.plan.start)
                     cursor.setPosition(patch.end, QTextCursor.KeepAnchor)
-                    cursor.insertText(old.text if same_range else patch.original)
+                    cursor.insertText(old.plan.text if same_range else patch.original)
                     if not same_range:
                         cursor.setPosition(old.plan.start)
                         cursor.setPosition(old.plan.end, QTextCursor.KeepAnchor)
-                        cursor.insertText(old.text)
+                        cursor.insertText(old.plan.text)
                     self.status.cursor.set_cursor_pos(old.cursor_position)
-                    self.status.cursor.highlight_put(old.start, old.end)
+                    self.status.cursor.highlight_put(old.plan.start, old.end)
                     recovered = True
         if failed:
             if recovered and not self._foreign_edit:
@@ -504,18 +498,13 @@ class PutController:
                 self.cancel()
             self.status.set_message("Could not cycle this yank entry")
             return True
-        expected_length = (
-            previous_length
-            - (old.end - old.start)
-            + (old.plan.end - old.plan.start)
-            - (plan.end - plan.start)
-            + result.end
-            - result.start
-        )
+        # Restore the previous patch's size, then apply the new patch's delta.
+        expected_length = previous_length - shift + result.end - plan.end
         valid_patch = (
             not self._foreign_edit
             and editor.document().characterCount() == expected_length
-            and _text(editor.textCursor(), result.start, result.end) == result.text
+            and _text(editor.textCursor(), result.plan.start, result.end)
+            == result.plan.text
         )
         if not valid_patch:
             self.cancel()

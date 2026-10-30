@@ -204,7 +204,7 @@ def test_count_only_does_not_expand_or_allocate_edits(monkeypatch):
     def fail(*args):
         pytest.fail("Count-only execution expanded a replacement")
 
-    monkeypatch.setattr(substitute, "_expand_replacement", fail)
+    monkeypatch.setattr(substitute, "substitution_match", fail)
     document, plan = _plan("a a\na", "a", "z", global_matches=True, count_only=True)
     assert (plan.match_count, plan.line_count, plan.last_line) == (3, 2, 1)
     assert plan.edits == ()

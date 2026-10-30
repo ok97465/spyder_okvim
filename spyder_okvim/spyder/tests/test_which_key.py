@@ -104,7 +104,7 @@ def _stays_hidden(state):
 def _seed_prefix_hints(state):
     """Provide a local mark and named register without changing the cursor."""
     filename = state.stack.get_current_filename()
-    state.status.bookmarks[filename]["a"] = {
+    state.status.bookmark_manager.bookmarks[filename]["a"] = {
         "file": filename,
         "line": 1,
         "col": 2,
@@ -263,8 +263,8 @@ def test_bookmark_hints_include_current_local_and_global_marks_only(which_key):
     _seed_prefix_hints(state)
     filename = state.stack.get_current_filename()
     other = next(path for path in state.stack.get_filenames() if path != filename)
-    state.status.bookmarks[other]["b"] = {"file": other, "line": 0, "col": 0}
-    state.status.bookmarks_global["A"] = {"file": other, "line": 2, "col": 0}
+    state.status.bookmark_manager.bookmarks[other]["b"] = {"file": other, "line": 0, "col": 0}
+    state.status.bookmark_manager.bookmarks_global["A"] = {"file": other, "line": 2, "col": 0}
     popup = _show(state, "'")
     candidates = _candidate_texts(popup)
     assert set(candidates) == {"a", "A"}

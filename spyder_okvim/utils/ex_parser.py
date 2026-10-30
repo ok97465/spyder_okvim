@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 class ExError(ValueError):
@@ -491,16 +491,11 @@ def resolve_substitute(
             if header.command == "~" or "r" in flags
             else previous.pattern
         )
-        replacement, delimiter = previous.replacement, previous.delimiter
+        spec = replace(previous, pattern=pattern, flags=flags, count=count)
     else:
         spec = parse_substitute(body, previous_flags)
-        pattern = spec.pattern or search_pattern
-        replacement, delimiter, flags, count = (
-            spec.replacement,
-            spec.delimiter,
-            spec.flags,
-            spec.count,
-        )
-    if not pattern:
+        if not spec.pattern:
+            spec = replace(spec, pattern=search_pattern)
+    if not spec.pattern:
         raise ExError("No previous search pattern")
-    return SubstituteSpec(pattern, replacement, delimiter, flags, count)
+    return spec

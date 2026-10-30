@@ -26,8 +26,8 @@ def test_search_in_view_covers_full_viewport(vim_bot):
         block = editor.document().findBlockByNumber(1)
         vim_status.cursor.set_cursor_pos(block.position())
 
-        positions_forward = helper_motion.search_in_view("fo", full_view=True)
-        positions_reverse = helper_motion.search_in_view("fo", reverse=True, full_view=True)
+        positions_forward = helper_motion.leap_helper.search_in_view("fo", full_view=True)
+        positions_reverse = helper_motion.leap_helper.search_in_view("fo", reverse=True, full_view=True)
 
         expected_positions = []
         index = new_text.find("fo")

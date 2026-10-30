@@ -6,13 +6,7 @@ from dataclasses import dataclass
 from itertools import chain
 from time import monotonic
 
-from spyder_okvim.utils.substitute import (
-    ReplacementLimitExceeded,
-    _check_boundary,
-    _iter_matches,
-    assemble_substitution_line,
-    substitution_match,
-)
+from spyder_okvim.utils import substitute
 
 
 @dataclass(frozen=True)
@@ -68,11 +62,11 @@ class PreviewResult:
 def safe_highlight_span(source, start, end):
     """Widen UTF-16-unit matches to displayable character boundaries."""
     try:
-        _check_boundary(source, start)
+        substitute._check_boundary(source, start)
     except ValueError:
         start -= 1
     try:
-        _check_boundary(source, end)
+        substitute._check_boundary(source, end)
     except ValueError:
         end += 1
     return start, end
@@ -251,7 +245,7 @@ class SubstitutePreview:
                 edits = None
                 output_reason = "replacement expansion limit"
             found = False
-            for match in _iter_matches(
+            for match in substitute._iter_matches(
                 prepared.pattern, original, prepared.global_matches
             ):
                 if self._match_count >= limits.max_matches:
@@ -272,7 +266,7 @@ class SubstitutePreview:
                 )
                 if edits is not None:
                     try:
-                        edit = substitution_match(
+                        edit = substitute.substitution_match(
                             prepared.tokens,
                             source,
                             match,
@@ -283,7 +277,7 @@ class SubstitutePreview:
                                 - len(original),
                             ),
                         )
-                    except ReplacementLimitExceeded:
+                    except substitute.ReplacementLimitExceeded:
                         # Once bounded expansion fails, spend no further work
                         # retrying the same oversized replacement on later rows.
                         self._expansion_exhausted = True
@@ -305,7 +299,7 @@ class SubstitutePreview:
                 ):
                     self._omit_output(number, "output character limit")
                 else:
-                    after = assemble_substitution_line(source, edits).decode(
+                    after = substitute.assemble_substitution_line(source, edits).decode(
                         "utf-16-le"
                     )
                     if after != original:

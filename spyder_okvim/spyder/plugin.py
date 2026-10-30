@@ -21,8 +21,6 @@ from spyder.api.plugin_registration.decorators import (
 )
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 
-# Project Libraries
-from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder.api.widgets.status import StatusBarWidget
 from spyder.utils.icon_manager import MAIN_FG_COLOR
 
@@ -33,6 +31,7 @@ from spyder_okvim.spyder.confpage import OkvimConfigPage
 from spyder_okvim.spyder.switcher import SwitcherNavigation
 from spyder_okvim.spyder.vim_widgets import VimPane
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
+from spyder_okvim.utils.testing_env import running_in_pytest
 
 
 class StatusBarVimWidget(StatusBarWidget):
@@ -80,36 +79,6 @@ class StatusBarVimWidget(StatusBarWidget):
         width_total += 2 * spacing + spacing_post
         self.setFixedWidth(width_total)
         self.setLayout(layout)
-
-    def set_layout(self):
-        """Public entry point to apply the layout."""
-        self._set_layout()
-
-    # ---- Status bar widget API
-    def set_icon(self):
-        """Set the icon for the status bar widget."""
-        pass
-
-    def set_value(self, value):
-        """Set formatted text value."""
-        pass
-
-    def update_tooltip(self):
-        """Update tooltip for widget."""
-        pass
-
-    def mouseReleaseEvent(self, event):
-        """Override Qt method to allow for click signal."""
-        super().mouseReleaseEvent(event)
-
-    # ---- API to be defined by user
-    def get_tooltip(self):
-        """Return the widget tooltip text."""
-        return ""
-
-    def get_icon(self):
-        """Return the widget icon."""
-        return None
 
 
 class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904

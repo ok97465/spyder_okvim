@@ -574,7 +574,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         executor_sub = self.executor_sub_alnum
         self.set_parent_info_to_submode(executor_sub, num, num_str)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.vim_status.set_bookmark, True)]
+            [FUNC_INFO(self.vim_status.bookmark_manager.set_bookmark, True)]
         )
         return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
 
@@ -586,7 +586,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         def run(ch):
             self.vim_status.push_jump()
             if ch.isupper():
-                self.vim_status.jump_to_bookmark(ch)
+                self.vim_status.bookmark_manager.jump_to_bookmark(ch)
                 cursor = self.get_cursor()
                 self.vim_status.cursor.set_cursor_pos(cursor.block().position())
             else:
@@ -606,7 +606,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         def run(ch):
             self.vim_status.push_jump()
             if ch.isupper():
-                self.vim_status.jump_to_bookmark(ch)
+                self.vim_status.bookmark_manager.jump_to_bookmark(ch)
             else:
                 info = self.helper_motion.backtick(ch)
                 if info.cursor_pos is not None:

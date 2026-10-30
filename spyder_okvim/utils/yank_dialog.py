@@ -211,15 +211,7 @@ class YankHistoryPicker:
             )
             # Popup deletion can post focus changes after ``finished``. Keep
             # the request active until those settle, then create the put.
-            QTimer.singleShot(0, self._restore_focus)
-
-    def _restore_focus(self):
-        if self.widget._yank_picker is not self:
-            return
-        if self.is_current():
-            live_widget(self.editor_ref).window().activateWindow()
-            self.widget.commandline.setFocus()
-        QTimer.singleShot(0, self._complete)
+            QTimer.singleShot(0, self._complete)
 
     def _complete(self):
         if self.widget._yank_picker is not self:
@@ -227,8 +219,9 @@ class YankHistoryPicker:
         valid = self.is_current()
         editor = live_widget(self.editor_ref)
         line = self.widget.commandline
-        if valid and not line.hasFocus():
-            if self._restore_attempts < 4:
+        # Check focus on a later event-loop turn after every restoration attempt.
+        if valid and (self._restore_attempts == 0 or not line.hasFocus()):
+            if self._restore_attempts < 5:
                 self._restore_attempts += 1
                 editor.window().activateWindow()
                 line.setFocus()

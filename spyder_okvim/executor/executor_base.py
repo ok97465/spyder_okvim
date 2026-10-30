@@ -92,7 +92,7 @@ class ExecutorBase:
         self.get_pos_end_in_selection = vim_status.get_pos_end_in_selection
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
         self.helper_motion = MotionHelper(vim_status)
-        self.helper_action = ActionHelper(vim_status)
+        self.helper_action = ActionHelper(self.helper_motion)
 
         self.has_zero_cmd = True
         self.pattern_cmd = None

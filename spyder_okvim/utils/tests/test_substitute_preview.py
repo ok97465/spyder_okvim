@@ -165,7 +165,7 @@ def test_highlighting_never_tokenizes_or_expands_replacements(
         pytest.fail("Highlighting attempted to prepare replacement text")
 
     monkeypatch.setattr(substitute, "tokenize_replacement", fail)
-    monkeypatch.setattr(substitute, "_expand_replacement", fail)
+    monkeypatch.setattr(substitute, "substitution_match", fail)
     _, prepared, result = preview("foo foo\nfoo", command)
     assert result.match_count == expected_count
     assert prepared.tokens == ()
@@ -227,16 +227,16 @@ def test_scan_limits_bound_candidate_highlights(limit, value, expected_count, re
 
 
 def test_long_lines_are_omitted_before_regex_is_called(monkeypatch):
-    from spyder_okvim.utils import substitute_preview
+    from spyder_okvim.utils import substitute
 
     observed = []
-    iterate = substitute_preview._iter_matches
+    iterate = substitute._iter_matches
 
     def record(pattern, text, global_matches):
         observed.append(text)
         yield from iterate(pattern, text, global_matches)
 
-    monkeypatch.setattr(substitute_preview, "_iter_matches", record)
+    monkeypatch.setattr(substitute, "_iter_matches", record)
     limits = replace(PreviewLimits(), max_line_chars=3)
     _, _, result = preview("xxxxxxxx\nx", ":%s/x/y/g", limits=limits)
     assert observed == ["x"]
@@ -370,13 +370,13 @@ def test_only_requested_visible_blocks_expand_replacements(monkeypatch):
     from spyder_okvim.utils import substitute
 
     observed = []
-    expand = substitute._expand_replacement
+    expand = substitute.substitution_match
 
     def record(tokens, source, match, **kwargs):
         observed.append(source.decode("utf-16-le"))
         return expand(tokens, source, match, **kwargs)
 
-    monkeypatch.setattr(substitute, "_expand_replacement", record)
+    monkeypatch.setattr(substitute, "substitution_match", record)
     _, _, result = preview(
         "foo\nfoo foo\nfoo",
         ":%s/foo/bar/g",
@@ -436,12 +436,12 @@ def test_output_limits_omit_rows_while_candidate_scanning_continues(limit, value
 
 
 def test_output_limit_is_checked_before_assembling_large_expansions(monkeypatch):
-    from spyder_okvim.utils import substitute_preview
+    from spyder_okvim.utils import substitute
 
     def fail(*args, **kwargs):
         pytest.fail("Oversized replacement was assembled")
 
-    monkeypatch.setattr(substitute_preview, "assemble_substitution_line", fail)
+    monkeypatch.setattr(substitute, "assemble_substitution_line", fail)
     _, _, result = preview(
         "a" * 100,
         r":s/(a+)/" + r"\1" * 100 + "/",
@@ -488,7 +488,7 @@ def test_count_only_and_unfinished_pattern_never_prepare_overlay_replacements(
         pytest.fail("A search/count-only preview attempted replacement expansion")
 
     monkeypatch.setattr(substitute, "tokenize_replacement", fail)
-    monkeypatch.setattr(substitute, "_expand_replacement", fail)
+    monkeypatch.setattr(substitute, "substitution_match", fail)
     for command in (":%s/foo", r":%s/foo/\u/gnc"):
         _, _, result = preview(
             "foo foo\nfoo",
@@ -530,13 +530,13 @@ def test_failed_expansion_is_not_retried_for_later_visible_rows(monkeypatch):
     from spyder_okvim.utils import substitute
 
     observed = []
-    expand = substitute._expand_replacement
+    expand = substitute.substitution_match
 
     def record(tokens, source, match, **kwargs):
         observed.append(source.decode("utf-16-le"))
         return expand(tokens, source, match, **kwargs)
 
-    monkeypatch.setattr(substitute, "_expand_replacement", record)
+    monkeypatch.setattr(substitute, "substitution_match", record)
     _, _, result = preview(
         "foo\nfoo\nfoo",
         ":%s/foo/longer/",

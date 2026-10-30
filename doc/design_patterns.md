@@ -39,6 +39,16 @@ Other executors retain their existing parsers where counts, text input, or motio
 grammar require them. The `submode` decorator manages executor transitions;
 `MotionHelper` and `ActionHelper` own movement and text operations.
 
+Each executor creates one `MotionHelper` and passes it to `ActionHelper` for
+text-object boundaries, avoiding a second motion helper and its Leap state.
+Search motions live directly in `MotionHelper`; `utils/search_helpers.py`
+contains the regular-expression functions shared with substitution. Stateful
+Leap operations are called through `helper_motion.leap_helper` directly.
+
+Bookmark callers use `vim_status.bookmark_manager` directly. The manager owns
+both bookmark dictionaries and persistence; `VimStatus` keeps no duplicate
+dictionary references or forwarding methods.
+
 ## Dynamic hints
 
 Every executor exposes `hint_prefix` and `get_hint_candidates()`. A `None` prefix
@@ -126,3 +136,8 @@ an old editor.
 Snapshot puts keep only their entry, direction, and count in `PutPayload`.
 The Visual selection shape remains in `DotCmdInfo`, whose
 `selection_to_cmd_string()` is shared by ordinary and snapshot dot repetition.
+
+Command-line popups own their content and appearance caches. Their setters
+report changes so the controller can update geometry without another layout
+cache or inspecting popup internals. `SubstituteOverlay` paints its passive
+viewport child through its existing event filter.

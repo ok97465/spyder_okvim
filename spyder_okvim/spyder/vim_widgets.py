@@ -771,17 +771,6 @@ class VimLineEdit(QLineEdit):
             pass
 
 
-class VimMessageLabel(QLabel):
-    """Display Vim status messages."""
-
-    def __init__(self, txt, parent):
-        super().__init__(txt, parent)
-        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        tw = text_width(self.fontMetrics(), " recording @q... 0000 fewers lines ")
-        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
-        self.setFixedWidth(tw + (2 * fw) + 4)
-
-
 class MacroPlaybackWorker(QThread):
     """Replay a recorded macro on the main thread."""
 
@@ -840,13 +829,17 @@ class VimWidget(QWidget):
         self._input_depth = 0
         self._yank_picker = None
         self.status_label = VimStateLabel(main)
-        self.msg_label = VimMessageLabel("", main)
+        self.msg_label = QLabel("", main)
+        self.msg_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        message_width = text_width(
+            self.msg_label.fontMetrics(), " recording @q... 0000 fewers lines "
+        )
+        frame_width = self.msg_label.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
+        self.msg_label.setFixedWidth(message_width + (2 * frame_width) + 4)
 
         self.vim_status = VimStatus(editor_widget, main, self.msg_label)
         self.put_controller = PutController(self.vim_status)
         self.vim_status.put_controller = self.put_controller
-        # # Avoid Qt crashes if the label is deleted by ignoring the signal
-        # self.vim_status.change_label.connect(lambda state: None)
         self.vim_status.change_label.connect(self.status_label.change_state)
 
         self.vim_shortcut = VimShortcut(self.main, self.vim_status)

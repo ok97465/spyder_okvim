@@ -113,9 +113,6 @@ class VimStatus(QObject):
             self.get_editor,
             self.cursor.set_cursor_pos,
         )
-        # Expose dictionaries for backwards compatibility
-        self.bookmarks = self.bookmark_manager.bookmarks
-        self.bookmarks_global = self.bookmark_manager.bookmarks_global
 
         # jumplist
         self.jump_list = JumpList()
@@ -215,8 +212,6 @@ class VimStatus(QObject):
 
         # bookmarks
         self.bookmark_manager.clear()
-        self.bookmarks = self.bookmark_manager.bookmarks
-        self.bookmarks_global = self.bookmark_manager.bookmarks_global
 
         # jumplist
         self.jump_list = JumpList()
@@ -556,27 +551,6 @@ class VimStatus(QObject):
         open_file = getattr(application, "open_file_in_plugin", None)
         if callable(open_file):
             open_file(file_path)
-
-    # ---- Bookmarks ----------------------------------------------------
-    def _load_persistent_bookmarks(self) -> None:
-        """Load persistent bookmarks from disk."""
-        self.bookmark_manager._load_persistent_bookmarks()
-
-    def _save_persistent_bookmarks(self) -> None:
-        """Save persistent bookmarks to disk."""
-        self.bookmark_manager._save_persistent_bookmarks()
-
-    def set_bookmark(self, name: str) -> None:
-        """Set bookmark at current cursor position."""
-        self.bookmark_manager.set_bookmark(name)
-
-    def get_bookmark(self, name: str):
-        """Return bookmark information for *name* or None."""
-        return self.bookmark_manager.get_bookmark(name)
-
-    def jump_to_bookmark(self, name: str) -> None:
-        """Move cursor to bookmark *name* if it exists."""
-        self.bookmark_manager.jump_to_bookmark(name)
 
     # ---- Jump list ---------------------------------------------------
     def get_current_location(self):

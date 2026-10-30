@@ -45,7 +45,7 @@ class BookmarkManager:
         else:
             self.bookmarks_global = {}
 
-    def _save_persistent_bookmarks(self) -> None:
+    def save(self) -> None:
         """Save persistent bookmarks to disk."""
         folder = osp.dirname(self.bookmarks_file)
         os.makedirs(folder, exist_ok=True)
@@ -59,7 +59,7 @@ class BookmarkManager:
         """Remove all bookmarks from memory and disk."""
         self.bookmarks = defaultdict(dict)
         self.bookmarks_global = {}
-        self._save_persistent_bookmarks()
+        self.save()
 
     def set_bookmark(self, name: str) -> None:
         """Set bookmark at the current cursor position."""
@@ -71,7 +71,7 @@ class BookmarkManager:
         info = {"file": path, "line": line, "col": col}
         if name.isupper():
             self.bookmarks_global[name] = info
-            self._save_persistent_bookmarks()
+            self.save()
         else:
             self.bookmarks[path][name] = info
 
@@ -84,39 +84,27 @@ class BookmarkManager:
 
     def jump_to_bookmark(self, name: str) -> None:
         """Move cursor to bookmark *name* if it exists."""
+        info = self.get_bookmark(name)
+        if not info:
+            return
         if name.isupper():
-            info = self.bookmarks_global.get(name)
-            if not info:
-                return
-            file_path = info.get("file")
-            line = info.get("line")
-            col = info.get("col")
+            file_path = info["file"]
             editor_stack = self.get_editorstack()
             if editor_stack.is_file_opened(file_path) is None:
                 self.open_file(file_path)
             editor_stack.set_current_filename(file_path)
-            editor = self.get_editor()
-            block = editor.document().findBlockByNumber(line)
-            if not block.isValid():
+        editor = self.get_editor()
+        block = editor.document().findBlockByNumber(info["line"])
+        if not block.isValid():
+            if name.isupper():
                 self.bookmarks_global.pop(name, None)
-                self._save_persistent_bookmarks()
-                return
-            pos = block.position() + min(col, block.length() - 1)
-            self.set_cursor_pos(pos)
-        else:
-            current = self.get_editorstack().get_current_filename()
-            info = self.bookmarks.get(current, {}).get(name)
-            if not info:
-                return
-            line = info.get("line")
-            col = info.get("col")
-            editor = self.get_editor()
-            block = editor.document().findBlockByNumber(line)
-            if not block.isValid():
+                self.save()
+            else:
+                current = self.get_editorstack().get_current_filename()
                 self.bookmarks[current].pop(name, None)
-                return
-            pos = block.position() + min(col, block.length() - 1)
-            self.set_cursor_pos(pos)
+            return
+        pos = block.position() + min(info["col"], block.length() - 1)
+        self.set_cursor_pos(pos)
 
     def list_bookmarks(self) -> list[tuple[str, dict]]:
         """Return a combined list of local and global bookmarks."""

@@ -4,7 +4,7 @@
 # Standard Libraries
 import ast
 import re
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from typing import TYPE_CHECKING
 
 # Third Party Libraries
@@ -14,7 +14,7 @@ from qtpy.QtGui import QTextCursor
 # Project Libraries
 from spyder_okvim.utils.leap_helpers import LeapHelper
 from spyder_okvim.utils.motion import MotionInfo, MotionType
-from spyder_okvim.utils.search_helpers import SearchHelper
+from spyder_okvim.utils.search_helpers import resolve_ignorecase
 from spyder_okvim.utils.text_constants import BRACKET_PAIR
 
 if TYPE_CHECKING:  # pragma: no cover - typing helpers
@@ -38,7 +38,6 @@ class MotionHelper:
         self.set_cursor = vim_status.set_cursor
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
 
-        self.search_helper = SearchHelper(vim_status, self._set_motion_info)
         self.leap_helper = LeapHelper(vim_status, self._set_motion_info)
 
         self.find_cmd_map = {
@@ -682,34 +681,6 @@ class MotionHelper:
             ch_pos + block.position(), motion_type=MotionType.CharWise
         )
 
-    def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
-        """Return start and end positions of the visible viewport."""
-        return self.leap_helper.get_viewport_positions()
-
-    def search_in_view(
-        self, txt: str, *, reverse: bool = False, full_view: bool = False
-    ) -> list[int]:
-        """Return viewport positions of ``txt`` ordered by direction."""
-        return self.leap_helper.search_in_view(
-            txt, reverse=reverse, full_view=full_view
-        )
-
-    def leap(self, ch2, num=1, by_repeat_cmd=False):
-        """Delegate to :class:`LeapHelper`."""
-        return self.leap_helper.leap(ch2, num, by_repeat_cmd)
-
-    def display_additional_leap_targets(self):
-        """Show annotations for additional Leap targets."""
-        self.leap_helper.display_additional_leap_targets()
-
-    def reverse_leap(self, ch2, num=1, by_repeat_cmd=False):
-        """Delegate to :class:`LeapHelper`."""
-        return self.leap_helper.reverse_leap(ch2, num, by_repeat_cmd)
-
-    def display_additional_reverse_leap_targets(self):
-        """Show annotations for reverse Leap targets."""
-        self.leap_helper.display_additional_reverse_leap_targets()
-
     def semicolon(self, num=1, num_str=""):
         """Repeat latest f, t, F or T."""
         name = self.vim_status.find_info.cmd_name
@@ -732,26 +703,16 @@ class MotionHelper:
 
     def apostrophe(self, mark: str):
         """Return linewise position of mark."""
-        info = self.vim_status.get_bookmark(mark)
-        if not info:
+        motion = self.backtick(mark)
+        if motion.cursor_pos is None:
             return self._set_motion_info(None)
-        current = self.vim_status.get_editorstack().get_current_filename()
-        if info.get("file") != current:
-            return self._set_motion_info(None)
-        editor = self.get_editor()
-        block = editor.document().findBlockByNumber(info["line"])
-        if not block.isValid():
-            if mark.isupper():
-                self.vim_status.bookmarks_global.pop(mark, None)
-                self.vim_status._save_persistent_bookmarks()
-            else:
-                self.vim_status.bookmarks[current].pop(mark, None)
-            return self._set_motion_info(None)
+        block = self.get_editor().document().findBlock(motion.cursor_pos)
         return self._set_motion_info(block.position(), motion_type=MotionType.LineWise)
 
     def backtick(self, mark: str):
         """Return charwise position of mark."""
-        info = self.vim_status.get_bookmark(mark)
+        bookmarks = self.vim_status.bookmark_manager
+        info = bookmarks.get_bookmark(mark)
         if not info:
             return self._set_motion_info(None)
         current = self.vim_status.get_editorstack().get_current_filename()
@@ -761,10 +722,10 @@ class MotionHelper:
         block = editor.document().findBlockByNumber(info["line"])
         if not block.isValid():
             if mark.isupper():
-                self.vim_status.bookmarks_global.pop(mark, None)
-                self.vim_status._save_persistent_bookmarks()
+                bookmarks.bookmarks_global.pop(mark, None)
+                bookmarks.save()
             else:
-                self.vim_status.bookmarks[current].pop(mark, None)
+                bookmarks.bookmarks[current].pop(mark, None)
             return self._set_motion_info(None)
         pos = block.position() + min(info["col"], block.length() - 1)
         return self._set_motion_info(pos, motion_type=MotionType.CharWiseIncludingEnd)
@@ -1279,30 +1240,53 @@ class MotionHelper:
 
         return motion_info
 
-    def search(self, txt: str, forward: bool = True):
-        """Delegate search to :class:`SearchHelper`."""
-        self.search_helper.search(txt, forward=forward)
+    def search(self, text: str, forward: bool = True) -> None:
+        """Search in ``forward`` direction, reusing the previous pattern if empty."""
+        text = text or self.vim_status.search.txt_searched
+        if not text:
+            return
+        ignorecase = resolve_ignorecase(text)
+        self.vim_status.search.search(text, ignorecase=ignorecase, forward=forward)
 
-    def n(self, num=1, num_str=""):
-        """Move to the next search match."""
-        return self.search_helper.n(num, num_str)
+    def n(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Move to a match in the direction of the last search."""
+        return self._repeat_search(num, self.vim_status.search.forward)
 
-    def N(self, num=1, num_str=""):
-        """Move to the previous search match."""
-        return self.search_helper.N(num, num_str)
+    def N(self, num: int = 1, num_str: str = "") -> MotionInfo:
+        """Move to a match opposite the direction of the last search."""
+        return self._repeat_search(num, not self.vim_status.search.forward)
 
-    def _get_word_under_cursor(self) -> str:
-        """Return word under cursor."""
-        editor = self.get_editor()
-        return editor.get_current_word()
+    def _repeat_search(self, num: int, forward: bool) -> MotionInfo:
+        """Find a counted match while preserving the saved search direction."""
+        positions = self.vim_status.search.get_sel_start_list()
+        if not positions:
+            return self._set_motion_info(None)
+        text = self.vim_status.search.txt_searched
+        prefix = "/" if forward else "?"
+        self.vim_status.set_message(f"{prefix}{text}")
+        cursor_pos = self.get_cursor().position()
+        if forward:
+            idx = bisect_right(positions, cursor_pos) + num - 1
+        else:
+            idx = bisect_left(positions, cursor_pos) - num
+        idx %= len(positions)
+        return self._set_motion_info(positions[idx], motion_type=MotionType.CharWise)
 
-    def asterisk(self, num=1, num_str=""):
+    def asterisk(self, num: int = 1, num_str: str = "") -> MotionInfo:
         """Search forward for the word under the cursor."""
-        return self.search_helper.asterisk(num, num_str)
+        word = self.get_editor().get_current_word()
+        if word is None:
+            return self._set_motion_info(None)
+        self.search(rf"\b{word}\b", forward=True)
+        return self.n(num=num)
 
-    def sharp(self, num=1, num_str=""):
+    def sharp(self, num: int = 1, num_str: str = "") -> MotionInfo:
         """Search backward for the word under the cursor."""
-        return self.search_helper.sharp(num, num_str)
+        word = self.get_editor().get_current_word()
+        if word is None:
+            return self._set_motion_info(None)
+        self.search(rf"\b{word}\b", forward=False)
+        return self.n(num=num)
 
     def space(self, num=1, num_str=""):
         """Get the position on the right side of the cursor."""

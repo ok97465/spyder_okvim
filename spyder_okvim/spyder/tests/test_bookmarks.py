@@ -369,7 +369,7 @@ def test_global_bookmark_removed_after_edit(vim_bot):
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
     qtbot.keyClicks(cmd_line, "'A")
     assert editor.textCursor().position() == 0
-    assert "A" in vim.vim_cmd.vim_status.bookmarks_global
+    assert "A" in vim.vim_cmd.vim_status.bookmark_manager.bookmarks_global
 
 
 def test_global_bookmark_overwrite(vim_bot):
