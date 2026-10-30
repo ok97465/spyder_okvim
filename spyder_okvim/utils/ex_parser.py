@@ -56,6 +56,19 @@ class SubstituteSpec:
     count: int | None = None
 
 
+@dataclass(frozen=True)
+class SubstituteGuideContext:
+    """Read-only guidance for the field containing the command-line cursor."""
+
+    stage: str
+    delimiter: str
+    addresses: tuple[str, ...] = ()
+    raw_flags: str = ""
+    effective_flags: str = ""
+    missing_previous: bool = False
+    unsupported: str = ""
+
+
 def _skip_space(text, position):
     while position < len(text) and text[position].isspace():
         position += 1
@@ -252,16 +265,21 @@ def _decode_pattern(pattern, delimiter):
     return "".join(result)
 
 
+def _substitute_delimiter(delimiter):
+    """Keep incomplete guidance and executable substitution syntax aligned."""
+    return (
+        33 <= ord(delimiter) <= 126
+        and not delimiter.isalnum()
+        and delimiter not in '\\"|'
+    )
+
+
 def parse_substitute(body: str, previous_flags: str = "") -> SubstituteSpec:
     """Parse ``/pattern/replacement/flags`` without altering replacement escapes."""
     if not body:
         raise ExError("Specify a substitution pattern and replacement")
     delimiter = body[0]
-    if not (
-        33 <= ord(delimiter) <= 126
-        and not delimiter.isalnum()
-        and delimiter not in '\\"|'
-    ):
+    if not _substitute_delimiter(delimiter):
         raise ExError("Invalid substitution delimiter")
     pattern, position, closed = _segment(body, 1, delimiter, pattern=True)
     if closed:
@@ -276,8 +294,8 @@ def parse_substitute(body: str, previous_flags: str = "") -> SubstituteSpec:
     )
 
 
-def _substitute_flags(tail, previous_flags):
-    """Read flags and a count, optionally retaining the previous flags with &."""
+def _scan_substitute_flags(tail, previous_flags):
+    """Apply flags and return where the optional count or comment begins."""
     keep_flags = tail.startswith("&")
     position = int(keep_flags)
     # r chooses the pattern for this command; Vim does not remember it with &.
@@ -291,8 +309,13 @@ def _substitute_flags(tail, previous_flags):
             flags.append(flag)
         position += 1
 
-    position = _skip_space(tail, position)
-    start = position
+    return "".join(flags), position
+
+
+def _substitute_flags(tail, previous_flags):
+    """Read flags and a count, optionally retaining the previous flags with &."""
+    flags, position = _scan_substitute_flags(tail, previous_flags)
+    position = start = _skip_space(tail, position)
     while position < len(tail) and "0" <= tail[position] <= "9":
         position += 1
     count = _decimal_address(tail[start:position]) if position > start else None
@@ -303,7 +326,76 @@ def _substitute_flags(tail, previous_flags):
         raise ExError(
             f"Unsupported substitution flag or trailing input: {tail[position:]}"
         )
-    return "".join(flags), count
+    return flags, count
+
+
+def scan_substitute_guide(
+    text: str, cursor_position: int, previous: SubstituteSpec | None = None
+) -> SubstituteGuideContext | None:
+    """Inspect an unfinished ``:s`` command without executing or resolving it.
+
+    ``cursor_position`` is a Python string index, including the initial colon.
+    The Qt caller converts its UTF-16 cursor position before calling this pure
+    function. A cursor immediately after a delimiter belongs to the next field.
+    """
+    if not text.startswith(":"):
+        return None
+    try:
+        header = scan_header(text[1:], incomplete=True)
+    except ExError:
+        return None
+    if not header.command or not "substitute".startswith(header.command):
+        return None
+    body = header.argument
+    if not body or not _substitute_delimiter(body[0]):
+        return None
+
+    body_start = 1 + header.argument_start  # Include the prompt's initial colon.
+    cursor = max(0, min(cursor_position, len(text))) - body_start
+    if cursor < 1:
+        return None
+    delimiter = body[0]
+    _, pattern_end, pattern_closed = _segment(body, 1, delimiter, pattern=True)
+    if not pattern_closed or cursor < pattern_end:
+        return SubstituteGuideContext("pattern", delimiter, header.addresses)
+    _, replacement_end, replacement_closed = _segment(body, pattern_end, delimiter)
+    if not replacement_closed or cursor < replacement_end:
+        return SubstituteGuideContext("replacement", delimiter, header.addresses)
+
+    tail = body[replacement_end:]
+    tail_cursor = cursor - replacement_end
+    previous_flags = previous.flags if previous is not None else ""
+    flags, flags_end = _scan_substitute_flags(tail, previous_flags)
+    count_start = count_end = _skip_space(tail, flags_end)
+    while count_end < len(tail) and "0" <= tail[count_end] <= "9":
+        count_end += 1
+    trailing_start = _skip_space(tail, count_end)
+    stage = "flags"
+    unsupported = ""
+    if trailing_start < len(tail) and tail_cursor >= trailing_start:
+        if tail[trailing_start] == '"':
+            return None
+        stage = "unsupported"
+        unsupported = tail[trailing_start:]
+    elif count_end > count_start and tail_cursor >= count_start:
+        stage = "count"
+
+    # Describe active behavior rather than the executor's saved flag spelling.
+    active = set(flags) - {"i", "I", "r"}
+    last_case = next((flag for flag in reversed(flags) if flag in "iI"), "")
+    if last_case:
+        active.add(last_case)
+    if "n" in active:
+        active.discard("c")
+    return SubstituteGuideContext(
+        stage,
+        delimiter,
+        header.addresses,
+        raw_flags=tail[:flags_end],
+        effective_flags="".join(flag for flag in "gciIne" if flag in active),
+        missing_previous=tail.startswith("&") and previous is None,
+        unsupported=unsupported,
+    )
 
 
 def resolve_substitute(

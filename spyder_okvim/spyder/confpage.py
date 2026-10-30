@@ -58,6 +58,12 @@ class OkvimConfigPage(PluginConfigPage):
             default=True,
         )
         options_layout.addWidget(self.commandline_history_enabled)
+        self.substitute_guide_enabled = newcb(
+            "Show substitute command guide (:s)",
+            "substitute_guide_enabled",
+            default=True,
+        )
+        options_layout.addWidget(self.substitute_guide_enabled)
 
         hl_yank_layout = QHBoxLayout()
         hl_yank_layout.addWidget(newcb("highlight after yank", "highlight_yank"))

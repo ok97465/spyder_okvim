@@ -2,6 +2,7 @@
 
 # Third Party Libraries
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QFont
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -32,6 +33,7 @@ class HistoryPopup(QFrame):
     """Display scrollable history rows without taking command-line focus."""
 
     MAX_VISIBLE_ROWS = 8
+    MIN_WIDTH = 320
 
     def __init__(self, viewport):
         super().__init__(viewport)
@@ -40,6 +42,7 @@ class HistoryPopup(QFrame):
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self._candidates = ()
+        self._font = None
 
         self.header = QLabel("History", self)
         self.header.setTextFormat(Qt.PlainText)
@@ -59,7 +62,6 @@ class HistoryPopup(QFrame):
         self.list_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_widget.setTextElideMode(Qt.ElideRight)
-        self.list_widget.setUniformItemSizes(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 5, 6, 5)
@@ -92,8 +94,16 @@ class HistoryPopup(QFrame):
 
     def refresh_appearance(self, font):
         """Follow the command line's appearance and report any actual change."""
-        previous_font = self.font()
-        self.setFont(font)
+        font_changed = font != self._font
+        if font_changed:
+            self._font = QFont(font)
+            self.setFont(font)
+        font_family = font.family().replace("\\", "\\\\").replace('"', '\\"')
+        font_size = (
+            f"{font.pointSizeF()}pt"
+            if font.pointSizeF() > 0
+            else f"{font.pixelSize()}px"
+        )
         stylesheet = (
             "QFrame#commandlineHistoryPopup {"
             f"background-color: {SpyderPalette.COLOR_BACKGROUND_1};"
@@ -105,6 +115,7 @@ class HistoryPopup(QFrame):
             "QListWidget#commandlineHistoryList {"
             f"color: {SpyderPalette.COLOR_TEXT_1};"
             f"background-color: {SpyderPalette.COLOR_BACKGROUND_1};"
+            f'font-family: "{font_family}"; font-size: {font_size};'
             "border: none; outline: none; }"
             "QListWidget#commandlineHistoryList::item { padding: 2px 4px; }"
             "QListWidget#commandlineHistoryList::item:selected {"
@@ -116,13 +127,15 @@ class HistoryPopup(QFrame):
         if stylesheet_changed:
             self.setStyleSheet(stylesheet)
         # Stylesheet widgets do not reliably inherit their parent's font.
-        self.header.setFont(font)
-        self.list_widget.setFont(font)
-        return stylesheet_changed or self.font() != previous_font
+        if font_changed or stylesheet_changed:
+            self.header.setFont(font)
+            self.list_widget.setFont(font)
+        return stylesheet_changed or font_changed
 
     def update_geometry(self):
         """Fit the panel near the command line at the viewport's lower edge."""
         self.ensurePolished()
+        self.list_widget.ensurePolished()
         viewport = self.parentWidget()
         width, height = viewport.width(), viewport.height()
         margin = min(8, max(0, (min(width, height) - 1) // 2))
@@ -131,22 +144,34 @@ class HistoryPopup(QFrame):
         margins = self.layout().contentsMargins() + self.contentsMargins()
         horizontal_padding = margins.left() + margins.right()
         vertical_padding = margins.top() + margins.bottom()
-        row_height = self.list_widget.sizeHintForRow(0)
-        if row_height <= 0:
-            row_height = self.list_widget.fontMetrics().height() + 4
         visible_rows = min(self.MAX_VISIBLE_ROWS, len(self._candidates))
+        rows_height = sum(
+            self.list_widget.sizeHintForRow(row) for row in range(visible_rows)
+        )
+        # Spyder's theme adds padding inside the list, outside its viewport.
+        list_margins = self.list_widget.contentsMargins()
         wanted_height = (
             self.header.sizeHint().height()
             + self.layout().spacing()
-            + row_height * visible_rows
+            + rows_height
+            + list_margins.top()
+            + list_margins.bottom()
             + vertical_padding
         )
         row_width = max(0, self.list_widget.sizeHintForColumn(0))
-        scrollbar_width = self.list_widget.verticalScrollBar().sizeHint().width()
-        wanted_width = max(row_width, self.header.sizeHint().width())
-        popup_width = min(
-            available_width, wanted_width + horizontal_padding + scrollbar_width
+        needs_scrollbar = (
+            len(self._candidates) > visible_rows or wanted_height > available_height
         )
+        if needs_scrollbar:
+            row_width += self.list_widget.verticalScrollBar().sizeHint().width()
+        wanted_width = (
+            max(
+                row_width + list_margins.left() + list_margins.right(),
+                self.header.sizeHint().width(),
+            )
+            + horizontal_padding
+        )
+        popup_width = min(available_width, max(self.MIN_WIDTH, wanted_width))
         popup_height = min(available_height, wanted_height)
         self.setGeometry(
             margin,

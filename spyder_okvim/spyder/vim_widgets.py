@@ -40,8 +40,8 @@ from spyder_okvim.executor import (
     ExecutorVlineCmd,
 )
 from spyder_okvim.executor.executor_sub import ExecutorSubCmd_window
-from spyder_okvim.spyder.commandline_history_controller import (
-    CommandlineHistoryController,
+from spyder_okvim.spyder.commandline_popup_controller import (
+    CommandlinePopupController,
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
@@ -446,7 +446,7 @@ class VimLineEdit(QLineEdit):
         context = self._history_context(self.text())
         if context is None:
             return
-        self.vim_widget.commandline_history.suppress()
+        self.vim_widget.commandline_popup.suppress_history()
         kind, prompt, _ = context
         history = self.histories[kind]
         if not history:
@@ -474,7 +474,7 @@ class VimLineEdit(QLineEdit):
         context = self._history_context(self.text())
         if context is None:
             return
-        self.vim_widget.commandline_history.suppress()
+        self.vim_widget.commandline_popup.suppress_history()
         if context[0] != "ex":
             return
         working_directory = os.getcwd()
@@ -515,7 +515,7 @@ class VimLineEdit(QLineEdit):
         """Keep Tab in the prompt instead of letting QWidget move focus."""
         if (
             event.type() == QEvent.ShortcutOverride
-            and self.vim_widget.commandline_history.key_action(event) is not None
+            and self.vim_widget.commandline_popup.key_action(event) is not None
         ):
             event.accept()
             return True
@@ -593,14 +593,14 @@ class VimLineEdit(QLineEdit):
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Override Qt method."""
-        history_action = self.vim_widget.commandline_history.key_action(e)
+        history_action = self.vim_widget.commandline_popup.key_action(e)
         with self.vim_widget.input_processing():
             self._handle_key_press(e, history_action)
 
     def _handle_key_press(self, e: QKeyEvent, history_action=None) -> None:
         """Process a key before synchronizing hints at the outer input boundary."""
         if history_action is not None:
-            self.vim_widget.commandline_history.handle_key(history_action, e)
+            self.vim_widget.commandline_popup.handle_key(history_action, e)
             return
         if not self.testAttribute(Qt.WA_InputMethodEnabled):
             e = latin_command_key(e)
@@ -836,7 +836,7 @@ class VimWidget(QWidget):
         self.worker_macro.sig_focus_vim.connect(self._focus_macro_input)
         self.worker_macro.sig_playback_finished.connect(self._finish_macro)
         self.which_key = WhichKeyController(self)
-        self.commandline_history = CommandlineHistoryController(self)
+        self.commandline_popup = CommandlinePopupController(self)
         self.apply_settings()
 
     @property
@@ -873,7 +873,7 @@ class VimWidget(QWidget):
         """Apply command bindings and hint preferences explicitly."""
         self.set_leader_key()
         self.which_key.apply_settings()
-        self.commandline_history.apply_settings()
+        self.commandline_popup.apply_settings()
         status = self.vim_status
         enabled = bool(CONF.get(CONF_SECTION, "yanky_enabled", True))
         length = CONF.get(CONF_SECTION, "yank_history_length", 100)
@@ -1092,7 +1092,7 @@ class VimWidget(QWidget):
         self.cancel_yank_picker()
         self.put_controller.cleanup()
         self.which_key.cleanup()
-        self.commandline_history.cleanup()
+        self.commandline_popup.cleanup()
         self.cancel_macro()
         if self.vim_status.is_recording_macro():
             self.vim_status.stop_recording_macro()

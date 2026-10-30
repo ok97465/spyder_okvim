@@ -10,6 +10,7 @@ import weakref
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
+from qtpy.QtGui import QTextCursor
 from qtpy.QtWidgets import QApplication, QMainWindow, QShortcut
 from spyder.api.plugins import Plugins
 from spyder.config.manager import CONF
@@ -237,7 +238,7 @@ def test_yanky_shared_history_and_view_lifetime(editor_windows, host):
     # A shared-document edit can arrive from a split without changing focus.
     other = clone.get_current_editor()
     cursor = other.textCursor()
-    cursor.movePosition(cursor.End)
+    cursor.movePosition(QTextCursor.End)
     cursor.insertText("external")
     assert not widget.put_controller.can_cycle()
     assert status.yank_history.snapshot() == (entry,)
@@ -502,44 +503,63 @@ def test_which_key_releases_closed_window(which_key_windows, displayed):
     assert controller.popup.parentWidget() is code.viewport()
 
 
-@pytest.fixture
-def commandline_history_windows(editor_windows):
-    """Use real view routing with deterministic command history candidates."""
+@pytest.fixture(params=["history", "guide"])
+def commandline_popup_windows(editor_windows, request):
+    """Exercise each popup with the real editor and window routing."""
     state = editor_windows
-    previous_enabled = CONF.get(CONF_SECTION, "commandline_history_enabled", True)
-    CONF.set(CONF_SECTION, "commandline_history_enabled", True)
+    state.popup_kind = request.param
+    preferences = {
+        name: CONF.get(CONF_SECTION, name, True)
+        for name in ("commandline_history_enabled", "substitute_guide_enabled")
+    }
+    for name in preferences:
+        CONF.set(CONF_SECTION, name, True)
     state.vim.apply_plugin_settings([])
     state.commandline.histories["ex"][:] = ["write", "2"]
     try:
         yield state
     finally:
-        CONF.set(CONF_SECTION, "commandline_history_enabled", previous_enabled)
+        for name, previous in preferences.items():
+            CONF.set(CONF_SECTION, name, previous)
         if not state.vim_closed:
             state.commandline.esc_pressed()
             state.vim.apply_plugin_settings([])
 
 
-def _history_visible(controller):
-    popup = controller.popup
+def _commandline_panel(state, kind=None):
+    controller = state.vim.vim_cmd.commandline_popup
+    kind = state.popup_kind if kind is None else kind
+    return controller.popup if kind == "history" else controller.guide_popup
+
+
+def _commandline_popup_visible(state):
+    popup = _commandline_panel(state)
     return popup is not None and not widget_is_deleted(popup) and popup.isVisible()
 
 
-def _start_commandline_history(state):
-    """Show and select a row without accepting or executing its command."""
-    controller = state.vim.vim_cmd.commandline_history
+def _start_commandline_popup(state, kind=None):
+    """Show a guide or select a history row without executing its command."""
+    controller = state.vim.vim_cmd.commandline_popup
+    kind = state.popup_kind if kind is None else kind
     state.commandline.esc_pressed()
-    state.qtbot.keyClicks(state.commandline, ":")
-    state.qtbot.waitUntil(lambda: _history_visible(controller))
-    state.qtbot.keyClick(state.commandline, Qt.Key_N, Qt.ControlModifier)
-    assert controller.selected_index == 0
-    assert state.commandline.text() == ":"
+    command = ":" if kind == "history" else ":s/alpha/beta/"
+    state.qtbot.keyClicks(state.commandline, command)
+    popup = _commandline_panel(state, kind)
+    state.qtbot.waitUntil(lambda: popup is not None and popup.isVisible())
+    if kind == "history":
+        state.qtbot.keyClick(state.commandline, Qt.Key_N, Qt.ControlModifier)
+        assert controller.selected_index == 0
+    else:
+        assert controller.selected_index is None
+        assert controller.candidates == []
+    assert state.commandline.text() == command
     return controller
 
 
 @pytest.mark.parametrize("target", ["tab", "split", "window"])
-def test_commandline_history_follows_active_view(commandline_history_windows, target):
-    """View switches discard stale selection and bind the next panel locally."""
-    state = commandline_history_windows
+def test_commandline_popup_follows_active_view(commandline_popup_windows, target):
+    """View switches discard stale state and bind the next panel locally."""
+    state = commandline_popup_windows
     source_stack = state.widget.editorstacks[0]
     if target == "split":
         state.widget.editorsplitter.split(Qt.Horizontal)
@@ -552,8 +572,8 @@ def test_commandline_history_follows_active_view(commandline_history_windows, ta
     else:
         target_stack = source_stack
     source = _focus_stack(state, source_stack)
-    controller = _start_commandline_history(state)
-    old_popup = controller.popup
+    controller = _start_commandline_popup(state)
+    old_popup = _commandline_panel(state)
 
     if target == "tab":
         source_stack.set_stack_index(1 - source_stack.get_stack_index())
@@ -563,28 +583,29 @@ def test_commandline_history_follows_active_view(commandline_history_windows, ta
         target_editor.setFocus()
     _settle()
 
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
     assert controller.selected_index is None
     assert controller.candidates == []
     assert widget_is_deleted(old_popup)
     assert state.vim.vim_cmd.vim_status.sub_mode is None
     code = _focus_stack(state, target_stack)
     assert code is not source
-    _start_commandline_history(state)
-    assert controller.popup.parentWidget() is code.viewport()
-    assert controller.popup.window() is code.window()
-    assert code.viewport().rect().contains(controller.popup.geometry())
+    _start_commandline_popup(state)
+    popup = _commandline_panel(state)
+    assert popup.parentWidget() is code.viewport()
+    assert popup.window() is code.window()
+    assert code.viewport().rect().contains(popup.geometry())
     assert QApplication.focusWidget() is state.commandline
 
 
-def test_commandline_history_releases_closed_editor(commandline_history_windows):
+def test_commandline_popup_releases_closed_editor(commandline_popup_windows):
     """Closing the active tab disposes its panel before the editor is deleted."""
-    state = commandline_history_windows
+    state = commandline_popup_windows
     stack = state.widget.editorstacks[0]
     stack.set_stack_index(1)
     code = _focus_stack(state, stack)
-    controller = _start_commandline_history(state)
-    popup = controller.popup
+    controller = _start_commandline_popup(state)
+    popup = _commandline_panel(state)
 
     stack.close_file(1, force=True)
     _settle()
@@ -595,92 +616,125 @@ def test_commandline_history_releases_closed_editor(commandline_history_windows)
     _settle()
     assert widget_is_deleted(code)
     assert widget_is_deleted(popup)
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
     assert controller.selected_index is None
     replacement = _focus_stack(state, stack)
-    _start_commandline_history(state)
-    assert controller.popup.parentWidget() is replacement.viewport()
+    _start_commandline_popup(state)
+    assert _commandline_panel(state).parentWidget() is replacement.viewport()
 
 
-def test_commandline_history_releases_closed_window(commandline_history_windows):
-    """A detached window cannot retain its selected panel after closing."""
-    state = commandline_history_windows
+def test_commandline_popup_releases_closed_window(commandline_popup_windows):
+    """A detached window cannot retain its panel after closing."""
+    state = commandline_popup_windows
     window = state.widget.create_new_window()
     _settle()
     stack = window.editorwidget.editorstacks[0]
     _focus_stack(state, stack)
-    controller = _start_commandline_history(state)
-    popup = controller.popup
+    controller = _start_commandline_popup(state)
+    popup = _commandline_panel(state)
 
     window.close()
     _settle()
 
     assert widget_is_deleted(window)
     assert widget_is_deleted(popup)
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
     assert controller.selected_index is None
     code = _focus_stack(state, state.widget.editorstacks[0])
-    _start_commandline_history(state)
-    assert controller.popup.parentWidget() is code.viewport()
+    _start_commandline_popup(state)
+    assert _commandline_panel(state).parentWidget() is code.viewport()
 
 
-def test_commandline_history_cleanup_disconnects_callbacks(commandline_history_windows):
-    """Cleanup removes the panel and ignores later input and viewport events."""
-    state = commandline_history_windows
+def test_commandline_popup_cleanup_disconnects_callbacks(commandline_popup_windows):
+    """Cleanup removes both panels and ignores later input and viewport events."""
+    state = commandline_popup_windows
     code = _focus_stack(state, state.widget.editorstacks[0])
-    controller = _start_commandline_history(state)
-    popup = controller.popup
+    controller = _start_commandline_popup(state)
+    other_kind = "guide" if state.popup_kind == "history" else "history"
+    _start_commandline_popup(state, other_kind)
+    popups = controller.popup, controller.guide_popup
 
     controller.cleanup()
     _settle()
-    assert widget_is_deleted(popup)
+    assert all(widget_is_deleted(popup) for popup in popups)
     assert controller.popup is None
+    assert controller.guide_popup is None
     assert controller.candidates == []
     assert controller.selected_index is None
     state.commandline.esc_pressed()
-    state.commandline.setText(":")
+    state.commandline.setText(":s/")
     state.vim.vim_cmd.sig_input_finished.emit()
     code.resize(max(1, code.width() - 1), code.height())
     _settle()
     controller.sync()
     assert controller.popup is None
+    assert controller.guide_popup is None
     assert controller.candidates == []
 
 
 @pytest.mark.parametrize("close_to_dock", [False, True])
-def test_commandline_history_tracks_docking_host(
-    commandline_history_windows, close_to_dock
+def test_commandline_popup_tracks_docking_host(
+    commandline_popup_windows, close_to_dock
 ):
     """The same viewport follows docking and handles the new host's events."""
-    state = commandline_history_windows
+    state = commandline_popup_windows
     stack = state.widget.editorstacks[0]
     code = _focus_stack(state, stack)
-    controller = _start_commandline_history(state)
+    controller = _start_commandline_popup(state)
 
     state.widget.create_window()
     _settle()
     floating = state.widget.windowwidget
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
     assert _focus_stack(state, stack) is code
-    _start_commandline_history(state)
-    assert controller.popup.window() is floating
+    _start_commandline_popup(state)
+    assert _commandline_panel(state).window() is floating
     QApplication.sendEvent(floating, QEvent(QEvent.WindowDeactivate))
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
     assert controller.selected_index is None
 
-    _start_commandline_history(state)
+    _start_commandline_popup(state)
     if close_to_dock:
         floating.close()
     else:
         state.widget.dock_window()
     _settle()
     assert widget_is_deleted(floating)
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
     assert _focus_stack(state, stack) is code
-    _start_commandline_history(state)
-    assert controller.popup.window() is state.main
+    _start_commandline_popup(state)
+    assert _commandline_panel(state).window() is state.main
     QApplication.sendEvent(state.main, QEvent(QEvent.WindowDeactivate))
-    assert not _history_visible(controller)
+    assert not _commandline_popup_visible(state)
+
+
+@pytest.mark.parametrize("undocked", [False, True])
+def test_commandline_popup_shutdown_in_new_window(commandline_popup_windows, undocked):
+    """Plugin shutdown releases both popups before the window UI is deleted."""
+    state = commandline_popup_windows
+    if undocked:
+        state.widget.create_window()
+        _settle()
+    window = state.widget.create_new_window()
+    _settle()
+    _focus_stack(state, window.editorwidget.editorstacks[0])
+    controller = _start_commandline_popup(state)
+    other_kind = "guide" if state.popup_kind == "history" else "history"
+    _start_commandline_popup(state, other_kind)
+    popups = controller.popup, controller.guide_popup
+
+    state.vim.on_close()
+    state.vim_closed = True
+    _settle()
+
+    assert all(widget_is_deleted(popup) for popup in popups)
+    if not widget_is_deleted(controller):
+        assert controller.popup is None
+        assert controller.guide_popup is None
+    assert widget_is_deleted(state.commandline)
+    window.close()
+    _settle()
+    assert widget_is_deleted(window)
 
 
 @pytest.mark.parametrize("undocked", [False, True])

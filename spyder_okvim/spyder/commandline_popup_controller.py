@@ -1,4 +1,4 @@
-"""Offer command history only at stable, interactive prompt boundaries."""
+"""Show history or substitution guidance at stable command-line boundaries."""
 
 # Standard Libraries
 import weakref
@@ -11,11 +11,13 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.commandline_history import HistoryPopup, history_candidates
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.substitute_guide import SubstituteGuidePopup
+from spyder_okvim.utils.ex_parser import scan_substitute_guide
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
 
 
-class CommandlineHistoryController(QObject):
-    """Keep candidate selection separate from command text and execution."""
+class CommandlinePopupController(QObject):
+    """Share prompt and editor lifetimes while keeping history selection local."""
 
     def __init__(self, vim_widget):
         super().__init__(vim_widget)
@@ -27,8 +29,10 @@ class CommandlineHistoryController(QObject):
         self._context = None
         self._suppressed = False
         self._closed = False
-        self.enabled = False
+        self.history_enabled = False
+        self.guide_enabled = False
         self.popup = None
+        self.guide_popup = None
         self.candidates = []
         self.selected_index = None
         self._connections = (
@@ -42,16 +46,18 @@ class CommandlineHistoryController(QObject):
         )
         for signal, slot in self._connections:
             signal.connect(slot)
+        vim_widget.commandline.installEventFilter(self)
         self.apply_settings()
 
     def apply_settings(self):
         """Apply an explicit preference change, including immediate dismissal."""
         if self._closed:
             return
-        enabled = bool(CONF.get(CONF_SECTION, "commandline_history_enabled", True))
-        if enabled != self.enabled:
-            self.cancel()
-            self.enabled = enabled
+        history = bool(CONF.get(CONF_SECTION, "commandline_history_enabled", True))
+        guide = bool(CONF.get(CONF_SECTION, "substitute_guide_enabled", True))
+        if (history, guide) != (self.history_enabled, self.guide_enabled):
+            self.history_enabled, self.guide_enabled = history, guide
+            self._clear_candidates()
             self.sync()
 
     def set_editor(self, editor):
@@ -73,9 +79,10 @@ class CommandlineHistoryController(QObject):
             except (TypeError, RuntimeError):
                 pass
         self._set_window(None)
-        if self.popup is not None and not widget_is_deleted(self.popup):
-            self.popup.deleteLater()
-        self.popup = None
+        for popup in (self.popup, self.guide_popup):
+            if popup is not None and not widget_is_deleted(popup):
+                popup.deleteLater()
+        self.popup = self.guide_popup = None
         self._editor = weakref.ref(editor) if editor is not None else None
         self._viewport = weakref.ref(viewport) if viewport is not None else None
         self._set_window(editor.window() if editor is not None else None)
@@ -98,15 +105,16 @@ class CommandlineHistoryController(QObject):
         self.cancel()
         self._set_window(None)
         self._editor = self._viewport = self._window = None
-        self.popup = None
+        self.popup = self.guide_popup = None
 
     def _hide(self):
-        if self.popup is not None and not widget_is_deleted(self.popup):
-            self.popup.hide()
+        for popup in (self.popup, self.guide_popup):
+            if popup is not None and not widget_is_deleted(popup):
+                popup.hide()
 
     def _clear_candidates(self):
-        self._hide()
         if self.popup is not None and not widget_is_deleted(self.popup):
+            self.popup.hide()
             self.popup.select(None)
         self.candidates = []
         self.selected_index = None
@@ -114,11 +122,12 @@ class CommandlineHistoryController(QObject):
 
     def cancel(self):
         """Release all state when a prompt or its editor is left."""
+        self._hide()
         self._clear_candidates()
         self._session = None
         self._suppressed = False
 
-    def suppress(self):
+    def suppress_history(self):
         """Keep recalled/completed text quiet until a real edit or new prompt."""
         self._suppressed = True
         self._clear_candidates()
@@ -129,14 +138,16 @@ class CommandlineHistoryController(QObject):
         self._context = None
 
     def _text_changed(self):
+        self._hide()
         self._clear_candidates()
         self.sync()
 
-    def _current_context(self):
+    def _current_context(self, *, history=False):
+        """Read an interactive prompt, optionally requiring history selection."""
         vim = live_widget(self._vim)
         editor = live_widget(self._editor)
         viewport = live_widget(self._viewport)
-        if vim is None or self._closed or not self.enabled:
+        if vim is None or self._closed or (history and not self.history_enabled):
             return None
         line = vim.commandline
         status = vim.vim_status
@@ -161,12 +172,15 @@ class CommandlineHistoryController(QObject):
         if context is None:
             return None
         # QLineEdit positions count UTF-16 units, including surrogate pairs.
-        if line.cursorPosition() != len(line.text().encode("utf-16-le")) // 2:
+        if (
+            history
+            and line.cursorPosition() != len(line.text().encode("utf-16-le")) // 2
+        ):
             return None
         return status.sub_mode, *context
 
     def sync(self):
-        """Read candidates after recursive input and IME updates have settled."""
+        """Choose the guide before considering history or its suppression."""
         vim = live_widget(self._vim)
         if self._closed or vim is None or vim.is_processing_input:
             return
@@ -182,7 +196,38 @@ class CommandlineHistoryController(QObject):
             self.cancel()
             self._session = session
         context = self._current_context()
-        if context is None or self._suppressed:
+        if context is None:
+            self._hide()
+            self._clear_candidates()
+            return
+        if self.guide_enabled and context[1] == "ex":
+            # QLineEdit counts UTF-16 code units; the parser uses Python indices.
+            cursor = len(
+                line.text()
+                .encode("utf-16-le")[: line.cursorPosition() * 2]
+                .decode("utf-16-le", errors="ignore")
+            )
+            guide = scan_substitute_guide(
+                line.text(), cursor, vim.vim_status.last_substitute
+            )
+            if guide is not None:
+                self._clear_candidates()
+                if self.guide_popup is None or widget_is_deleted(self.guide_popup):
+                    self.guide_popup = SubstituteGuidePopup(live_widget(self._viewport))
+                changed = self.guide_popup.set_context(guide)
+                appearance_changed = self.guide_popup.refresh_appearance(line.font())
+                if changed or appearance_changed:
+                    self.guide_popup.update_geometry()
+                self.guide_popup.raise_()
+                self.guide_popup.show()
+                return
+        if self.guide_popup is not None and not widget_is_deleted(self.guide_popup):
+            self.guide_popup.hide()
+        if (
+            not self.history_enabled
+            or self._suppressed
+            or line.cursorPosition() != len(line.text().encode("utf-16-le")) // 2
+        ):
             self._clear_candidates()
             return
         _, kind, _, body = context
@@ -216,7 +261,7 @@ class CommandlineHistoryController(QObject):
             or self.popup is None
             or widget_is_deleted(self.popup)
             or not self.popup.isVisible()
-            or self._current_context() != self._context
+            or self._current_context(history=True) != self._context
         ):
             return None
         if event.modifiers() == Qt.ControlModifier:
@@ -238,7 +283,7 @@ class CommandlineHistoryController(QObject):
         # Consume the reserved key without accepting stale text or executing it.
         if (
             not self.candidates
-            or self._current_context() != self._context
+            or self._current_context(history=True) != self._context
             or (action == "accept" and self.selected_index is None)
         ):
             self._clear_candidates()
@@ -265,20 +310,50 @@ class CommandlineHistoryController(QObject):
         # commit may change the prefix, so it must never accept a stale row or
         # turn this same Return into command execution.
         QApplication.inputMethod().commit()
-        if self._current_context() != context:
+        if self._current_context(history=True) != context:
             self._clear_candidates()
             return
-        self.suppress()
+        self.suppress_history()
         line._reset_navigation()
         _, _, prompt, _ = context
         line._replace_commandline(prompt + candidate)
 
     def eventFilter(self, watched, event):
-        if event.type() in (QEvent.Hide, QEvent.Close, QEvent.WindowDeactivate):
+        vim = live_widget(self._vim)
+        if event.type() in (QEvent.Hide, QEvent.Close, QEvent.WindowDeactivate) or (
+            event.type() == QEvent.FocusOut
+            and vim is not None
+            and watched is vim.commandline
+        ):
             self.cancel()
+        elif watched is live_widget(self._viewport) and event.type() == QEvent.Wheel:
+            # The passive guide lets mouse events reach the editor viewport.
+            # Forward only wheels over its bounds, preserving Qt's scrolling.
+            popup = self.guide_popup
+            if (
+                popup is not None
+                and not widget_is_deleted(popup)
+                and popup.isVisible()
+                and popup.geometry().contains(event.position().toPoint())
+            ):
+                scrollbar = popup.scroll_area.verticalScrollBar()
+                if scrollbar.maximum() > scrollbar.minimum():
+                    # Dispatch directly: sendEvent would propagate an ignored
+                    # boundary wheel back to this viewport and recurse.
+                    scrollbar.event(event)
+                    event.accept()
+                    return True
         elif watched is live_widget(self._viewport) and event.type() == QEvent.Resize:
-            if self.popup is not None and not widget_is_deleted(self.popup):
-                self.popup.update_geometry()
+            for popup in (self.popup, self.guide_popup):
+                if popup is not None and not widget_is_deleted(popup):
+                    popup.update_geometry()
+        elif event.type() in (
+            QEvent.WindowActivate,
+            QEvent.FontChange,
+            QEvent.PaletteChange,
+            QEvent.StyleChange,
+        ):
+            self.sync()
         return super().eventFilter(watched, event)
 
     def cleanup(self):
@@ -286,6 +361,9 @@ class CommandlineHistoryController(QObject):
         if self._closed:
             return
         self.set_editor(None)
+        vim = live_widget(self._vim)
+        if vim is not None and not widget_is_deleted(vim.commandline):
+            vim.commandline.removeEventFilter(self)
         for signal, slot in self._connections:
             signal.disconnect(slot)
         self._connections = ()

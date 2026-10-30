@@ -20,7 +20,7 @@ def history_popup(vim_bot, qtbot):
     widget = vim.vim_cmd
     line = widget.commandline
     status = widget.vim_status
-    controller = widget.commandline_history
+    controller = widget.commandline_popup
     previous_index = stack.get_stack_index()
     previous_enabled = CONF.get(CONF_SECTION, "commandline_history_enabled", True)
     previous_histories = {kind: items[:] for kind, items in line.histories.items()}

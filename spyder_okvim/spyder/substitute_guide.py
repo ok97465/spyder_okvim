@@ -1,0 +1,256 @@
+"""Read-only help for the field under the cursor in a substitution command."""
+
+# Third Party Libraries
+from qtpy.QtCore import Qt
+from qtpy.QtGui import QFont
+from qtpy.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QLayout,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+from spyder.utils.palette import SpyderPalette
+
+SUBSTITUTION_OPTIONS = (
+    ("g", "Replace all matches in each line; otherwise only the first"),
+    ("c", "Confirm each replacement; n takes precedence"),
+    ("i", "Ignore case; the last i or I wins"),
+    ("I", "Match case; the last i or I wins"),
+    ("n", "Count matches without replacing; g controls which matches count"),
+    ("e", "Hide the no-match error only"),
+    ("&", "Reuse the previous substitution options; allowed first only"),
+)
+
+
+class SubstituteGuidePopup(QFrame):
+    """Explain input without selecting rows or changing command-line focus."""
+
+    MAX_WIDTH = 640
+
+    def __init__(self, viewport):
+        super().__init__(viewport)
+        self.setObjectName("substituteGuidePopup")
+        self.setMinimumSize(0, 0)
+        self.setFocusPolicy(Qt.NoFocus)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self._content = None
+        self._font = None
+
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setObjectName("substituteGuideScroll")
+        self.scroll_area.setFocusPolicy(Qt.NoFocus)
+        self.scroll_area.viewport().setFocusPolicy(Qt.NoFocus)
+        self.scroll_area.verticalScrollBar().setFocusPolicy(Qt.NoFocus)
+        self.scroll_area.horizontalScrollBar().setFocusPolicy(Qt.NoFocus)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setMinimumSize(0, 0)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setWidgetResizable(True)
+
+        self.content_widget = QWidget(self.scroll_area)
+        self.content_widget.setObjectName("substituteGuideContent")
+        self.content_widget.setFocusPolicy(Qt.NoFocus)
+        self.content_widget.setMinimumSize(0, 0)
+        self.content_widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.header = QLabel(self.content_widget)
+        self.description = QLabel(self.content_widget)
+        self.range_label = QLabel(self.content_widget)
+        self.effective_label = QLabel(self.content_widget)
+        self.note = QLabel(self.content_widget)
+
+        content_layout = QVBoxLayout(self.content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(4)
+        content_layout.setSizeConstraint(QLayout.SetNoConstraint)
+        content_layout.addWidget(self.header)
+        content_layout.addWidget(self.description)
+        content_layout.addWidget(self.range_label)
+
+        self.options_widget = QWidget(self.content_widget)
+        self.options_widget.setFocusPolicy(Qt.NoFocus)
+        self.options_widget.setMinimumSize(0, 0)
+        options_layout = QGridLayout(self.options_widget)
+        options_layout.setContentsMargins(0, 0, 0, 0)
+        options_layout.setHorizontalSpacing(10)
+        options_layout.setVerticalSpacing(3)
+        options_layout.setColumnStretch(1, 1)
+        self.option_labels = []
+        for row, (flag, explanation) in enumerate(SUBSTITUTION_OPTIONS):
+            flag_label = QLabel(flag, self.options_widget)
+            description_label = QLabel(explanation, self.options_widget)
+            options_layout.addWidget(flag_label, row, 0, Qt.AlignTop)
+            options_layout.addWidget(description_label, row, 1)
+            self.option_labels.append((flag_label, description_label))
+        content_layout.addWidget(self.options_widget)
+        content_layout.addWidget(self.effective_label)
+        content_layout.addWidget(self.note)
+        self.scroll_area.setWidget(self.content_widget)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 5, 6, 5)
+        layout.setSizeConstraint(QLayout.SetNoConstraint)
+        layout.addWidget(self.scroll_area)
+
+        for label in self.findChildren(QLabel):
+            label.setTextFormat(Qt.PlainText)
+            label.setFocusPolicy(Qt.NoFocus)
+            label.setMinimumSize(0, 0)
+            label.setWordWrap(True)
+            # Let wrapped text shrink below its longest word in narrow editors.
+            policy = label.sizePolicy()
+            policy.setHorizontalPolicy(QSizePolicy.Ignored)
+            label.setSizePolicy(policy)
+        for flag_label, _description in self.option_labels:
+            flag_label.setWordWrap(False)
+            flag_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.hide()
+
+    def set_context(self, context):
+        """Update changed help text, returning whether its layout needs fitting."""
+        delimiter = context.delimiter
+        if context.stage == "pattern":
+            title = "Search pattern"
+            explanation = (
+                "Use Qt regular expressions. An empty pattern uses the last "
+                f"confirmed search. Next {delimiter} starts the replacement."
+            )
+        elif context.stage == "replacement":
+            title = "Replacement"
+            explanation = (
+                "An empty replacement deletes matches. "
+                r"& = whole match; \1–\9 = capture groups; \& = literal &; "
+                f"\\{delimiter} = literal {delimiter}. "
+                f"Next {delimiter} starts the options."
+            )
+        elif context.stage == "flags":
+            title = "Substitution options"
+            explanation = (
+                "Without g, process the first match on each line. "
+                "Repeated g, c and e toggle their option. The last i or I wins."
+            )
+        elif context.stage == "count":
+            title = "Line count"
+            explanation = (
+                "The number after the options is the number of lines to process, "
+                f"starting at the end of the range. Example: :s{delimiter}foo"
+                f"{delimiter}bar{delimiter}g 3"
+            )
+        else:
+            title = "Unsupported substitution option"
+            explanation = (
+                f"Unsupported option or trailing input: {context.unsupported}. "
+                "The command executor will validate the input."
+            )
+        if context.addresses == ("%",):
+            range_text = "Range: % selects the entire file."
+        elif context.addresses:
+            range_text = "Range: the specified lines. % selects the entire file."
+        else:
+            range_text = "Range: current line. % selects the entire file."
+
+        show_options = context.stage == "flags"
+        effective_text = ""
+        notes = []
+        if show_options:
+            effective_text = "Currently applied: " + (context.effective_flags or "none")
+            if "n" in context.effective_flags:
+                target = (
+                    "every match"
+                    if "g" in context.effective_flags
+                    else "the first match"
+                )
+                notes.append(
+                    f"n counts {target} on each line and takes priority over c."
+                )
+            if context.missing_previous:
+                notes.append(
+                    "& needs a previous substitution; no previous record is available."
+                )
+            if "r" in context.raw_flags:
+                notes.append(
+                    "r selects the search pattern for repeated substitutions; "
+                    "it has no effect with an explicit pattern."
+                )
+            notes.append(
+                "A number after the options specifies how many lines to process."
+            )
+        note = "\n".join(notes)
+        content = title, explanation, range_text, show_options, effective_text, note
+        if content == self._content:
+            return False
+        self._content = content
+        for label, text in (
+            (self.header, title),
+            (self.description, explanation),
+            (self.range_label, range_text),
+            (self.effective_label, effective_text),
+            (self.note, note),
+        ):
+            if label.text() != text:
+                label.setText(text)
+            label.setVisible(bool(text))
+        self.options_widget.setVisible(show_options)
+        self.scroll_area.verticalScrollBar().setValue(0)
+        return True
+
+    def refresh_appearance(self, font):
+        """Follow the command-line font and Spyder palette only when changed."""
+        # Qt may resolve additional font properties while polishing widgets.
+        # Compare the requested font so that resolution is not a fresh change.
+        font_changed = self._font != font
+        if font_changed:
+            self._font = QFont(font)
+            self.setFont(font)
+        stylesheet = (
+            "QFrame#substituteGuidePopup {"
+            f"background-color: {SpyderPalette.COLOR_BACKGROUND_1};"
+            f"border: 1px solid {SpyderPalette.COLOR_BACKGROUND_4};"
+            "border-radius: 4px; }"
+            "QFrame#substituteGuidePopup QLabel {"
+            f"color: {SpyderPalette.COLOR_TEXT_1};"
+            "background: transparent; border: none; padding: 0; }"
+            "QScrollArea#substituteGuideScroll, QWidget#substituteGuideContent {"
+            f"background-color: {SpyderPalette.COLOR_BACKGROUND_1};"
+            "border: none; }"
+        )
+        stylesheet_changed = self.styleSheet() != stylesheet
+        if stylesheet_changed:
+            self.setStyleSheet(stylesheet)
+        # Stylesheet children do not reliably inherit their parent's font.
+        if font_changed or stylesheet_changed:
+            for label in self.findChildren(QLabel):
+                label.setFont(font)
+        return font_changed or stylesheet_changed
+
+    def update_geometry(self):
+        """Wrap and scroll help within the active viewport's lower edge."""
+        self.ensurePolished()
+        viewport = self.parentWidget()
+        width, height = viewport.width(), viewport.height()
+        margin = min(8, max(0, (min(width, height) - 1) // 2))
+        available_width = max(1, width - 2 * margin)
+        available_height = max(1, height - 2 * margin)
+        popup_width = min(available_width, self.MAX_WIDTH)
+        margins = self.layout().contentsMargins() + self.contentsMargins()
+        horizontal_padding = margins.left() + margins.right()
+        vertical_padding = margins.top() + margins.bottom()
+        scrollbar_width = self.scroll_area.verticalScrollBar().sizeHint().width()
+        text_width = max(1, popup_width - horizontal_padding - scrollbar_width)
+        content_layout = self.content_widget.layout()
+        content_layout.invalidate()
+        content_height = max(
+            1,
+            content_layout.heightForWidth(text_width),
+            content_layout.minimumSize().height(),
+        )
+        self.content_widget.setMinimumHeight(content_height)
+        popup_height = min(available_height, content_height + vertical_padding)
+        self.setGeometry(
+            margin, height - margin - popup_height, popup_width, popup_height
+        )
+        self.layout().activate()

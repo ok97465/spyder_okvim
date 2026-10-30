@@ -6,6 +6,7 @@ from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QApplication, QLineEdit, QWidget
 from spyder.utils.palette import SpyderPalette
+from spyder.utils.stylesheet import APP_STYLESHEET
 
 # Project Libraries
 from spyder_okvim.spyder.commandline_history import HistoryPopup, history_candidates
@@ -105,6 +106,65 @@ def test_history_panel_scrolls_every_candidate_into_view(history_panel):
     assert panel.height() < viewport.height() // 2
 
 
+@pytest.mark.parametrize("themed", [False, True])
+@pytest.mark.parametrize("font_size", [10, 14])
+@pytest.mark.parametrize(
+    "candidates",
+    [
+        ["write"],
+        ["write", "quit"],
+        ["write", "한글😀"],
+        ["한글😀", "write"],
+        ["write", "한글😀"] * (HistoryPopup.MAX_VISIBLE_ROWS // 2),
+    ],
+)
+def test_default_panel_fits_complete_rows_without_scrollbars(
+    history_panel, themed, font_size, candidates
+):
+    viewport, _line_edit, panel = history_panel
+    viewport.resize(700, 500)
+    if themed:
+        viewport.setStyleSheet(APP_STYLESHEET.to_string())
+    panel.refresh_appearance(QFont("Courier New", font_size))
+    panel.set_candidates(candidates)
+    panel.update_geometry()
+    panel.show()
+    QCoreApplication.processEvents()
+
+    listing = panel.list_widget
+    assert listing.font().family() == "Courier New"
+    assert listing.font().pointSize() == font_size
+    assert panel.width() >= panel.MIN_WIDTH
+    assert listing.verticalScrollBar().maximum() == 0
+    assert not listing.verticalScrollBar().isVisible()
+    assert not listing.horizontalScrollBar().isVisible()
+    assert listing.viewport().width() >= listing.sizeHintForColumn(0)
+    for row in range(listing.count()):
+        bounds = listing.visualItemRect(listing.item(row))
+        assert bounds.height() >= listing.sizeHintForRow(row)
+        assert listing.viewport().rect().contains(bounds)
+    assert viewport.rect().contains(panel.geometry())
+
+
+def test_themed_panel_reserves_scrollbar_space_for_long_commands(history_panel):
+    viewport, _line_edit, panel = history_panel
+    viewport.resize(1000, 600)
+    viewport.setStyleSheet(APP_STYLESHEET.to_string())
+    panel.set_candidates([f"s/{'old' * 15}/한글😀{row}/g" for row in range(12)])
+    panel.update_geometry()
+    panel.show()
+    QCoreApplication.processEvents()
+
+    listing = panel.list_widget
+    assert listing.verticalScrollBar().isVisible()
+    assert listing.viewport().width() >= listing.sizeHintForColumn(0)
+    for row in range(panel.MAX_VISIBLE_ROWS):
+        bounds = listing.visualItemRect(listing.item(row))
+        assert listing.viewport().rect().contains(bounds)
+    panel.select(11)
+    assert listing.viewport().rect().contains(listing.visualItemRect(listing.item(11)))
+
+
 def test_history_panel_fits_a_narrow_viewport_after_resize(history_panel):
     viewport, _line_edit, panel = history_panel
     panel.set_candidates(["long command " * 20 for _ in range(20)])
@@ -116,10 +176,13 @@ def test_history_panel_fits_a_narrow_viewport_after_resize(history_panel):
         assert viewport.rect().contains(panel.geometry())
 
 
+@pytest.mark.parametrize("themed", [False, True])
 def test_history_panel_refreshes_only_when_appearance_changes(
-    history_panel, monkeypatch
+    history_panel, monkeypatch, themed
 ):
-    _viewport, _line_edit, panel = history_panel
+    viewport, _line_edit, panel = history_panel
+    if themed:
+        viewport.setStyleSheet(APP_STYLESHEET.to_string())
     panel.set_candidates(["write"])
     panel.update_geometry()
     panel.show()
