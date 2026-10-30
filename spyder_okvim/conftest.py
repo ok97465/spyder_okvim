@@ -179,4 +179,5 @@ def process_events_after_test(vim_bot):
     """Cancel delayed hints before processing pending Qt events after a test."""
     yield
     vim_bot[3].vim_cmd.which_key.cancel()
+    vim_bot[3].vim_cmd.substitute_preview.cancel()
     QCoreApplication.processEvents()

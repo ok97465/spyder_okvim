@@ -203,6 +203,44 @@ def _exercise_vim(state, stack):
     status.hide_annotate_on_txt()
 
 
+def test_substitute_overlay_is_released_when_editor_window_changes(editor_windows):
+    """A painted preview cannot follow the shared prompt into another window."""
+    state = editor_windows
+    preview = state.vim.vim_cmd.substitute_preview
+    window = state.widget.create_new_window()
+    _settle()
+    source_stack = state.widget.editorstacks[0]
+    target_stack = window.editorwidget.editorstacks[0]
+    source_stack.set_stack_index(0)
+    target_stack.set_stack_index(1)
+    source = _focus_stack(state, source_stack)
+    source.set_text("foo foo\n")
+    state.vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    state.qtbot.keyClicks(state.commandline, ":%s/foo/bar/g")
+    state.qtbot.waitUntil(lambda: preview.result is not None)
+    assert [row.after for row in preview.overlay.rows] == ["bar bar"]
+    previous = preview.overlay.widget
+    assert previous.isVisible()
+
+    target = _focus_stack(state, target_stack)
+    _settle()
+    assert preview.result is None
+    assert preview.overlay.rows == ()
+    assert widget_is_deleted(previous)
+    assert preview.overlay.widget.parentWidget() is target.viewport()
+    assert source.toPlainText() == "foo foo\n"
+
+    target.set_text("foo target\n")
+    state.vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
+    state.qtbot.keyClicks(state.commandline, ":%s/foo/new/g")
+    state.qtbot.waitUntil(lambda: preview.result is not None)
+    assert [row.after for row in preview.overlay.rows] == ["new target"]
+    window.close()
+    _settle()
+    assert preview.result is None
+    assert source.toPlainText() == "foo foo\n"
+
+
 @pytest.mark.parametrize("host", ["main", "undocked", "window"])
 def test_yanky_shared_history_and_view_lifetime(editor_windows, host):
     """Cycle and picker state belong to one view, including detached hosts."""
@@ -510,10 +548,14 @@ def commandline_popup_windows(editor_windows, request):
     state.popup_kind = request.param
     preferences = {
         name: CONF.get(CONF_SECTION, name, True)
-        for name in ("commandline_history_enabled", "substitute_guide_enabled")
+        for name in (
+            "commandline_history_enabled",
+            "substitute_guide_enabled",
+            "substitute_preview_enabled",
+        )
     }
     for name in preferences:
-        CONF.set(CONF_SECTION, name, True)
+        CONF.set(CONF_SECTION, name, name != "substitute_preview_enabled")
     state.vim.apply_plugin_settings([])
     state.commandline.histories["ex"][:] = ["write", "2"]
     try:

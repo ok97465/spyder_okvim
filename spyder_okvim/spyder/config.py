@@ -42,6 +42,7 @@ CONF_DEFAULTS = [
             "which_key_delay": 300,
             "commandline_history_enabled": True,
             "substitute_guide_enabled": True,
+            "substitute_preview_enabled": True,
         },
     )
 ]

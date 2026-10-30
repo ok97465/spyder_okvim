@@ -7,6 +7,13 @@ from unicodedata import category
 
 from qtpy.QtCore import QRegularExpression
 
+from spyder_okvim.utils.ex_parser import (
+    ExError,
+    SubstituteSpec,
+    resolve_range,
+)
+from spyder_okvim.utils.search_helpers import compile_pattern, resolve_ignorecase
+
 # QTextDocument paragraphs and Unicode line separators must never be inserted
 # by this first, line-preserving implementation.
 _LINE_SEPARATORS = frozenset("\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029")
@@ -20,6 +27,55 @@ class SubstitutionPlan:
     match_count: int
     line_count: int
     last_line: int | None
+
+
+@dataclass(frozen=True)
+class PreparedSubstitution:
+    """Validated, side-effect-free input shared by execution and preview."""
+
+    first_line: int
+    last_line: int
+    spec: SubstituteSpec
+    pattern: QRegularExpression
+    tokens: tuple
+    global_matches: bool
+    count_only: bool
+    confirm: bool
+    replacement_prepared: bool = True
+
+
+def prepare_substitution(
+    header, spec, current_line, line_count, *, prepare_replacement=True
+):
+    """Validate a resolved command for execution or incremental preview."""
+    first, last = resolve_range(header, current_line, line_count)
+    if spec.count is not None:
+        first, last = last, min(last + spec.count - 1, line_count - 1)
+    override = next(
+        (flag == "i" for flag in reversed(spec.flags) if flag in "iI"), None
+    )
+    pattern = compile_pattern(spec.pattern, resolve_ignorecase(spec.pattern, override))
+    if not pattern.isValid():
+        raise ExError(f"Invalid pattern: {pattern.errorString()}")
+    count_only = "n" in spec.flags
+    if prepare_replacement and spec.replacement.startswith(r"\="):
+        raise ExError("Expression replacements are not supported")
+    tokens = (
+        tokenize_replacement(spec.replacement, spec.delimiter)
+        if prepare_replacement and not count_only
+        else ()
+    )
+    return PreparedSubstitution(
+        first,
+        last,
+        spec,
+        pattern,
+        tokens,
+        "g" in spec.flags,
+        count_only,
+        "c" in spec.flags and not count_only,
+        prepare_replacement,
+    )
 
 
 def tokenize_replacement(replacement: str, delimiter: str):
@@ -81,28 +137,58 @@ def _check_boundary(source: bytes, offset: int):
             raise ValueError("Pattern splits a UTF-16 surrogate pair")
 
 
-def _expand_replacement(tokens, source, match):
+def _expand_replacement(tokens, source, match, *, max_chars=None):
     """Expand only referenced captures, preserving original NBSP characters."""
     captures = {}
     pieces = []
+    size = 0
     for token in tokens:
         if not isinstance(token, int):
-            pieces.append(token)
-            continue
-        if token not in captures:
-            start, end = match.capturedStart(token), match.capturedEnd(token)
-            if start == -1:
-                # Vim expands both absent and unmatched groups to empty text.
-                captures[token] = ""
-            else:
-                _check_boundary(source, start)
-                _check_boundary(source, end)
-                captures[token] = source[start * 2 : end * 2].decode("utf-16-le")
-        pieces.append(captures[token])
+            piece = token
+        else:
+            if token not in captures:
+                start, end = match.capturedStart(token), match.capturedEnd(token)
+                if start == -1:
+                    # Vim expands both absent and unmatched groups to empty text.
+                    captures[token] = ""
+                else:
+                    _check_boundary(source, start)
+                    _check_boundary(source, end)
+                    captures[token] = source[start * 2 : end * 2].decode("utf-16-le")
+            piece = captures[token]
+        if max_chars is not None:
+            size += len(piece)
+            if size > max_chars:
+                raise ReplacementLimitExceeded("replacement expansion limit")
+        pieces.append(piece)
     replacement = "".join(pieces)
     if any(char in _LINE_SEPARATORS for char in replacement):
         raise ValueError("Line breaks in replacements are not supported")
     return replacement
+
+
+class ReplacementLimitExceeded(ValueError):
+    """A bounded preview expansion would exceed the available result budget."""
+
+
+def substitution_match(tokens, source, match, *, max_chars=None):
+    """Validate an edit and expand captures against the original paragraph."""
+    start, end = match.capturedStart(), match.capturedEnd()
+    _check_boundary(source, start)
+    _check_boundary(source, end)
+    replacement = _expand_replacement(tokens, source, match, max_chars=max_chars)
+    return start, end, replacement
+
+
+def assemble_substitution_line(source, edits):
+    """Apply local UTF-16 spans to paragraph bytes without Python-index slicing."""
+    pieces = []
+    previous = 0
+    for start, end, replacement in edits:
+        pieces.extend((source[previous : start * 2], replacement.encode("utf-16-le")))
+        previous = end * 2
+    pieces.append(source[previous:])
+    return b"".join(pieces)
 
 
 def _next_character(source, offset):
@@ -224,10 +310,7 @@ def build_substitution_plan(
                 continue
             if source is None:
                 source = original.encode("utf-16-le")
-            start, end = match.capturedStart(), match.capturedEnd()
-            _check_boundary(source, start)
-            _check_boundary(source, end)
-            replacement = _expand_replacement(tokens, source, match)
+            start, end, replacement = substitution_match(tokens, source, match)
             if (
                 confirm
                 or replacement.encode("utf-16-le") != source[start * 2 : end * 2]
@@ -250,15 +333,11 @@ def build_substitution_plan(
             # Several adjacent replacements can cancel each other. Assemble a
             # single paragraph for comparison only, keeping small edit spans
             # for the actual document mutation and its cursor/mark tracking.
-            pieces = []
-            previous = 0
-            for start, end, replacement in block_edits:
-                start = (start - block.position()) * 2
-                end = (end - block.position()) * 2
-                pieces.extend((source[previous:start], replacement.encode("utf-16-le")))
-                previous = end
-            pieces.append(source[previous:])
-            if b"".join(pieces) != source:
+            local_edits = (
+                (start - block.position(), end - block.position(), replacement)
+                for start, end, replacement in block_edits
+            )
+            if assemble_substitution_line(source, local_edits) != source:
                 edits.extend(block_edits)
         block = block.next()
     return SubstitutionPlan(

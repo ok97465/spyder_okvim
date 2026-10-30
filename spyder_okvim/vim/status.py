@@ -173,6 +173,8 @@ class VimStatus(QObject):
 
     def reset_for_test(self):
         """Reset status for test."""
+        if self.cmd_line is not None:
+            self.cmd_line.vim_widget.substitute_preview.cancel()
         if self.substitute_confirm is not None:
             self.substitute_confirm.cancel()
         self.finish_insert(apply_count=False)

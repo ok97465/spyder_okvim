@@ -69,6 +69,20 @@ class SubstituteGuideContext:
     unsupported: str = ""
 
 
+@dataclass(frozen=True)
+class SubstitutePreviewContext:
+    """The whole incremental command, independent of the input cursor.
+
+    An unfinished pattern is a search preview, even though pressing Enter on
+    that spelling executes a deletion. Only a closed pattern can reuse an
+    empty pattern from the last confirmed search.
+    """
+
+    header: ExHeader
+    spec: SubstituteSpec
+    pattern_closed: bool
+
+
 def _skip_space(text, position):
     while position < len(text) and text[position].isspace():
         position += 1
@@ -327,6 +341,63 @@ def _substitute_flags(tail, previous_flags):
             f"Unsupported substitution flag or trailing input: {tail[position:]}"
         )
     return flags, count
+
+
+def scan_substitute_preview(
+    text: str, previous: SubstituteSpec | None = None
+) -> SubstitutePreviewContext | None:
+    """Read a complete command line without treating unfinished input as final.
+
+    Repeated substitutions and unsupported/incomplete headers have no preview.
+    Invalid completed flag tails raise ``ExError`` so a caller can discard the
+    old result without reporting an execution error while the user types.
+    """
+    if not text.startswith(":"):
+        return None
+    try:
+        header = scan_header(text[1:])
+    except ExError:
+        return None
+    body = header.argument
+    if (
+        not header.command
+        or not "substitute".startswith(header.command)
+        or not body
+        or not _substitute_delimiter(body[0])
+    ):
+        return None
+    delimiter = body[0]
+    pattern, position, pattern_closed = _segment(body, 1, delimiter, pattern=True)
+    replacement, replacement_closed = "", False
+    if pattern_closed:
+        replacement, position, replacement_closed = _segment(body, position, delimiter)
+    tail = body[position:] if replacement_closed else ""
+    flags, count = _substitute_flags(
+        tail, previous.flags if previous is not None else ""
+    )
+    return SubstitutePreviewContext(
+        header,
+        SubstituteSpec(
+            _decode_pattern(pattern, delimiter), replacement, delimiter, flags, count
+        ),
+        pattern_closed,
+    )
+
+
+def has_substitute_delimiter(text: str) -> bool:
+    """Recognize explicit substitution input even when its body is invalid."""
+    if not text.startswith(":"):
+        return False
+    try:
+        header = scan_header(text[1:])
+    except ExError:
+        return False
+    return bool(
+        header.command
+        and "substitute".startswith(header.command)
+        and header.argument
+        and _substitute_delimiter(header.argument[0])
+    )
 
 
 def scan_substitute_guide(

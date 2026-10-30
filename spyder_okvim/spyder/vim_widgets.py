@@ -44,8 +44,10 @@ from spyder_okvim.spyder.commandline_popup_controller import (
     CommandlinePopupController,
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
+from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
 from spyder_okvim.utils.commandline import completion_candidates
+from spyder_okvim.utils.ex_parser import ExError, is_substitute, scan_header
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.key_helpers import latin_command_key
 from spyder_okvim.utils.put import PutController
@@ -366,6 +368,7 @@ class VimLineEdit(QLineEdit):
         self._completion_directory = None
         self._updating_commandline = False
         self._is_composing = False
+        self._prompt_focus_window = None
         self.textChanged.connect(self._reset_navigation)
         self.cursorPositionChanged.connect(self._reset_completion)
 
@@ -624,6 +627,9 @@ class VimLineEdit(QLineEdit):
             return
         if key == Qt.Key_Escape:
             self.esc_pressed()
+        elif pressed_ctrl and key == Qt.Key_C and self._substitute_input():
+            self.vim_shortcut.clear_tip_search()
+            self.esc_pressed()
         elif pressed_ctrl and key in self.dispatcher.keys():
             self.vim_widget.put_controller.cancel()
             self.dispatcher[key]()
@@ -647,6 +653,17 @@ class VimLineEdit(QLineEdit):
             self.setText(self.text() + KEYCODE2STR[key])
         else:
             super().keyPressEvent(e)
+
+    def _substitute_input(self):
+        """Cancel substitute prompts with Ctrl+C even when preview is disabled."""
+        if getattr(self.vim_status.sub_mode, "history_kind", None) != "ex":
+            return False
+        if not self.text().startswith(":"):
+            return False
+        try:
+            return is_substitute(scan_header(self.text()[1:]).command)
+        except ExError:
+            return False
 
     def _yank_cycle_context(self):
         """Only plain Normal input and an optional positive count can cycle."""
@@ -682,6 +699,7 @@ class VimLineEdit(QLineEdit):
 
     def esc_pressed(self) -> None:
         """Clear state."""
+        self._prompt_focus_window = None
         self.vim_widget.cancel_substitute()
         self.vim_widget.put_controller.cancel()
         self.vim_widget.sig_command_cancelled.emit()
@@ -702,6 +720,15 @@ class VimLineEdit(QLineEdit):
         """Override Qt method."""
         self.vim_status.disconnect_from_editor()
         super().focusInEvent(event)
+        preserve_prompt = (
+            self._prompt_focus_window is not None
+            and self._prompt_focus_window() is self.window()
+        )
+        self._prompt_focus_window = None
+        if preserve_prompt and self._history_context(self.text()) is not None:
+            self.vim_widget.substitute_preview.resume()
+            self.vim_widget.sig_command_changed.emit()
+            return
         if self.vim_widget._yank_picker is not None:
             return
         if self.vim_status.cursor.get_editor():
@@ -709,8 +736,24 @@ class VimLineEdit(QLineEdit):
         self.vim_status.set_message("")
         self.vim_widget.sig_command_changed.emit()
 
+    def _transient_prompt_focus_loss(self, event):
+        """Keep an Ex draft across application deactivation or temporary hide."""
+        context = self._history_context(self.text())
+        return bool(
+            context is not None
+            and context[0] == "ex"
+            and (event.reason() == Qt.ActiveWindowFocusReason or not self.isVisible())
+        )
+
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
+        if self._transient_prompt_focus_loss(event):
+            if self._prompt_focus_window is None:
+                self._prompt_focus_window = weakref.ref(self.window())
+            self.vim_widget.substitute_preview.suspend()
+            super().focusOutEvent(event)
+            return
+        self._prompt_focus_window = None
         self.vim_widget.cancel_substitute()
         if self.vim_widget._yank_picker is not None:
             super().focusOutEvent(event)
@@ -837,6 +880,7 @@ class VimWidget(QWidget):
         self.worker_macro.sig_playback_finished.connect(self._finish_macro)
         self.which_key = WhichKeyController(self)
         self.commandline_popup = CommandlinePopupController(self)
+        self.substitute_preview = SubstitutePreviewController(self)
         self.apply_settings()
 
     @property
@@ -874,6 +918,7 @@ class VimWidget(QWidget):
         self.set_leader_key()
         self.which_key.apply_settings()
         self.commandline_popup.apply_settings()
+        self.substitute_preview.apply_settings()
         status = self.vim_status
         enabled = bool(CONF.get(CONF_SECTION, "yanky_enabled", True))
         length = CONF.get(CONF_SECTION, "yank_history_length", 100)
@@ -1056,6 +1101,7 @@ class VimWidget(QWidget):
                 return
 
         if txt.endswith("\r"):
+            self.substitute_preview.cancel()
             self.commandline.remember_command(txt[:-1])
         if executor(txt):
             self.commandline.clear()
@@ -1064,6 +1110,9 @@ class VimWidget(QWidget):
         # executor first: setText emits textChanged synchronously and otherwise
         # re-enters the previous executor with the numeric range.
         sub_mode = self.vim_status.sub_mode
+        if sub_mode is not executor and getattr(sub_mode, "history_kind", None) == "ex":
+            sub_mode.begin_input()
+            self.substitute_preview.begin_session(sub_mode)
         pending_range = getattr(sub_mode, "pending_range_text", None)
         if pending_range is not None:
             sub_mode.pending_range_text = None
@@ -1088,6 +1137,7 @@ class VimWidget(QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        self.substitute_preview.cleanup()
         self.cancel_substitute()
         self.cancel_yank_picker()
         self.put_controller.cleanup()

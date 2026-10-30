@@ -64,6 +64,12 @@ class OkvimConfigPage(PluginConfigPage):
             default=True,
         )
         options_layout.addWidget(self.substitute_guide_enabled)
+        self.substitute_preview_enabled = newcb(
+            "Enable incremental substitute preview (:s)",
+            "substitute_preview_enabled",
+            default=True,
+        )
+        options_layout.addWidget(self.substitute_preview_enabled)
 
         hl_yank_layout = QHBoxLayout()
         hl_yank_layout.addWidget(newcb("highlight after yank", "highlight_yank"))

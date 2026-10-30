@@ -1,14 +1,19 @@
 """Substitution guidance shares history's stable input and editor lifetime."""
 
+import gc
+import weakref
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
 from qtpy.QtGui import QKeyEvent, QWheelEvent
-from qtpy.QtWidgets import QApplication
+from qtpy.QtWidgets import QApplication, QWidget
 from spyder.config.manager import CONF
 
+from spyder_okvim.spyder.commandline_popup_controller import CommandlinePopupController
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.substitute_guide import SubstituteGuidePopup
 from spyder_okvim.spyder.tests.test_commandline_history_popup import (
     history_popup,
     select_next,
@@ -16,7 +21,7 @@ from spyder_okvim.spyder.tests.test_commandline_history_popup import (
     show,
     shown,
 )
-from spyder_okvim.utils.ex_parser import SubstituteSpec
+from spyder_okvim.utils.ex_parser import SubstituteSpec, scan_substitute_guide
 from spyder_okvim.utils.qtcompat import widget_is_deleted
 
 
@@ -24,12 +29,15 @@ from spyder_okvim.utils.qtcompat import widget_is_deleted
 def guide(history_popup):
     state = history_popup
     previous = CONF.get(CONF_SECTION, "substitute_guide_enabled", True)
+    previous_preview = CONF.get(CONF_SECTION, "substitute_preview_enabled", True)
     CONF.set(CONF_SECTION, "substitute_guide_enabled", True)
+    CONF.set(CONF_SECTION, "substitute_preview_enabled", False)
     state.widget.apply_settings()
     try:
         yield state
     finally:
         CONF.set(CONF_SECTION, "substitute_guide_enabled", previous)
+        CONF.set(CONF_SECTION, "substitute_preview_enabled", previous_preview)
         state.widget.apply_settings()
 
 
@@ -440,3 +448,43 @@ def test_reactivating_window_restores_guide(guide):
     assert state.line.text() == ":s/alpha/new/"
     QCoreApplication.sendEvent(state.main, QEvent(QEvent.WindowActivate))
     assert guide_shown(state)
+
+
+def test_layout_cache_does_not_retain_closed_guide_windows(guide):
+    """A cached guide layout must not keep its former Qt parent alive."""
+    viewport = QWidget()
+    viewport.resize(400, 300)
+    popup = SubstituteGuidePopup(viewport)
+    popup.set_context(scan_substitute_guide(":s/foo/bar/", len(":s/foo/bar/")))
+    viewport.show()
+    popup.show()
+    state = SimpleNamespace(
+        _viewport=weakref.ref(viewport), guide_popup=popup, _layout_signature=None
+    )
+    CommandlinePopupController._layout_guide(state)
+    popup_ref, viewport_ref = weakref.ref(popup), weakref.ref(viewport)
+    state.guide_popup = None
+    viewport.close()
+    viewport.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    del popup, viewport
+    gc.collect()
+    assert popup_ref() is None
+    assert viewport_ref() is None
+
+
+def test_host_window_change_ends_preview_session(guide):
+    state = guide
+    state.qtbot.keyClicks(state.line, ":s/foo/bar/")
+    preview = state.widget.substitute_preview
+    assert preview._session is state.status.sub_mode
+    controller = state.controller
+    previous = state.editor.window()
+    replacement = QWidget()
+    state.qtbot.addWidget(replacement)
+    try:
+        controller._set_window(replacement)
+        assert preview._session is None
+        assert state.status.sub_mode is not None
+    finally:
+        controller._set_window(previous)

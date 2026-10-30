@@ -12,7 +12,12 @@ from spyder.config.manager import CONF
 from spyder_okvim.spyder.commandline_history import HistoryPopup, history_candidates
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.substitute_guide import SubstituteGuidePopup
-from spyder_okvim.utils.ex_parser import scan_substitute_guide
+from spyder_okvim.utils.ex_parser import (
+    ExError,
+    has_substitute_delimiter,
+    scan_substitute_guide,
+    scan_substitute_preview,
+)
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
 
 
@@ -31,6 +36,8 @@ class CommandlinePopupController(QObject):
         self._closed = False
         self.history_enabled = False
         self.guide_enabled = False
+        self.preview_enabled = False
+        self._layout_signature = None
         self.popup = None
         self.guide_popup = None
         self.candidates = []
@@ -55,8 +62,17 @@ class CommandlinePopupController(QObject):
             return
         history = bool(CONF.get(CONF_SECTION, "commandline_history_enabled", True))
         guide = bool(CONF.get(CONF_SECTION, "substitute_guide_enabled", True))
-        if (history, guide) != (self.history_enabled, self.guide_enabled):
-            self.history_enabled, self.guide_enabled = history, guide
+        preview = bool(CONF.get(CONF_SECTION, "substitute_preview_enabled", True))
+        if (history, guide, preview) != (
+            self.history_enabled,
+            self.guide_enabled,
+            self.preview_enabled,
+        ):
+            self.history_enabled, self.guide_enabled, self.preview_enabled = (
+                history,
+                guide,
+                preview,
+            )
             self._clear_candidates()
             self.sync()
 
@@ -79,7 +95,7 @@ class CommandlinePopupController(QObject):
             except (TypeError, RuntimeError):
                 pass
         self._set_window(None)
-        for popup in (self.popup, self.guide_popup):
+        for popup in self._popups():
             if popup is not None and not widget_is_deleted(popup):
                 popup.deleteLater()
         self.popup = self.guide_popup = None
@@ -97,6 +113,12 @@ class CommandlinePopupController(QObject):
         self.cancel()
         if previous is not None:
             previous.removeEventFilter(self)
+            vim = live_widget(self._vim)
+            preview = (
+                getattr(vim, "substitute_preview", None) if vim is not None else None
+            )
+            if preview is not None:
+                preview.cancel()
         self._window = weakref.ref(window) if window is not None else None
         if window is not None:
             window.installEventFilter(self)
@@ -107,8 +129,11 @@ class CommandlinePopupController(QObject):
         self._editor = self._viewport = self._window = None
         self.popup = self.guide_popup = None
 
+    def _popups(self):
+        return self.popup, self.guide_popup
+
     def _hide(self):
-        for popup in (self.popup, self.guide_popup):
+        for popup in self._popups():
             if popup is not None and not widget_is_deleted(popup):
                 popup.hide()
 
@@ -126,6 +151,7 @@ class CommandlinePopupController(QObject):
         self._clear_candidates()
         self._session = None
         self._suppressed = False
+        self._layout_signature = None
 
     def suppress_history(self):
         """Keep recalled/completed text quiet until a real edit or new prompt."""
@@ -179,8 +205,32 @@ class CommandlinePopupController(QObject):
             return None
         return status.sub_mode, *context
 
+    def _layout_guide(self):
+        """Refit changed guidance without retaining closed Qt widgets."""
+        viewport = live_widget(self._viewport)
+        popup = self.guide_popup
+        if (
+            viewport is None
+            or popup is None
+            or widget_is_deleted(popup)
+            or not popup.isVisible()
+        ):
+            return
+        signature = (
+            viewport.width(),
+            viewport.height(),
+            id(popup),
+            popup._content,
+            popup.font().toString(),
+            popup.styleSheet(),
+        )
+        if signature == self._layout_signature:
+            return
+        self._layout_signature = signature
+        popup.update_geometry()
+
     def sync(self):
-        """Choose the guide before considering history or its suppression."""
+        """Show guidance before considering selectable history."""
         vim = live_widget(self._vim)
         if self._closed or vim is None or vim.is_processing_input:
             return
@@ -200,7 +250,25 @@ class CommandlinePopupController(QObject):
             self._hide()
             self._clear_candidates()
             return
-        if self.guide_enabled and context[1] == "ex":
+        guide_shown = False
+        preview = getattr(vim, "substitute_preview", None)
+        preview_prompt = self.preview_enabled and has_substitute_delimiter(line.text())
+        showing_overlay = False
+        if preview_prompt and preview is not None:
+            try:
+                command = scan_substitute_preview(
+                    line.text()[: preview.limits.max_command_chars],
+                    vim.vim_status.last_substitute,
+                )
+            except ExError:
+                command = None
+            # Keep results unobscured while calculating as well as displaying.
+            showing_overlay = preview.has_overlay or (
+                command is not None
+                and command.pattern_closed
+                and "n" not in command.spec.flags
+            )
+        if self.guide_enabled and not showing_overlay and context[1] == "ex":
             # QLineEdit counts UTF-16 code units; the parser uses Python indices.
             cursor = len(
                 line.text()
@@ -214,15 +282,21 @@ class CommandlinePopupController(QObject):
                 self._clear_candidates()
                 if self.guide_popup is None or widget_is_deleted(self.guide_popup):
                     self.guide_popup = SubstituteGuidePopup(live_widget(self._viewport))
-                changed = self.guide_popup.set_context(guide)
-                appearance_changed = self.guide_popup.refresh_appearance(line.font())
-                if changed or appearance_changed:
-                    self.guide_popup.update_geometry()
+                self.guide_popup.set_context(guide)
+                self.guide_popup.refresh_appearance(line.font())
                 self.guide_popup.raise_()
                 self.guide_popup.show()
-                return
-        if self.guide_popup is not None and not widget_is_deleted(self.guide_popup):
+                guide_shown = True
+        if (
+            not guide_shown
+            and self.guide_popup is not None
+            and not widget_is_deleted(self.guide_popup)
+        ):
             self.guide_popup.hide()
+        if guide_shown or preview_prompt:
+            self._clear_candidates()
+            self._layout_guide()
+            return
         if (
             not self.history_enabled
             or self._suppressed
@@ -257,6 +331,10 @@ class CommandlinePopupController(QObject):
         if (
             vim is None
             or vim.is_processing_input
+            or (
+                self.preview_enabled
+                and has_substitute_delimiter(vim.commandline.text())
+            )
             or not self.candidates
             or self.popup is None
             or widget_is_deleted(self.popup)
@@ -320,15 +398,29 @@ class CommandlinePopupController(QObject):
 
     def eventFilter(self, watched, event):
         vim = live_widget(self._vim)
-        if event.type() in (QEvent.Hide, QEvent.Close, QEvent.WindowDeactivate) or (
-            event.type() == QEvent.FocusOut
+        preview = getattr(vim, "substitute_preview", None) if vim is not None else None
+        event_type = event.type()
+        if event_type in (QEvent.Hide, QEvent.WindowDeactivate):
+            self._hide()
+            self._clear_candidates()
+            if preview is not None:
+                preview.suspend()
+        elif event_type == QEvent.Close or (
+            event_type == QEvent.FocusOut
             and vim is not None
             and watched is vim.commandline
         ):
             self.cancel()
-        elif watched is live_widget(self._viewport) and event.type() == QEvent.Wheel:
-            # The passive guide lets mouse events reach the editor viewport.
-            # Forward only wheels over its bounds, preserving Qt's scrolling.
+            if preview is not None:
+                if (
+                    event_type == QEvent.FocusOut
+                    and vim.commandline._transient_prompt_focus_loss(event)
+                ):
+                    preview.suspend()
+                else:
+                    preview.cancel()
+        elif watched is live_widget(self._viewport) and event_type == QEvent.Wheel:
+            # The passive guide forwards only wheels within its own bounds.
             popup = self.guide_popup
             if (
                 popup is not None
@@ -338,22 +430,26 @@ class CommandlinePopupController(QObject):
             ):
                 scrollbar = popup.scroll_area.verticalScrollBar()
                 if scrollbar.maximum() > scrollbar.minimum():
-                    # Dispatch directly: sendEvent would propagate an ignored
-                    # boundary wheel back to this viewport and recurse.
                     scrollbar.event(event)
                     event.accept()
                     return True
-        elif watched is live_widget(self._viewport) and event.type() == QEvent.Resize:
-            for popup in (self.popup, self.guide_popup):
-                if popup is not None and not widget_is_deleted(popup):
-                    popup.update_geometry()
-        elif event.type() in (
+        elif watched is live_widget(self._viewport) and event_type == QEvent.Resize:
+            if self.popup is not None and not widget_is_deleted(self.popup):
+                self.popup.update_geometry()
+            self._layout_guide()
+        elif event_type in (
+            QEvent.Show,
             QEvent.WindowActivate,
             QEvent.FontChange,
             QEvent.PaletteChange,
             QEvent.StyleChange,
         ):
             self.sync()
+            if preview is not None and event_type in (
+                QEvent.Show,
+                QEvent.WindowActivate,
+            ):
+                preview.resume()
         return super().eventFilter(watched, event)
 
     def cleanup(self):

@@ -23,6 +23,7 @@ def history_popup(vim_bot, qtbot):
     controller = widget.commandline_popup
     previous_index = stack.get_stack_index()
     previous_enabled = CONF.get(CONF_SECTION, "commandline_history_enabled", True)
+    previous_preview = CONF.get(CONF_SECTION, "substitute_preview_enabled", True)
     previous_histories = {kind: items[:] for kind, items in line.histories.items()}
     widget.cancel_macro()
     line.esc_pressed()
@@ -37,6 +38,7 @@ def history_popup(vim_bot, qtbot):
     for items in line.histories.values():
         items.clear()
     CONF.set(CONF_SECTION, "commandline_history_enabled", True)
+    CONF.set(CONF_SECTION, "substitute_preview_enabled", False)
     widget.apply_settings()
     main.show()
     main.activateWindow()
@@ -69,6 +71,7 @@ def history_popup(vim_bot, qtbot):
         for kind, items in previous_histories.items():
             line.histories[kind][:] = items
         CONF.set(CONF_SECTION, "commandline_history_enabled", previous_enabled)
+        CONF.set(CONF_SECTION, "substitute_preview_enabled", previous_preview)
         widget.apply_settings()
         controller.cancel()
         stack.set_stack_index(previous_index)

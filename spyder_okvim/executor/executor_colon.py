@@ -5,6 +5,7 @@
 import os.path as osp
 
 # Third Party Libraries
+from qtpy.QtCore import QRegularExpression
 from qtpy.QtGui import QTextCursor
 from qtpy.QtWidgets import QDialog
 
@@ -13,17 +14,16 @@ from spyder_okvim.executor.executor_base import ExecutorSubBase
 from spyder_okvim.utils.ex_parser import (
     ExError,
     is_substitute,
-    resolve_range,
     resolve_substitute,
     scan_header,
 )
 from spyder_okvim.utils.jump_dialog import JumpListDialog
 from spyder_okvim.utils.mark_dialog import MarkListDialog
 from spyder_okvim.utils.qtcompat import exec_dialog
-from spyder_okvim.utils.search_helpers import compile_pattern, resolve_ignorecase
+from spyder_okvim.utils.search_helpers import resolve_ignorecase
 from spyder_okvim.utils.substitute import (
     build_substitution_plan,
-    tokenize_replacement,
+    prepare_substitution,
 )
 from spyder_okvim.utils.substitute_confirm import SubstituteConfirm
 from spyder_okvim.vim import VimState
@@ -62,6 +62,14 @@ class ExecutorColon(ExecutorSubBase):
 
         self.editor_widget = vim_status.editor_widget
         self.pending_range_text = None
+        self.origin_line = None
+
+    def begin_input(self):
+        """Anchor default and dot addresses when this Ex input session starts."""
+        editor = self.get_editor()
+        self.origin_line = (
+            editor.textCursor().blockNumber() if editor is not None else None
+        )
 
     def __call__(self, txt: str) -> bool:
         """Parse ``txt`` and execute the corresponding ex command.
@@ -78,6 +86,7 @@ class ExecutorColon(ExecutorSubBase):
         if txt[-1] == "\b":
             cmd_line = self.vim_status.cmd_line
             if len(txt) <= 2:
+                self.origin_line = None
                 self.vim_status.sub_mode = None
                 return True
             else:
@@ -86,6 +95,7 @@ class ExecutorColon(ExecutorSubBase):
             return False
 
         if txt[0] != ":" or len(txt) <= 2:
+            self.origin_line = None
             self.vim_status.sub_mode = None
             return True
 
@@ -114,6 +124,7 @@ class ExecutorColon(ExecutorSubBase):
                 widget.cancel_macro()
             self.vim_status.set_message(str(error))
         finally:
+            self.origin_line = None
             if self.vim_status.sub_mode is self:
                 self.vim_status.sub_mode = None
 
@@ -129,36 +140,26 @@ class ExecutorColon(ExecutorSubBase):
         cursor = self.get_cursor()
         origin_block, origin_column = cursor.block(), cursor.positionInBlock()
         current_line = cursor.blockNumber()
-        first, last = resolve_range(header, current_line, document.blockCount())
+        address_line = current_line if self.origin_line is None else self.origin_line
+        address_line = min(address_line, document.blockCount() - 1)
         spec = resolve_substitute(header, vs.last_substitute, vs.search.txt_searched)
-        if spec.count is not None:
-            first, last = last, min(last + spec.count - 1, document.blockCount() - 1)
-        text = spec.pattern
-        override = next(
-            (flag == "i" for flag in reversed(spec.flags) if flag in "iI"), None
+        prepared = prepare_substitution(
+            header, spec, address_line, document.blockCount()
         )
-        ignorecase = resolve_ignorecase(text, override)
-        pattern = compile_pattern(text, ignorecase)
-        if not pattern.isValid():
-            raise ExError(f"Invalid pattern: {pattern.errorString()}")
-        count_only = "n" in spec.flags
-        confirm = "c" in spec.flags and not count_only
+        text = spec.pattern
+        pattern = prepared.pattern
+        count_only, confirm = prepared.count_only, prepared.confirm
         if confirm and vs.cmd_line.vim_widget.is_playing_macro:
             raise ExError("Confirmation substitutions are not supported in macros")
         if editor.isReadOnly() and not count_only:
             raise ExError("Document is read-only")
-        if spec.replacement.startswith(r"\="):
-            raise ExError("Expression replacements are not supported")
-        tokens = (
-            () if count_only else tokenize_replacement(spec.replacement, spec.delimiter)
-        )
         plan = build_substitution_plan(
             document,
-            first,
-            last,
+            prepared.first_line,
+            prepared.last_line,
             pattern,
-            tokens,
-            global_matches="g" in spec.flags,
+            prepared.tokens,
+            global_matches=prepared.global_matches,
             count_only=count_only,
             confirm=confirm,
         )
@@ -175,6 +176,9 @@ class ExecutorColon(ExecutorSubBase):
 
         # i/I affect this substitution only; n/N use the normal search options.
         search_ignorecase = resolve_ignorecase(text)
+        ignorecase = bool(
+            pattern.patternOptions() & QRegularExpression.CaseInsensitiveOption
+        )
         vs.search.search(
             text,
             ignorecase=search_ignorecase,
