@@ -1,4 +1,4 @@
-"""Preferences for the substitute guide remain independent of history."""
+"""Completion and guide preferences remain independent of other prompt options."""
 
 # Third Party Libraries
 import pytest
@@ -69,3 +69,61 @@ def test_substitute_guide_preference_roundtrip(
             page.deleteLater()
         CONF.set(CONF_SECTION, "substitute_guide_enabled", previous_guide)
         CONF.set(CONF_SECTION, "commandline_history_enabled", previous_history)
+
+
+def test_missing_completion_preference_defaults_enabled(vim_bot, monkeypatch):
+    """An older configuration enables completion suggestions by default."""
+    main, _, _, vim, _ = vim_bot
+    assert dict(CONF_DEFAULTS)[CONF_SECTION]["commandline_completion_enabled"] is True
+    monkeypatch.setattr(vim, "_conf", CONF)
+    page = OkvimConfigPage(vim, main)
+    get_option = page.get_option
+
+    def without_completion_option(option, default, **kwargs):
+        if option == "commandline_completion_enabled":
+            return default
+        return get_option(option, default, **kwargs)
+
+    monkeypatch.setattr(page, "get_option", without_completion_option)
+    try:
+        page.initialize()
+        assert page.commandline_completion_enabled.checkbox.isChecked()
+    finally:
+        page.deleteLater()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_completion_preference_roundtrip_is_independent(vim_bot, monkeypatch, enabled):
+    """Saving completion visibility preserves the other prompt preferences."""
+    main, _, _, vim, _ = vim_bot
+    monkeypatch.setattr(vim, "_conf", CONF)
+    options = {
+        "commandline_completion_enabled": enabled,
+        "commandline_history_enabled": not enabled,
+        "substitute_guide_enabled": enabled,
+        "substitute_preview_enabled": not enabled,
+    }
+    previous = {option: CONF.get(CONF_SECTION, option, True) for option in options}
+    pages = []
+    try:
+        for option, value in options.items():
+            CONF.set(CONF_SECTION, option, value)
+        page = OkvimConfigPage(vim, main)
+        pages.append(page)
+        page.initialize()
+        assert page.commandline_completion_enabled.checkbox.isChecked() is enabled
+        page.commandline_completion_enabled.checkbox.click()
+        page.save_to_conf()
+
+        options["commandline_completion_enabled"] = not enabled
+        reopened = OkvimConfigPage(vim, main)
+        pages.append(reopened)
+        reopened.initialize()
+        for option, value in options.items():
+            assert CONF.get(CONF_SECTION, option) is value
+            assert getattr(reopened, option).checkbox.isChecked() is value
+    finally:
+        for page in pages:
+            page.deleteLater()
+        for option, value in previous.items():
+            CONF.set(CONF_SECTION, option, value)

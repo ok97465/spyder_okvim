@@ -10,6 +10,8 @@ from spyder_okvim.utils.ex_parser import (
     resolve_range,
     resolve_substitute,
     scan_header,
+    scan_substitute_fields,
+    scan_substitute_guide,
 )
 
 
@@ -348,3 +350,36 @@ def test_keep_flags_does_not_reuse_the_pattern_selector(command, pattern, flags)
     previous = SubstituteSpec("old", "new", "/", "gr")
     spec = resolve_substitute(scan_header(command), previous, "search")
     assert (spec.pattern, spec.flags) == (pattern, flags)
+
+
+@pytest.mark.parametrize(
+    "text, pattern, replacement, closed",
+    [
+        (r":%s/a\/b/c\/d/g", r"a\/b", r"c\/d", True),
+        (":3,8substitute/[a/b]/한글😀/gi 3", "[a/b]", "한글😀", True),
+        (":s/foo//g", "foo", "", True),
+        (":s/foo/unfinished", "foo", "unfinished", False),
+        (":s/unfinished", "unfinished", None, False),
+    ],
+)
+def test_raw_substitute_spans_share_guide_boundaries(
+    text, pattern, replacement, closed
+):
+    fields = scan_substitute_fields(text)
+    assert text[slice(*fields.pattern_span)] == pattern
+    assert fields.replacement_closed is closed
+    context = scan_substitute_guide(text, fields.pattern_span[0])
+    assert context.stage == "pattern"
+    assert context.raw_span == fields.pattern_span
+    if replacement is None:
+        assert fields.replacement_span is None
+    else:
+        assert text[slice(*fields.replacement_span)] == replacement
+        context = scan_substitute_guide(text, fields.replacement_span[0])
+        assert context.stage == "replacement"
+        assert context.raw_span == fields.replacement_span
+
+
+@pytest.mark.parametrize("text", [":&", ":&&", ":~", ":s g", ":s|foo|bar|", "/foo"])
+def test_implicit_substitutions_have_no_raw_field_spans(text):
+    assert scan_substitute_fields(text) is None

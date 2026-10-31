@@ -97,7 +97,7 @@ def test_noop_replacement_removes_prior_drawn_result(preview):
     assert state.editor.toPlainText() == "alpha beta\nfoo x foo x foo\nlast line"
 
 
-def test_guide_yields_to_overlay_then_returns_for_pattern_input(preview):
+def test_guide_and_overlay_coexist_across_fields(preview):
     state = preview
     assert CONF.get(CONF_SECTION, "substitute_guide_enabled") is True
     enter_command(state, ":%s/foo")
@@ -105,7 +105,8 @@ def test_guide_yields_to_overlay_then_returns_for_pattern_input(preview):
     assert state.controller.guide_popup.isVisible()
     enter_command(state, ":%s/foo/bar")
     assert overlay_rows(state)
-    assert not state.controller.guide_popup.isVisible()
+    assert state.controller.guide_popup.isVisible()
+    assert state.controller.guide_popup.header.text() == "Replacement text"
     assert CONF.get(CONF_SECTION, "substitute_guide_enabled") is True
     enter_command(state, ":%s/foo")
     result(state)
@@ -145,7 +146,8 @@ def test_final_delimiter_shows_options_before_and_after_preview(preview, input_m
     assert state.editor.toPlainText() == source
 
     state.qtbot.keyPress(state.line, Qt.Key_Backspace)
-    assert not popup.isVisible()
+    assert popup.isVisible()
+    assert popup.header.text() == "Replacement text"
     state.qtbot.keyClicks(state.line, "/g")
     assert popup.isVisible()
     assert popup.header.text() == "Substitution options"
@@ -174,16 +176,19 @@ def test_trailing_help_remains_visible_with_preview(preview, tail, title):
     assert state.line.hasFocus()
 
 
-def test_guide_stays_hidden_while_closed_pattern_waits_for_debounce(preview):
+def test_guide_and_candidates_show_while_preview_waits_for_debounce(preview):
     state = preview
     enter_command(state, ":%s/foo")
     result(state)
     assert state.controller.guide_popup.isVisible()
     state.preview._timer.setInterval(150)
+    state.line.histories["ex"][:] = ["%s/foo/bar/g"]
     enter_command(state, ":%s/foo/")
     assert state.preview._timer.isActive()
     assert state.preview.result is None
-    assert not state.controller.guide_popup.isVisible()
+    assert state.controller.guide_popup.isVisible()
+    assert state.controller.popup.isVisible()
+    assert state.controller.guide_popup.header.text() == "Replacement text"
     enter_command(state, ":%s/foo")
     assert state.controller.guide_popup.isVisible()
     assert CONF.get(CONF_SECTION, "substitute_guide_enabled") is True

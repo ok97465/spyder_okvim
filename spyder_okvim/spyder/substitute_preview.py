@@ -141,14 +141,6 @@ class SubstitutePreviewController(QObject):
         ):
             self.cancel()
 
-    @property
-    def has_overlay(self):
-        """Whether calculated replacement output should take priority over help."""
-        result = self.result
-        return result is not None and bool(
-            result.rows or result.output_truncated or result.omitted_blocks
-        )
-
     def _invalidate(self, *, clear_cache=False):
         self._timer.stop()
         self._chunk_timer.stop()

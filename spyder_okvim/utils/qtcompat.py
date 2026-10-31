@@ -57,3 +57,17 @@ def text_width(metrics, text: str) -> int:
     if hasattr(metrics, "horizontalAdvance"):
         return metrics.horizontalAdvance(text)
     return metrics.width(text)
+
+
+def python_cursor_position(text: str, qt_position: int) -> int:
+    """Translate a Qt UTF-16 cursor offset to a Python string index."""
+    return len(
+        text.encode("utf-16-le")[: max(0, qt_position) * 2].decode(
+            "utf-16-le", errors="ignore"
+        )
+    )
+
+
+def qt_cursor_position(text: str, python_position: int) -> int:
+    """Translate a Python string index to a Qt UTF-16 cursor offset."""
+    return len(text[:python_position].encode("utf-16-le")) // 2

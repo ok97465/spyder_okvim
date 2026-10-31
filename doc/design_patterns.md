@@ -137,7 +137,14 @@ Snapshot puts keep only their entry, direction, and count in `PutPayload`.
 The Visual selection shape remains in `DotCmdInfo`, whose
 `selection_to_cmd_string()` is shared by ordinary and snapshot dot repetition.
 
+`VimLineEdit` owns the Tab candidates, selected row, and working directory.
+The applied text and whether a unique directory needs another lookup are
+derived from that row. `utils/commandline.py` supplies candidates to both Tab
+completion and automatic suggestions; substitution fields reuse one cached,
+immutable history snapshot without a separate history object.
+
 Command-line popups own their content and appearance caches. Their setters
-report changes so the controller can update geometry without another layout
-cache or inspecting popup internals. `SubstituteOverlay` paints its passive
-viewport child through its existing event filter.
+report changes so the controller can invalidate `CommandlinePopupHost` geometry.
+The host alone positions both sections; the sections only measure their content.
+`SubstituteOverlay` paints its passive viewport child through its existing event
+filter.

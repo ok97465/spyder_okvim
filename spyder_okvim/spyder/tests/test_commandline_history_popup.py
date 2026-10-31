@@ -9,6 +9,7 @@ from qtpy.QtGui import QInputMethodEvent, QKeyEvent
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
+from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.vim import KeyInfo, VimState
 
@@ -24,6 +25,7 @@ def history_popup(vim_bot, qtbot):
     previous_index = stack.get_stack_index()
     previous_enabled = CONF.get(CONF_SECTION, "commandline_history_enabled", True)
     previous_preview = CONF.get(CONF_SECTION, "substitute_preview_enabled", True)
+    previous_completion = CONF.get(CONF_SECTION, "commandline_completion_enabled", True)
     previous_histories = {kind: items[:] for kind, items in line.histories.items()}
     widget.cancel_macro()
     line.esc_pressed()
@@ -38,6 +40,7 @@ def history_popup(vim_bot, qtbot):
     for items in line.histories.values():
         items.clear()
     CONF.set(CONF_SECTION, "commandline_history_enabled", True)
+    CONF.set(CONF_SECTION, "commandline_completion_enabled", True)
     CONF.set(CONF_SECTION, "substitute_preview_enabled", False)
     widget.apply_settings()
     main.show()
@@ -72,6 +75,7 @@ def history_popup(vim_bot, qtbot):
             line.histories[kind][:] = items
         CONF.set(CONF_SECTION, "commandline_history_enabled", previous_enabled)
         CONF.set(CONF_SECTION, "substitute_preview_enabled", previous_preview)
+        CONF.set(CONF_SECTION, "commandline_completion_enabled", previous_completion)
         widget.apply_settings()
         controller.cancel()
         stack.set_stack_index(previous_index)
@@ -83,6 +87,17 @@ def history_popup(vim_bot, qtbot):
 def shown(state):
     popup = state.controller.popup
     return popup is not None and popup.isVisible()
+
+
+def history_bodies(state):
+    """Return full-history rows without the active prompt prefix."""
+    context = state.line._history_context(state.line.text())
+    prompt = context[1] if context is not None else ":"
+    return [
+        candidate.text[len(prompt) :]
+        for candidate in state.controller.candidates
+        if "history" in candidate.source.split(", ")
+    ]
 
 
 def show(state, prefix=":", history=("old", "new"), kind="ex"):
@@ -112,7 +127,7 @@ def test_recent_candidates_are_read_only_and_keep_focus(history_popup, prefix, k
     original = state.editor.toPlainText()
     position = state.editor.textCursor().position()
     revision = state.editor.document().revision()
-    assert state.controller.candidates == ["foo", "far"]
+    assert history_bodies(state) == ["foo", "far"]
     assert state.controller.selected_index is None
     assert popup.list_widget.currentRow() == -1
     select_next(state)
@@ -127,7 +142,8 @@ def test_recent_candidates_are_read_only_and_keep_focus(history_popup, prefix, k
     assert state.editor.document().revision() == revision
     assert state.line.histories[kind] == ["foo", "far", "foo"]
     assert state.line.hasFocus()
-    assert popup.parentWidget() is state.editor.viewport()
+    assert popup.parentWidget() is state.controller.host
+    assert state.controller.host.parentWidget() is state.editor.viewport()
 
 
 def test_enter_accepts_then_executes_and_records_once(history_popup, monkeypatch):
@@ -162,12 +178,98 @@ def test_enter_without_selection_executes_existing_text(history_popup):
     assert not shown(state)
 
 
+def test_automatic_commands_merge_with_history_in_history_order(history_popup):
+    state = history_popup
+    show(state, prefix=":w", history=("wq", "w", "write draft.py", "w"))
+
+    candidates = state.controller.candidates
+    assert [candidate.text for candidate in candidates] == [
+        ":w",
+        ":write draft.py",
+        ":wq",
+    ]
+    assert candidates[0].source.split(", ") == ["history", "command"]
+    assert candidates[0].apply_scope == "full command"
+    assert candidates[1].source == "history"
+    assert candidates[2].source.split(", ") == ["history", "command"]
+    assert state.controller.selected_index is None
+    assert state.line.text() == ":w"
+
+
+def test_enter_after_tab_executes_once(history_popup, monkeypatch):
+    state = history_popup
+    clear = Mock()
+    remember = Mock(wraps=state.line.remember_command)
+    monkeypatch.setattr(state.widget, "clear_yank_history", clear)
+    monkeypatch.setattr(state.line, "remember_command", remember)
+    state.qtbot.keyClicks(state.line, ":YankyClear")
+
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+
+    assert state.line.text() == ":YankyClearHistory"
+    assert shown(state)
+    assert state.controller.selected_index is not None
+    clear.assert_not_called()
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    clear.assert_called_once_with()
+    remember.assert_called_once_with(":YankyClearHistory")
+    assert state.line.text() == ""
+
+
+def test_ctrl_navigation_after_tab_requires_acceptance_before_execution(
+    history_popup, monkeypatch
+):
+    state = history_popup
+    remember = Mock(wraps=state.line.remember_command)
+    monkeypatch.setattr(state.line, "remember_command", remember)
+    state.qtbot.keyClicks(state.line, ":v")
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    assert state.line.text() == ":vs"
+
+    select_next(state)
+
+    assert state.line.text() == ":vs"
+    assert state.controller.candidates[state.controller.selected_index].text == ":vsp"
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    assert state.line.text() == ":vsp"
+    assert state.status.sub_mode is not None
+    assert state.controller.selected_index is None
+    remember.assert_not_called()
+
+
+def test_manual_cursor_move_after_tab_restores_automatic_command_candidates(
+    history_popup,
+):
+    state = history_popup
+    show(state, prefix=":w", history=("write draft.py",))
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    assert state.line.text() == ":wq"
+    assert state.line.completion_result is not None
+
+    state.qtbot.keyPress(state.line, Qt.Key_Left)
+
+    assert state.line.text() == ":wq"
+    assert state.line.cursorPosition() == 2
+    assert state.line.completion_result is None
+    assert shown(state)
+    assert [candidate.text for candidate in state.controller.candidates] == [
+        ":w",
+        ":wq",
+    ]
+    assert all(
+        candidate.source == "command" for candidate in state.controller.candidates
+    )
+    assert state.controller.selected_index is None
+    assert state.controller.popup.list_widget.currentRow() == -1
+
+
 def test_edit_resets_selection_and_empty_results_hide(history_popup):
     state = history_popup
     show(state, history=("foo", "far", "Foo"))
     select_next(state)
     state.qtbot.keyClicks(state.line, "f")
-    assert state.controller.candidates == ["far", "foo"]
+    assert history_bodies(state) == ["far", "foo"]
     assert state.controller.selected_index is None
     select_next(state)
     state.qtbot.keyClicks(state.line, "z")
@@ -184,8 +286,8 @@ def test_navigation_keeps_geometry_while_scrolling_selection(
     state = history_popup
     popup = show(state, history=tuple(f"command {index}" for index in range(12)))
     geometry = popup.geometry()
-    update_geometry = Mock(wraps=popup.update_geometry)
-    monkeypatch.setattr(popup, "update_geometry", update_geometry)
+    measure = Mock(wraps=popup.preferred_size)
+    monkeypatch.setattr(popup, "preferred_size", measure)
 
     for _ in range(10):
         select_next(state)
@@ -193,7 +295,7 @@ def test_navigation_keeps_geometry_while_scrolling_selection(
 
     assert state.controller.selected_index == 8
     assert popup.geometry() == geometry
-    update_geometry.assert_not_called()
+    measure.assert_not_called()
     item = popup.list_widget.currentItem()
     assert (
         popup.list_widget.viewport()
@@ -208,25 +310,29 @@ def test_font_change_refits_existing_popup(history_popup, monkeypatch):
     original_font = state.line.font()
     font = state.line.font()
     font.setPointSize(max(1, font.pointSize()) + 2)
-    update_geometry = Mock(wraps=popup.update_geometry)
-    monkeypatch.setattr(popup, "update_geometry", update_geometry)
+    measure = Mock(wraps=popup.preferred_size)
+    monkeypatch.setattr(popup, "preferred_size", measure)
 
     try:
         state.line.setFont(font)
         state.controller.sync()
         assert state.controller.popup is popup
         assert popup.font() == font
-        update_geometry.assert_called_once_with()
+        measure.assert_called_once()
     finally:
         state.line.setFont(original_font)
 
 
-def test_cursor_movement_hides_and_rechecks_at_end(history_popup):
+def test_cursor_movement_hides_history_but_keeps_command_completions(history_popup):
     state = history_popup
     show(state, prefix=":f", history=("foo", "far"))
     select_next(state)
     state.qtbot.keyPress(state.line, Qt.Key_Left)
-    assert not shown(state)
+    assert shown(state)
+    assert history_bodies(state) == []
+    assert all(
+        candidate.source == "command" for candidate in state.controller.candidates
+    )
     assert state.controller.selected_index is None
     state.line.setCursorPosition(len(state.line.text().encode("utf-16-le")) // 2)
     assert shown(state)
@@ -271,13 +377,22 @@ def test_up_down_preserve_draft_and_cursor_while_suppressing_popup(history_popup
 @pytest.mark.parametrize(
     "prefix, kind", [(":w", "ex"), ("/w", "search"), ("?w", "search")]
 )
-def test_completion_hides_popup_until_edit(history_popup, key, prefix, kind):
+def test_tab_shows_applied_completion_list_for_ex_only(
+    history_popup, key, prefix, kind
+):
     state = history_popup
     show(state, prefix=prefix, history=("write", "write copy.py"), kind=kind)
     state.qtbot.keyPress(state.line, key)
-    assert not shown(state)
+    assert shown(state) is (kind == "ex")
+    if kind == "ex":
+        assert all(
+            candidate.source == "command" for candidate in state.controller.candidates
+        )
+        assert state.controller.selected_index is not None
+        selected = state.controller.candidates[state.controller.selected_index]
+        assert selected.text == state.line.text()
     state.controller.sync()
-    assert not shown(state)
+    assert shown(state) is (kind == "ex")
     assert state.line.hasFocus()
 
 
@@ -360,7 +475,7 @@ def test_visual_ex_range_is_filtered_as_part_of_body(history_popup):
     state = history_popup
     show(state, "Vj:", ("1,2s/alpha/omega/", "3s/last/end/"))
     assert state.line.text() == ":1,2"
-    assert state.controller.candidates == ["1,2s/alpha/omega/"]
+    assert history_bodies(state) == ["1,2s/alpha/omega/"]
     select_next(state)
     state.qtbot.keyPress(state.line, Qt.Key_Return)
     assert state.line.text() == ":1,2s/alpha/omega/"
@@ -379,7 +494,7 @@ def test_composition_hides_and_commit_refreshes_without_old_selection(history_po
     send_ime(state, commit="글")
     assert state.line.text() == "/한글"
     assert shown(state)
-    assert state.controller.candidates == ["한글"]
+    assert history_bodies(state) == ["한글"]
     assert state.controller.selected_index is None
 
 
@@ -434,7 +549,11 @@ def test_setting_and_focus_loss_clean_up_immediately(history_popup):
     select_next(state)
     CONF.set(CONF_SECTION, "commandline_history_enabled", False)
     state.widget.apply_settings()
-    assert not shown(state)
+    assert shown(state)
+    assert history_bodies(state) == []
+    assert all(
+        candidate.source == "command" for candidate in state.controller.candidates
+    )
     assert state.controller.selected_index is None
     assert state.line.text() == ":"
     state.qtbot.keyPress(state.line, Qt.Key_Up)
@@ -448,6 +567,56 @@ def test_setting_and_focus_loss_clean_up_immediately(history_popup):
     assert not shown(state)
     assert state.controller.selected_index is None
     assert state.status.sub_mode is None
+
+
+def test_completion_setting_is_independent_and_preserves_tab(history_popup):
+    state = history_popup
+    show(state, prefix=":w", history=("write draft.py",))
+    assert any(
+        "command" in candidate.source for candidate in state.controller.candidates
+    )
+
+    CONF.set(CONF_SECTION, "commandline_completion_enabled", False)
+    state.widget.apply_settings()
+
+    assert shown(state)
+    assert history_bodies(state) == ["write draft.py"]
+    assert all(
+        candidate.source == "history" for candidate in state.controller.candidates
+    )
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    assert state.line.text() == ":wq"
+    assert not shown(state)
+    CONF.set(CONF_SECTION, "commandline_completion_enabled", True)
+    state.widget.apply_settings()
+    assert shown(state)
+    assert all(
+        candidate.source == "command" for candidate in state.controller.candidates
+    )
+
+
+@pytest.mark.parametrize(
+    "option", ["substitute_guide_enabled", "substitute_preview_enabled"]
+)
+def test_guide_and_preview_settings_preserve_current_selection(history_popup, option):
+    state = history_popup
+    show(state, prefix=":w", history=("write draft.py",))
+    select_next(state)
+    candidates = state.controller.candidates[:]
+    index = state.controller.selected_index
+    previous = CONF.get(CONF_SECTION, option, True)
+    try:
+        CONF.set(CONF_SECTION, option, not previous)
+        state.widget.apply_settings()
+
+        assert state.controller.candidates == candidates
+        assert state.controller.selected_index == index
+        assert state.controller.popup.list_widget.currentRow() == index
+        assert state.line.text() == ":w"
+    finally:
+        CONF.set(CONF_SECTION, option, previous)
+        state.widget.apply_settings()
 
 
 def test_editor_switch_releases_old_panel_and_pending_input(history_popup):
@@ -467,7 +636,7 @@ def test_editor_switch_releases_old_panel_and_pending_input(history_popup):
     assert shown(state)
     assert state.controller.popup is not popup
     assert (
-        state.controller.popup.parentWidget()
+        state.controller.host.parentWidget()
         is state.stack.get_current_editor().viewport()
     )
 
@@ -487,9 +656,7 @@ def test_automatic_history_filtering_never_reads_path_completion(
 ):
     state = history_popup
     completion = Mock(side_effect=AssertionError("automatic disk lookup"))
-    monkeypatch.setattr(
-        "spyder_okvim.spyder.vim_widgets.completion_candidates", completion
-    )
+    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.completion_items", completion)
     show(state, prefix=":w", history=("write first.py", "write second.py"))
     state.qtbot.keyClicks(state.line, "r")
     select_next(state)
@@ -582,7 +749,7 @@ def test_nested_input_never_shows_or_accepts_intermediate_candidates(history_pop
         state.qtbot.keyPress(state.line, Qt.Key_N, Qt.ControlModifier)
         assert state.line.text() == ":n"
     assert shown(state)
-    assert state.controller.candidates == ["new"]
+    assert history_bodies(state) == ["new"]
     assert state.controller.selected_index is None
 
 
@@ -616,7 +783,98 @@ def test_input_started_callback_cannot_use_stale_candidates(
     finally:
         state.widget.sig_input_started.disconnect(replace_before_dispatch)
     assert state.line.text() == (":n" if transition == "rewrite" else "")
-    assert state.controller.candidates == (["new"] if transition == "rewrite" else [])
+    assert history_bodies(state) == (["new"] if transition == "rewrite" else [])
     assert state.controller.selected_index is None
     assert (state.status.sub_mode is not None) == (transition == "rewrite")
+    remember.assert_not_called()
+
+
+@pytest.mark.parametrize("transition", ["cursor", "executor"])
+def test_acceptance_rechecks_cursor_and_executor_identity(
+    history_popup, monkeypatch, transition
+):
+    state = history_popup
+    show(state, prefix=":w", history=("write draft.py",))
+    select_next(state)
+    remember = Mock(wraps=state.line.remember_command)
+    monkeypatch.setattr(state.line, "remember_command", remember)
+
+    def change_before_dispatch():
+        if transition == "cursor":
+            state.line.setCursorPosition(1)
+        else:
+            state.status.sub_mode = ExecutorColon(state.status)
+
+    state.widget.sig_input_started.connect(change_before_dispatch)
+    try:
+        state.qtbot.keyPress(state.line, Qt.Key_Return)
+    finally:
+        state.widget.sig_input_started.disconnect(change_before_dispatch)
+
+    assert state.line.text() == ":w"
+    assert state.status.sub_mode is not None
+    assert state.controller.selected_index is None
+    remember.assert_not_called()
+
+
+def test_acceptance_rechecks_removed_history_row_without_input_change(
+    history_popup, monkeypatch
+):
+    state = history_popup
+    show(state, prefix=":w", history=("write draft.py",))
+    select_next(state)
+    remember = Mock(wraps=state.line.remember_command)
+    monkeypatch.setattr(state.line, "remember_command", remember)
+
+    def remove_before_dispatch():
+        state.line.histories["ex"].clear()
+
+    state.widget.sig_input_started.connect(remove_before_dispatch)
+    try:
+        state.qtbot.keyPress(state.line, Qt.Key_Return)
+    finally:
+        state.widget.sig_input_started.disconnect(remove_before_dispatch)
+
+    assert state.line.text() == ":w"
+    assert state.line.histories["ex"] == []
+    assert state.status.sub_mode is not None
+    assert history_bodies(state) == []
+    assert state.controller.selected_index is None
+    remember.assert_not_called()
+
+
+def test_selected_path_rechecks_working_directory_before_acceptance(
+    history_popup, monkeypatch, tmp_path
+):
+    state = history_popup
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "alpha.py").touch()
+    (first / "alpine.py").touch()
+    monkeypatch.chdir(first)
+    state.qtbot.keyClicks(state.line, ":e al")
+    state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    assert state.line.text() == ":e alpha.py"
+    select_next(state)
+    assert (
+        state.controller.candidates[state.controller.selected_index].text
+        == ":e alpine.py"
+    )
+    remember = Mock(wraps=state.line.remember_command)
+    monkeypatch.setattr(state.line, "remember_command", remember)
+
+    def change_before_dispatch():
+        monkeypatch.chdir(second)
+
+    state.widget.sig_input_started.connect(change_before_dispatch)
+    try:
+        state.qtbot.keyPress(state.line, Qt.Key_Return)
+    finally:
+        state.widget.sig_input_started.disconnect(change_before_dispatch)
+
+    assert state.line.text() == ":e alpha.py"
+    assert state.status.sub_mode is not None
+    assert state.controller.selected_index is None
     remember.assert_not_called()

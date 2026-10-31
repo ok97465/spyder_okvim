@@ -117,7 +117,7 @@ def test_search_tab_does_not_complete_or_move_focus(
         pytest.fail("Search input must not request Ex completion")
 
     monkeypatch.setattr(
-        "spyder_okvim.spyder.vim_widgets.completion_candidates", unexpected_completion
+        "spyder_okvim.spyder.vim_widgets.completion_items", unexpected_completion
     )
     qtbot.keyClicks(commandline, prefix + "w")
     original = commandline.text()
@@ -587,3 +587,112 @@ def test_substitute_body_never_queries_paths(completion_bot, monkeypatch, body):
 
     assert commandline.text() == ":%" + body
     scandir.assert_not_called()
+
+
+def test_accepting_field_history_preserves_range_flags_and_other_fields(completion_bot):
+    """A selected middle-field suggestion changes input before it can execute."""
+    editor, status, line, qtbot, _ = completion_bot
+    history = ["s/old/bar/g", "s/old/barn/i"]
+    line.histories["ex"][:] = history
+    original = editor.toPlainText()
+    revision = editor.document().revision()
+    previous = status.last_substitute
+    qtbot.keyClicks(line, ":")
+    line.setText(":%s/foo/baWRONG/g 3")
+    line.setCursorPosition(len(":%s/foo/ba"))
+    controller = line.vim_widget.commandline_popup
+
+    assert [candidate.text for candidate in controller.candidates] == [
+        ":%s/foo/barn/g 3",
+        ":%s/foo/bar/g 3",
+    ]
+    assert controller.selected_index is None
+    qtbot.keyPress(line, Qt.Key_N, Qt.ControlModifier)
+    assert line.text() == ":%s/foo/baWRONG/g 3"
+    qtbot.keyPress(line, Qt.Key_Return)
+
+    assert line.text() == ":%s/foo/barn/g 3"
+    assert line.cursorPosition() == len(":%s/foo/barn")
+    assert status.sub_mode is not None
+    assert controller.selected_index is None
+    assert editor.toPlainText() == original
+    assert editor.document().revision() == revision
+    assert status.last_substitute is previous
+    assert line.histories["ex"] == history
+
+
+def test_tab_cycles_field_history_using_original_prefix(completion_bot, monkeypatch):
+    """Tab reuses the field list and leaves the command's other text intact."""
+    _, _, line, qtbot, _ = completion_bot
+    line.histories["ex"][:] = ["s/old/barn/g", "s/old/bar/g"]
+    scandir = Mock(side_effect=AssertionError("field completion requested paths"))
+    monkeypatch.setattr(os, "scandir", scandir)
+    qtbot.keyClicks(line, ":")
+    line.setText(":3,8s/foo/baWRONG/gi 2")
+    line.setCursorPosition(len(":3,8s/foo/ba"))
+    controller = line.vim_widget.commandline_popup
+
+    for key, value in [
+        (Qt.Key_Tab, "bar"),
+        (Qt.Key_Tab, "barn"),
+        (Qt.Key_Backtab, "bar"),
+    ]:
+        qtbot.keyPress(line, key)
+        assert line.text() == ":3,8s/foo/" + value + "/gi 2"
+        assert line.cursorPosition() == len(":3,8s/foo/" + value)
+        assert line.hasFocus()
+        assert controller.popup.isVisible()
+        assert controller.selected_index is not None
+        assert (
+            controller.candidates[controller.selected_index].apply_scope
+            == "replacement"
+        )
+    scandir.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "history, text, prefix, expected, scope",
+    [
+        (
+            [r"s/a\/b/c\/d/g", "s#other#wrong#g"],
+            r":%s/a\/OLD/keep/g",
+            r":%s/a\/",
+            r":%s/a\/b/keep/g",
+            "pattern",
+        ),
+        (
+            ["s#old#wrong#g", "s/foo//g"],
+            ":%s/foo/WRONG/g",
+            ":%s/foo/",
+            ":%s/foo//g",
+            "replacement",
+        ),
+        (
+            ["s/foo/😀bar/g"],
+            ":%s/foo/😀bOLD/g",
+            ":%s/foo/😀b",
+            ":%s/foo/😀bar/g",
+            "replacement",
+        ),
+    ],
+)
+def test_field_completion_preserves_raw_escapes_empty_values_and_utf16_cursor(
+    completion_bot, history, text, prefix, expected, scope
+):
+    _, _, line, qtbot, _ = completion_bot
+    line.histories["ex"][:] = history
+    qtbot.keyClicks(line, ":")
+    line.setText(text)
+    line.setCursorPosition(utf16_position(prefix))
+    controller = line.vim_widget.commandline_popup
+    assert len(controller.candidates) == 1
+    assert controller.candidates[0].apply_scope == scope
+    applied_cursor = controller.candidates[0].cursor_position
+    if expected == ":%s/foo//g":
+        assert controller.candidates[0].label == "(빈 문자열: 삭제)"
+
+    qtbot.keyPress(line, Qt.Key_Tab)
+
+    assert line.text() == expected
+    assert line.cursorPosition() == utf16_position(expected[:applied_cursor])
+    assert line.hasFocus()

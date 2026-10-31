@@ -40,6 +40,7 @@ CONF_DEFAULTS = [
             "leader_key": "Space",
             "which_key_enabled": True,
             "which_key_delay": 300,
+            "commandline_completion_enabled": True,
             "commandline_history_enabled": True,
             "substitute_guide_enabled": True,
             "substitute_preview_enabled": True,

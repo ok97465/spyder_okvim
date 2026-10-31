@@ -1,7 +1,7 @@
 """Read-only help for the field under the cursor in a substitution command."""
 
 # Third Party Libraries
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QSize, Qt
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import (
     QFrame,
@@ -29,8 +29,8 @@ class SubstituteGuidePopup(QFrame):
 
     MAX_WIDTH = 640
 
-    def __init__(self, viewport):
-        super().__init__(viewport)
+    def __init__(self, parent):
+        super().__init__(parent)
         self.setObjectName("substituteGuidePopup")
         self.setMinimumSize(0, 0)
         self.setFocusPolicy(Qt.NoFocus)
@@ -125,6 +125,22 @@ class SubstituteGuidePopup(QFrame):
                 "{n,m} = n to m repetitions\n"
                 "(...) = capture group; a|b = a or b"
             )
+        elif context.stage == "replacement":
+            title = "Replacement text"
+            explanation = (
+                r"& or \0 = entire match; \1–\9 = capture groups"
+                "\n"
+                r"\& = literal &; \\ = literal backslash"
+                "\n"
+                r"\t = tab; \b = backspace"
+                "\n"
+                f"\\{delimiter} = literal delimiter {delimiter}\n"
+                "Missing capture groups insert empty text. "
+                r"Other unrecognized escapes drop the backslash (\z inserts z)."
+                "\n"
+                r"Line breaks, \r, \n, \u, \U, \l, \L, \e, \E and "
+                r"expression replacements (\=) are not supported. ~ is literal."
+            )
         elif context.stage == "flags":
             title = "Substitution options"
             explanation = ""
@@ -141,7 +157,7 @@ class SubstituteGuidePopup(QFrame):
                 f"Unsupported option or trailing input: {context.unsupported}. "
                 "The command executor will validate the input."
             )
-        if context.stage in ("pattern", "flags"):
+        if context.stage in ("pattern", "replacement", "flags"):
             range_text = ""
         elif context.addresses == ("%",):
             range_text = "Range: % selects the entire file."
@@ -243,14 +259,9 @@ class SubstituteGuidePopup(QFrame):
             )
         return width + 2
 
-    def update_geometry(self):
-        """Wrap and scroll help within the active viewport's lower edge."""
+    def preferred_size(self, available_width, available_height, *, fixed_width=None):
+        """Measure wrapped help within the width allocated by the host."""
         self.ensurePolished()
-        viewport = self.parentWidget()
-        width, height = viewport.width(), viewport.height()
-        margin = min(8, max(0, (min(width, height) - 1) // 2))
-        available_width = max(1, width - 2 * margin)
-        available_height = max(1, height - 2 * margin)
         margins = self.layout().contentsMargins() + self.contentsMargins()
         horizontal_padding = margins.left() + margins.right()
         vertical_padding = margins.top() + margins.bottom()
@@ -260,6 +271,8 @@ class SubstituteGuidePopup(QFrame):
             self.MAX_WIDTH,
             self._preferred_text_width() + horizontal_padding + scrollbar_width,
         )
+        if fixed_width is not None:
+            popup_width = max(1, min(available_width, fixed_width))
         text_width = max(1, popup_width - horizontal_padding - scrollbar_width)
         content_layout = self.content_widget.layout()
         content_layout.invalidate()
@@ -270,7 +283,4 @@ class SubstituteGuidePopup(QFrame):
         )
         self.content_widget.setMinimumHeight(content_height)
         popup_height = min(available_height, content_height + vertical_padding)
-        self.setGeometry(
-            margin, height - margin - popup_height, popup_width, popup_height
-        )
-        self.layout().activate()
+        return QSize(popup_width, popup_height)

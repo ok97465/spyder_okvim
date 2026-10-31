@@ -7,17 +7,26 @@ import os
 import pytest
 
 # Project Libraries
-from spyder_okvim.utils.commandline import completion_candidates
+from spyder_okvim.utils.commandline import (
+    CompletionCandidate,
+    command_candidates,
+    completion_items,
+    merge_candidates,
+    substitute_field_candidates,
+)
 
 
 COMMANDS = ("e", "w", "q", "q!", "wq", "n", "marks", "jumps")
 
 
-def complete(text, directory, cursor=None):
+def complete(text, directory, cursor=None, commands=COMMANDS):
     """Complete at the end by default."""
-    return completion_candidates(
-        text, len(text) if cursor is None else cursor, COMMANDS, str(directory)
-    )
+    return [
+        (candidate.text, candidate.cursor_position)
+        for candidate in completion_items(
+            text, len(text) if cursor is None else cursor, commands, str(directory)
+        )
+    ]
 
 
 def test_command_completion_preserves_argument(tmp_path):
@@ -36,9 +45,9 @@ def test_command_completion_preserves_argument(tmp_path):
 
 def test_named_extension_commands_keep_builtin_completion_order(tmp_path):
     commands = COMMANDS + ("YankyRingHistory", "YankyClearHistory")
-    candidates = completion_candidates(":", 1, commands, str(tmp_path))
+    candidates = complete(":", tmp_path, commands=commands)
     assert candidates[0] == (":e", 2)
-    assert completion_candidates(":Yanky", 6, commands, str(tmp_path)) == [
+    assert complete(":Yanky", tmp_path, commands=commands) == [
         (":YankyClearHistory", len(":YankyClearHistory")),
         (":YankyRingHistory", len(":YankyRingHistory")),
     ]
@@ -218,7 +227,7 @@ def test_substitute_name_completion_preserves_range_and_body(tmp_path, prefix):
     text = prefix + "su/foo/bar/g"
     position = len(prefix + "su")
     expected = prefix + "substitute/foo/bar/g"
-    assert completion_candidates(text, position, commands, str(tmp_path)) == [
+    assert complete(text, tmp_path, position, commands) == [
         (expected, len(prefix + "substitute"))
     ]
 
@@ -233,18 +242,128 @@ def test_substitute_body_never_scans_files(tmp_path, monkeypatch, body, command)
 
     monkeypatch.setattr(os, "scandir", unexpected_scan)
     text = ":%" + command + body
-    assert (
-        completion_candidates(
-            text, len(text), COMMANDS + ("s", "substitute"), str(tmp_path)
-        )
-        == []
-    )
+    assert complete(text, tmp_path, commands=COMMANDS + ("s", "substitute")) == []
 
 
 @pytest.mark.parametrize("prefix", [":s", ":%s", ":3,8s"])
 def test_bare_substitute_name_is_still_completable(tmp_path, prefix):
     commands = COMMANDS + ("s", "substitute")
-    assert completion_candidates(prefix, len(prefix), commands, str(tmp_path)) == [
+    assert complete(prefix, tmp_path, commands=commands) == [
         (prefix, len(prefix)),
         (prefix[:-1] + "substitute", len(prefix) + len("ubstitute")),
     ]
+
+
+def test_automatic_candidates_do_not_query_filesystem(monkeypatch):
+    """Typing command names does not require filesystem reads."""
+
+    def unexpected_read(*args, **kwargs):
+        pytest.fail("Automatic candidates must use in-memory data")
+
+    monkeypatch.setattr(os, "scandir", unexpected_read)
+    monkeypatch.setattr("spyder_okvim.utils.commandline.is_text_file", unexpected_read)
+    monkeypatch.setattr("builtins.open", unexpected_read)
+    assert command_candidates(":w", 2, COMMANDS) == [(":w", 2), (":wq", 3)]
+
+
+def test_merge_distinguishes_application_cursor_and_keeps_literal_text():
+    """Identical labels or text alone do not imply the same application."""
+    first = CompletionCandidate("history", "short", "full command", ":w 한글", 5)
+    second = CompletionCandidate("command", "short", "command", ":w 한글", 2)
+    duplicate = CompletionCandidate("command", "other", "command", ":w 한글", 5)
+    assert merge_candidates([first], [second, duplicate]) == [
+        CompletionCandidate("history, command", "short", "full command", ":w 한글", 5),
+        second,
+    ]
+
+
+def test_explicit_completion_items_wrap_names_and_paths(tmp_path):
+    (tmp_path / "file.py").touch()
+    assert completion_items(":w", 2, iter(COMMANDS), str(tmp_path))[0] == (
+        CompletionCandidate("command", ":w", "command", ":w", 2)
+    )
+    rows = completion_items(":w fi", 5, iter(COMMANDS), str(tmp_path))
+    assert rows == [CompletionCandidate("path", ":w file.py", "path", ":w file.py", 10)]
+
+
+def test_substitute_field_history_preserves_other_fields_and_suffix():
+    entries = ["s/foo/bar/g", "s/food/barn/i", "s/foo/bar/g"]
+    text = ":%s/foo/baWRONG/g 3"
+    rows = substitute_field_candidates(entries, text, len(":%s/foo/ba"))
+    assert [(row.text, row.cursor_position) for row in rows] == [
+        (":%s/foo/bar/g 3", len(":%s/foo/bar")),
+        (":%s/foo/barn/g 3", len(":%s/foo/barn")),
+    ]
+    assert all(row.apply_scope == "replacement" for row in rows)
+    text = ":3,8substitute/foOLD/current/g"
+    rows = substitute_field_candidates(entries, text, len(":3,8substitute/fo"))
+    assert [row.text for row in rows] == [
+        ":3,8substitute/foo/current/g",
+        ":3,8substitute/food/current/g",
+    ]
+
+
+def test_substitute_field_history_uses_same_delimiter_and_raw_escapes():
+    entries = [r"s/a\/b/c\/d/g", "s#old#new#g", "s/foo//g"]
+    text = r":s/a\/OLD/keep/g"
+    rows = substitute_field_candidates(entries, text, len(r":s/a\/"))
+    assert [row.text for row in rows] == [r":s/a\/b/keep/g"]
+    rows = substitute_field_candidates(entries, ":s/foo/", len(":s/foo/"))
+    assert rows[0].label == "(빈 문자열: 삭제)"
+    assert rows[0].text == ":s/foo/"
+    assert [row.text for row in rows] == [":s/foo/", r":s/foo/c\/d"]
+
+
+def test_substitute_field_history_skips_implicit_or_ambiguous_records():
+    entries = [
+        "&",
+        "&&",
+        "~",
+        "s",
+        "s g",
+        "s//reused/g",
+        "s/unfinished",
+        "s/foo/bar/x",
+        "s#other#different#g",
+        "s/foo/explicit",
+    ]
+    rows = substitute_field_candidates(entries, ":s/foo/", len(":s/foo/"))
+    assert [row.text for row in rows] == [":s/foo/explicit"]
+
+
+def test_field_history_never_escapes_a_preserved_closing_delimiter():
+    """An unfinished saved escape must not absorb the target field boundary."""
+    entries = ["s/foo/bar\\", "s/foo/baz\\\\"]
+    text = ":%s/foo/baOLD/g 2"
+    rows = substitute_field_candidates(entries, text, len(":%s/foo/ba"))
+    assert [row.text for row in rows] == [":%s/foo/baz\\\\/g 2"]
+    assert [
+        row.text for row in substitute_field_candidates(entries, ":s/foo/ba", 9)
+    ] == [
+        ":s/foo/baz\\\\",
+        ":s/foo/bar\\",
+    ]
+    assert [
+        row.text for row in substitute_field_candidates(entries, ":s/fo/keep/g", 5)
+    ] == [":s/foo/keep/g"]
+
+
+def test_substitute_field_history_reparses_only_when_history_changes(monkeypatch):
+    import spyder_okvim.utils.commandline as commandline
+
+    parse = commandline.parse_substitute
+    calls = []
+
+    def counted(body, *args):
+        calls.append(body)
+        return parse(body, *args)
+
+    monkeypatch.setattr(commandline, "parse_substitute", counted)
+    commandline._substitute_history_fields.cache_clear()
+    entries = ["s/foo/bar/g"]
+    substitute_field_candidates(entries, ":s/f", 4)
+    substitute_field_candidates(entries, ":s/fo", 5)
+    assert calls == ["/foo/bar/g"]
+    entries.append("s/next/last/g")
+    substitute_field_candidates(entries, ":s/", 3)
+    assert calls == ["/foo/bar/g", "/next/last/g", "/foo/bar/g"]

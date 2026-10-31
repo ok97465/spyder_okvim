@@ -10,8 +10,8 @@ from qtpy.QtGui import QKeyEvent, QWheelEvent
 from qtpy.QtWidgets import QApplication, QWidget
 from spyder.config.manager import CONF
 
+from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.spyder.substitute_guide import SubstituteGuidePopup
 from spyder_okvim.spyder.tests.test_commandline_history_popup import (
     history_popup as history_popup,
     select_next,
@@ -47,9 +47,6 @@ def guide_shown(state):
 def assert_stage(state, title):
     assert guide_shown(state)
     assert state.controller.guide_popup.header.text() == title
-    assert not shown(state)
-    assert state.controller.candidates == []
-    assert state.controller.selected_index is None
     assert state.line.hasFocus()
 
 
@@ -60,14 +57,14 @@ def test_stages_forward_backspace_and_middle_cursor(guide):
     assert_stage(state, "Search pattern")
     popup = state.controller.guide_popup
     state.qtbot.keyClicks(state.line, "foo/")
-    assert not guide_shown(state)
-    assert not shown(state)
+    assert_stage(state, "Replacement text")
+    assert shown(state)
     state.qtbot.keyClicks(state.line, "bar/")
     assert_stage(state, "Substitution options")
     assert state.controller.guide_popup is popup
     state.qtbot.keyPress(state.line, Qt.Key_Backspace)
-    assert not guide_shown(state)
-    assert not shown(state)
+    assert_stage(state, "Replacement text")
+    assert shown(state)
     for _ in range(4):
         state.qtbot.keyPress(state.line, Qt.Key_Backspace)
     assert_stage(state, "Search pattern")
@@ -75,8 +72,8 @@ def test_stages_forward_backspace_and_middle_cursor(guide):
     state.line.setCursorPosition(4)
     assert_stage(state, "Search pattern")
     state.line.setCursorPosition(7)
-    assert not guide_shown(state)
-    assert not shown(state)
+    assert_stage(state, "Replacement text")
+    assert shown(state)
     state.line.setCursorPosition(11)
     assert_stage(state, "Substitution options")
     state.line.setCursorPosition(2)
@@ -93,7 +90,7 @@ def test_paste_delete_and_utf16_cursor(guide):
     text = state.line.text()
     replacement_start = text.index("/바꿈") + 1
     state.line.setCursorPosition(len(text[:replacement_start].encode("utf-16-le")) // 2)
-    assert not guide_shown(state)
+    assert_stage(state, "Replacement text")
     assert not shown(state)
     state.line.setCursorPosition(len(":s/😀한글".encode("utf-16-le")) // 2)
     assert_stage(state, "Search pattern")
@@ -117,28 +114,76 @@ def test_clipboard_paste_selects_stage_from_complete_input(guide):
 
 
 @pytest.mark.parametrize("preview_enabled", [False, True])
-def test_replacement_stage_has_no_guide_or_history_popup(guide, preview_enabled):
+def test_replacement_guide_candidates_and_preview_coexist(guide, preview_enabled):
     state = guide
     CONF.set(CONF_SECTION, "substitute_preview_enabled", preview_enabled)
     state.widget.apply_settings()
     state.line.histories["ex"][:] = ["s/alpha/new/g"]
     state.qtbot.keyClicks(state.line, ":s/alpha/")
-    assert not guide_shown(state)
-    assert not shown(state)
-    assert state.controller.candidates == []
+    assert_stage(state, "Replacement text")
+    assert shown(state)
+    assert state.controller.selected_index is None
     state.qtbot.keyClicks(state.line, "new")
     if preview_enabled:
-        state.qtbot.waitUntil(lambda: state.widget.substitute_preview.has_overlay)
+        state.qtbot.waitUntil(state.widget.substitute_preview.overlay.widget.isVisible)
     QCoreApplication.processEvents()
-    assert not guide_shown(state)
-    assert not shown(state)
-    assert state.controller.candidates == []
+    assert_stage(state, "Replacement text")
+    assert shown(state)
+    assert state.controller.selected_index is None
     assert state.line.hasFocus()
     state.qtbot.keyClicks(state.line, "/")
     assert_stage(state, "Substitution options")
+    assert shown(state)
     state.line.setCursorPosition(state.line.text().index("new"))
-    assert not guide_shown(state)
-    assert not shown(state)
+    assert_stage(state, "Replacement text")
+    assert shown(state)
+
+
+def test_pattern_guide_and_field_candidates_remain_above_preview(guide):
+    state = guide
+    CONF.set(CONF_SECTION, "substitute_preview_enabled", True)
+    state.widget.apply_settings()
+    state.line.histories["ex"][:] = ["s/alpha/new/g"]
+    state.qtbot.keyClicks(state.line, ":s/alpha/new")
+    preview = state.widget.substitute_preview
+    state.qtbot.waitUntil(preview.overlay.widget.isVisible)
+    state.line.setCursorPosition(len(":s/al"))
+    assert preview.overlay.widget.isVisible()
+    assert_stage(state, "Search pattern")
+    assert shown(state)
+    assert all(
+        candidate.apply_scope == "pattern" for candidate in state.controller.candidates
+    )
+    assert state.controller.host.parentWidget() is state.editor.viewport()
+
+
+@pytest.mark.parametrize(
+    "command, title",
+    [
+        (":s/alpha/new/g", "Substitution options"),
+        (":s/alpha/new/g 3", "Line count"),
+    ],
+)
+def test_candidates_and_guide_are_visible_during_preview_delay(guide, command, title):
+    state = guide
+    CONF.set(CONF_SECTION, "substitute_preview_enabled", True)
+    state.widget.apply_settings()
+    preview = state.widget.substitute_preview
+    preview._timer.setInterval(10000)
+    try:
+        state.line.histories["ex"][:] = [command[1:]]
+        state.qtbot.keyClicks(state.line, command)
+        assert preview._timer.isActive()
+        assert not preview.overlay.widget.isVisible()
+        assert_stage(state, title)
+        assert shown(state)
+        preview._timer.stop()
+        preview._start()
+        state.qtbot.waitUntil(preview.overlay.widget.isVisible)
+        assert_stage(state, title)
+        assert shown(state)
+    finally:
+        preview._timer.setInterval(preview.DEBOUNCE_MS)
 
 
 def test_guide_is_read_only_and_does_not_search(guide, monkeypatch):
@@ -156,9 +201,7 @@ def test_guide_is_read_only_and_does_not_search(guide, monkeypatch):
     histories = {kind: items[:] for kind, items in state.line.histories.items()}
     forbidden = Mock(side_effect=AssertionError("guide attempted execution"))
     monkeypatch.setattr("spyder_okvim.utils.ex_parser.resolve_range", forbidden)
-    monkeypatch.setattr(
-        "spyder_okvim.spyder.vim_widgets.completion_candidates", forbidden
-    )
+    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.completion_items", forbidden)
     state.qtbot.keyClicks(state.line, ":%s/[invalid/long/&g")
     text, cursor = state.line.text(), state.line.cursorPosition()
     for _ in range(3):
@@ -197,14 +240,14 @@ def test_selected_history_cannot_intercept_guide_enter(guide):
 def test_unclosed_substitutions_keep_deletion_execution(guide, command):
     state = guide
     state.qtbot.keyClicks(state.line, command)
-    assert guide_shown(state) is (command == ":s/alpha")
+    assert guide_shown(state)
     state.qtbot.keyPress(state.line, Qt.Key_Return)
     assert state.editor.toPlainText().startswith(" beta\n")
     assert not guide_shown(state)
 
 
 @pytest.mark.parametrize("key", [Qt.Key_Tab, Qt.Key_Backtab])
-def test_completion_suppression_does_not_hide_guide(guide, key):
+def test_no_match_tab_preserves_guide_and_allows_fresh_suggestions(guide, key):
     state = guide
     state.qtbot.keyClicks(state.line, ":s/alpha/new/")
     text = state.line.text()
@@ -215,7 +258,7 @@ def test_completion_suppression_does_not_hide_guide(guide, key):
     state.line.histories["ex"][:] = ["s/old/new/"]
     state.controller.sync()
     assert not guide_shown(state)
-    assert not shown(state)
+    assert shown(state)
 
 
 def test_up_down_restore_draft_and_preserve_history_suppression(guide):
@@ -244,6 +287,46 @@ def test_accepting_substitute_history_shows_guide(guide):
     assert state.editor.toPlainText().startswith("new beta")
 
 
+def test_candidate_selected_with_guide_applies_before_execution(guide):
+    state = guide
+    state.line.histories["ex"][:] = ["s/alpha/target/g"]
+    state.qtbot.keyClicks(state.line, ":s/alpha/ta")
+    assert_stage(state, "Replacement text")
+    assert shown(state)
+    before = state.editor.toPlainText()
+    select_next(state)
+    selected = state.controller.candidates[state.controller.selected_index]
+    assert selected.apply_scope == "replacement"
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    assert state.line.text() == ":s/alpha/target"
+    assert state.editor.toPlainText() == before
+    assert state.controller.selected_index is None
+    assert_stage(state, "Replacement text")
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    assert state.editor.toPlainText().startswith("target beta")
+
+
+def test_guide_only_refresh_preserves_an_explicit_candidate_selection(guide):
+    state = guide
+    state.status.last_substitute = SubstituteSpec("alpha", "old", "/", "gI")
+    state.line.histories["ex"][:] = ["s/alpha/new/&g"]
+    state.qtbot.keyClicks(state.line, ":s/alpha/new/&")
+    select_next(state)
+    index = state.controller.selected_index
+    candidates = state.controller.candidates[:]
+    assert index is not None
+    assert_stage(state, "Substitution options")
+    assert (
+        state.controller.guide_popup.effective_label.text() == "Currently applied: gI"
+    )
+    state.status.last_substitute = SubstituteSpec("alpha", "other", "/", "i")
+    state.controller.sync()
+    assert state.controller.guide_popup.effective_label.text() == "Currently applied: i"
+    assert state.controller.selected_index == index
+    assert state.controller.candidates == candidates
+    assert state.controller.popup.list_widget.currentRow() == index
+
+
 def test_guide_keeps_control_keys_on_default_path(guide, monkeypatch):
     state = guide
     fallback = Mock()
@@ -270,8 +353,12 @@ def test_ime_preedit_hides_and_commit_restores_current_stage(guide):
     assert not guide_shown(state)
     send_ime(state, commit="글/")
     assert state.line.text() == ":s/한글/"
-    assert not guide_shown(state)
-    assert not shown(state)
+    assert_stage(state, "Replacement text")
+    assert shown(state)
+    assert all(
+        candidate.apply_scope == "replacement"
+        for candidate in state.controller.candidates
+    )
     send_ime(state, commit="새글/")
     assert_stage(state, "Substitution options")
 
@@ -320,7 +407,7 @@ def test_independent_settings_and_immediate_toggling(
     CONF.set(CONF_SECTION, "substitute_guide_enabled", guide_enabled)
     state.widget.apply_settings()
     assert guide_shown(state) is guide_enabled
-    assert shown(state) is (history_enabled and not guide_enabled)
+    assert shown(state) is history_enabled
     state.controller.suppress_history()
     CONF.set(CONF_SECTION, "substitute_guide_enabled", not guide_enabled)
     state.widget.apply_settings()
@@ -348,8 +435,9 @@ def test_same_stage_reuses_layout_and_font_changes_refresh(guide, monkeypatch):
     state = guide
     state.qtbot.keyClicks(state.line, ":s/")
     popup = state.controller.guide_popup
-    geometry = Mock(wraps=popup.update_geometry)
-    monkeypatch.setattr(popup, "update_geometry", geometry)
+    host = state.controller.host
+    geometry = Mock(wraps=host.invalidate_geometry)
+    monkeypatch.setattr(host, "invalidate_geometry", geometry)
     state.qtbot.keyClicks(state.line, "alpha")
     state.controller.sync()
     geometry.assert_not_called()
@@ -400,7 +488,8 @@ def test_wheel_over_guide_scrolls_help_without_changing_input(guide, monkeypatch
     state.qtbot.keyClicks(state.line, ":s/")
     popup = state.controller.guide_popup
     monkeypatch.setattr(popup, "MAX_WIDTH", 90)
-    popup.update_geometry()
+    state.controller.host.invalidate_geometry()
+    state.controller.host.update_geometry()
     QCoreApplication.processEvents()
     scrollbar = popup.scroll_area.verticalScrollBar()
     assert scrollbar.maximum() > 0
@@ -427,17 +516,18 @@ def test_wheel_over_guide_scrolls_help_without_changing_input(guide, monkeypatch
         )
         QCoreApplication.sendEvent(viewport, event)
 
-    wheel(popup.geometry().center())
+    position = popup.mapTo(viewport, popup.rect().center())
+    wheel(position)
     assert scrollbar.value() > 0
     value = scrollbar.value()
     outside = QPoint(viewport.width() - 1, 0)
-    assert not popup.geometry().contains(outside)
+    assert not popup.rect().contains(popup.mapFrom(viewport, outside))
     wheel(outside)
     assert scrollbar.value() == value
     # Qt may ignore an end-of-range wheel and propagate it to the viewport.
     # The controller must not recursively forward the same event.
     scrollbar.setValue(scrollbar.maximum())
-    wheel(popup.geometry().center())
+    wheel(position)
     assert scrollbar.value() == scrollbar.maximum()
     assert state.line.hasFocus()
     assert (
@@ -484,16 +574,16 @@ def test_guide_layout_does_not_retain_closed_viewport(guide):
     """Fitting guidance must not keep its former Qt parent alive."""
     viewport = QWidget()
     viewport.resize(400, 300)
-    popup = SubstituteGuidePopup(viewport)
+    host = CommandlinePopupHost(viewport)
+    popup = host.guide_popup
     popup.set_context(scan_substitute_guide(":s/foo/bar/", len(":s/foo/bar/")))
     viewport.show()
-    popup.show()
-    popup.update_geometry()
+    host.show_sections(candidates=False, guide=True)
     popup_ref, viewport_ref = weakref.ref(popup), weakref.ref(viewport)
     viewport.close()
     viewport.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-    del popup, viewport
+    del popup, host, viewport
     gc.collect()
     assert popup_ref() is None
     assert viewport_ref() is None

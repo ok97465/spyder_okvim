@@ -46,7 +46,7 @@ from spyder_okvim.spyder.commandline_popup_controller import (
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
-from spyder_okvim.utils.commandline import completion_candidates
+from spyder_okvim.utils.commandline import completion_items, substitute_field_candidates
 from spyder_okvim.utils.commandline_history import (
     HISTORY_LIMIT,
     load_history,
@@ -56,7 +56,13 @@ from spyder_okvim.utils.ex_parser import ExError, is_substitute, scan_header
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.key_helpers import latin_command_key
 from spyder_okvim.utils.put import PutController
-from spyder_okvim.utils.qtcompat import exec_dialog, text_width, widget_is_deleted
+from spyder_okvim.utils.qtcompat import (
+    exec_dialog,
+    python_cursor_position,
+    qt_cursor_position,
+    text_width,
+    widget_is_deleted,
+)
 from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder_okvim.utils.yank_dialog import YankHistoryPicker
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
@@ -409,14 +415,38 @@ class VimLineEdit(QLineEdit):
         if not self._updating_commandline:
             self._history_index = None
             self._history_draft = None
-            self._completion_candidates = []
-            self._completion_index = -1
+            self._clear_completion()
 
     def _reset_completion(self, old_position, new_position) -> None:
         """A manually moved caret starts a new completion at that position."""
         if not self._updating_commandline:
-            self._completion_candidates = []
-            self._completion_index = -1
+            self._clear_completion()
+
+    def _clear_completion(self):
+        """Release the cached Tab candidates and their selected row together."""
+        self._completion_candidates = []
+        self._completion_index = -1
+        self._completion_directory = None
+
+    @property
+    def completion_result(self):
+        """Expose the current Tab list without giving the popup its ownership."""
+        if not self._completion_candidates:
+            return None
+        current = (
+            self.text(),
+            python_cursor_position(self.text(), self.cursorPosition()),
+        )
+        candidate = self._completion_candidates[self._completion_index]
+        if (
+            current != (candidate.text, candidate.cursor_position)
+            or self._completion_directory != os.getcwd()
+        ):
+            return None
+        return (
+            tuple(self._completion_candidates),
+            self._completion_index,
+        )
 
     def _history_context(self, text):
         """Return the history kind, current prompt/count, and editable body."""
@@ -464,6 +494,7 @@ class VimLineEdit(QLineEdit):
         self.vim_widget.commandline_popup.suppress_history()
         kind, prompt, _ = context
         history = self.histories[kind]
+        self._clear_completion()
         if not history:
             return
         if self._history_index is None:
@@ -471,8 +502,6 @@ class VimLineEdit(QLineEdit):
                 return
             self._history_draft = (self.text(), self.cursorPosition())
             self._history_index = len(history)
-        self._completion_candidates = []
-        self._completion_index = -1
         if backward:
             self._history_index = max(0, self._history_index - 1)
         else:
@@ -485,30 +514,42 @@ class VimLineEdit(QLineEdit):
             self._replace_commandline(prompt + history[self._history_index])
 
     def _complete_commandline(self, backward=False) -> None:
-        """Complete Ex commands or one directory of paths on explicit Tab."""
+        """Apply and cycle the original command, field, or explicit path query."""
         context = self._history_context(self.text())
         if context is None:
             return
-        self.vim_widget.commandline_popup.suppress_history()
+        controller = self.vim_widget.commandline_popup
         if context[0] != "ex":
+            controller.suppress_history()
             return
+        controller.clear_candidates()
         working_directory = os.getcwd()
-        if self._completion_directory != working_directory:
-            self._completion_candidates = []
-        if not self._completion_candidates:
+        completion = self.completion_result
+        if completion is not None:
+            candidates, _ = completion
+            candidate = candidates[0]
+            # A single directory starts a fresh lookup on the next explicit Tab.
+            if (
+                len(candidates) == 1
+                and candidate.apply_scope == "path"
+                and candidate.text[: candidate.cursor_position].endswith(os.sep)
+            ):
+                completion = None
+        if completion is None:
+            self._clear_completion()
+            text = self.text()
+            cursor = python_cursor_position(text, self.cursorPosition())
             self._completion_directory = working_directory
-            # Qt cursor offsets count UTF-16 units; the helper uses Python indices.
-            cursor = len(
-                self.text()
-                .encode("utf-16-le")[: self.cursorPosition() * 2]
-                .decode("utf-16-le", errors="ignore")
+            self._completion_candidates = substitute_field_candidates(
+                self.histories["ex"], text, cursor
             )
-            self._completion_candidates = completion_candidates(
-                self.text(),
-                cursor,
-                self.vim_status.sub_mode.SUPPORTED_COMMANDS,
-                working_directory,
-            )
+            if not self._completion_candidates:
+                self._completion_candidates = completion_items(
+                    text,
+                    cursor,
+                    self.vim_status.sub_mode.SUPPORTED_COMMANDS,
+                    working_directory,
+                )
             self._completion_index = (
                 len(self._completion_candidates) - 1 if backward else 0
             )
@@ -519,12 +560,11 @@ class VimLineEdit(QLineEdit):
             )
         if not self._completion_candidates:
             return
-        text, cursor = self._completion_candidates[self._completion_index]
-        qt_cursor = len(text[:cursor].encode("utf-16-le")) // 2
-        self._replace_commandline(text, qt_cursor)
-        # A unique directory can be traversed with the next Tab.
-        if len(self._completion_candidates) == 1:
-            self._completion_candidates = []
+        candidate = self._completion_candidates[self._completion_index]
+        self._replace_commandline(
+            candidate.text,
+            qt_cursor_position(candidate.text, candidate.cursor_position),
+        )
 
     def event(self, event) -> bool:
         """Keep Tab in the prompt instead of letting QWidget move focus."""

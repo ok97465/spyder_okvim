@@ -67,6 +67,19 @@ class SubstituteGuideContext:
     effective_flags: str = ""
     missing_previous: bool = False
     unsupported: str = ""
+    raw_span: tuple[int, int] | None = None
+
+
+@dataclass(frozen=True)
+class SubstituteFieldSpans:
+    """Raw field spans in prompt text, before decoding delimiter escapes."""
+
+    header: ExHeader
+    delimiter: str
+    pattern_span: tuple[int, int]
+    replacement_span: tuple[int, int] | None
+    pattern_closed: bool
+    replacement_closed: bool
 
 
 @dataclass(frozen=True)
@@ -352,10 +365,39 @@ def scan_substitute_preview(
     Invalid completed flag tails raise ``ExError`` so a caller can discard the
     old result without reporting an execution error while the user types.
     """
+    fields = scan_substitute_fields(text)
+    if fields is None:
+        return None
+    pattern = text[slice(*fields.pattern_span)]
+    replacement = text[slice(*fields.replacement_span)] if fields.pattern_closed else ""
+    tail = text[fields.replacement_span[1] + 1 :] if fields.replacement_closed else ""
+    flags, count = _substitute_flags(
+        tail, previous.flags if previous is not None else ""
+    )
+    return SubstitutePreviewContext(
+        fields.header,
+        SubstituteSpec(
+            _decode_pattern(pattern, fields.delimiter),
+            replacement,
+            fields.delimiter,
+            flags,
+            count,
+        ),
+        fields.pattern_closed,
+    )
+
+
+def scan_substitute_fields(text: str) -> SubstituteFieldSpans | None:
+    """Locate explicit raw fields using the same boundaries as execution.
+
+    Spans exclude their delimiters and use Python indices including the initial
+    colon. Repeated commands, invalid delimiters, and unsupported headers have
+    no explicit fields; an unfinished pattern has no replacement span.
+    """
     if not text.startswith(":"):
         return None
     try:
-        header = scan_header(text[1:])
+        header = scan_header(text[1:], incomplete=True)
     except ExError:
         return None
     body = header.argument
@@ -366,37 +408,25 @@ def scan_substitute_preview(
         or not _substitute_delimiter(body[0])
     ):
         return None
+    start = header.argument_start + 1
     delimiter = body[0]
-    pattern, position, pattern_closed = _segment(body, 1, delimiter, pattern=True)
-    replacement, replacement_closed = "", False
+    _, pattern_end, pattern_closed = _segment(body, 1, delimiter, pattern=True)
+    pattern_span = (start + 1, start + pattern_end - int(pattern_closed))
+    replacement_span = None
+    replacement_closed = False
     if pattern_closed:
-        replacement, position, replacement_closed = _segment(body, position, delimiter)
-    tail = body[position:] if replacement_closed else ""
-    flags, count = _substitute_flags(
-        tail, previous.flags if previous is not None else ""
-    )
-    return SubstitutePreviewContext(
+        _, replacement_end, replacement_closed = _segment(body, pattern_end, delimiter)
+        replacement_span = (
+            start + pattern_end,
+            start + replacement_end - int(replacement_closed),
+        )
+    return SubstituteFieldSpans(
         header,
-        SubstituteSpec(
-            _decode_pattern(pattern, delimiter), replacement, delimiter, flags, count
-        ),
+        delimiter,
+        pattern_span,
+        replacement_span,
         pattern_closed,
-    )
-
-
-def has_substitute_delimiter(text: str) -> bool:
-    """Recognize explicit substitution input even when its body is invalid."""
-    if not text.startswith(":"):
-        return False
-    try:
-        header = scan_header(text[1:])
-    except ExError:
-        return False
-    return bool(
-        header.command
-        and "substitute".startswith(header.command)
-        and header.argument
-        and _substitute_delimiter(header.argument[0])
+        replacement_closed,
     )
 
 
@@ -409,29 +439,31 @@ def scan_substitute_guide(
     The Qt caller converts its UTF-16 cursor position before calling this pure
     function. A cursor immediately after a delimiter belongs to the next field.
     """
-    if not text.startswith(":"):
+    fields = scan_substitute_fields(text)
+    if fields is None:
         return None
-    try:
-        header = scan_header(text[1:], incomplete=True)
-    except ExError:
-        return None
-    if not header.command or not "substitute".startswith(header.command):
-        return None
+    header = fields.header
     body = header.argument
-    if not body or not _substitute_delimiter(body[0]):
-        return None
-
     body_start = 1 + header.argument_start  # Include the prompt's initial colon.
     cursor = max(0, min(cursor_position, len(text))) - body_start
     if cursor < 1:
         return None
-    delimiter = body[0]
-    _, pattern_end, pattern_closed = _segment(body, 1, delimiter, pattern=True)
-    if not pattern_closed or cursor < pattern_end:
-        return SubstituteGuideContext("pattern", delimiter, header.addresses)
-    _, replacement_end, replacement_closed = _segment(body, pattern_end, delimiter)
-    if not replacement_closed or cursor < replacement_end:
-        return SubstituteGuideContext("replacement", delimiter, header.addresses)
+    delimiter = fields.delimiter
+    pattern_end = fields.pattern_span[1] - body_start + int(fields.pattern_closed)
+    if not fields.pattern_closed or cursor < pattern_end:
+        return SubstituteGuideContext(
+            "pattern", delimiter, header.addresses, raw_span=fields.pattern_span
+        )
+    replacement_end = (
+        fields.replacement_span[1] - body_start + int(fields.replacement_closed)
+    )
+    if not fields.replacement_closed or cursor < replacement_end:
+        return SubstituteGuideContext(
+            "replacement",
+            delimiter,
+            header.addresses,
+            raw_span=fields.replacement_span,
+        )
 
     tail = body[replacement_end:]
     tail_cursor = cursor - replacement_end

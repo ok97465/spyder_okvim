@@ -8,7 +8,6 @@ from qtpy.QtGui import QTextCursor, QTextDocument
 from spyder_okvim.utils.ex_parser import (
     ExError,
     SubstituteSpec,
-    has_substitute_delimiter,
     resolve_substitute,
     scan_substitute_preview,
 )
@@ -74,11 +73,9 @@ def test_scan_reads_entire_command(command, pattern, replacement, closed, flags,
 @pytest.mark.parametrize("command", [":s", ":s g", ":&", ":&&", ":~", ":1,", ":w/x"])
 def test_repeat_and_unfinished_header_have_no_preview(command):
     assert scan_substitute_preview(command) is None
-    assert not has_substitute_delimiter(command)
 
 
-def test_explicit_delimiter_stays_recognizable_with_invalid_body():
-    assert has_substitute_delimiter(":s/foo/bar/unsupported")
+def test_completed_substitute_rejects_unsupported_flags():
     with pytest.raises(ExError):
         scan_substitute_preview(":s/foo/bar/unsupported")
 

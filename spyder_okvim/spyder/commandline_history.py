@@ -1,7 +1,7 @@
 """History candidates and a non-focusable command-line history panel."""
 
 # Third Party Libraries
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QSize, Qt
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import (
     QAbstractItemView,
@@ -35,8 +35,8 @@ class HistoryPopup(QFrame):
     MAX_VISIBLE_ROWS = 8
     MIN_WIDTH = 320
 
-    def __init__(self, viewport):
-        super().__init__(viewport)
+    def __init__(self, parent):
+        super().__init__(parent)
         self.setObjectName("commandlineHistoryPopup")
         self.setFocusPolicy(Qt.NoFocus)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
@@ -44,7 +44,7 @@ class HistoryPopup(QFrame):
         self._candidates = ()
         self._font = None
 
-        self.header = QLabel("History", self)
+        self.header = QLabel("Suggestions", self)
         self.header.setTextFormat(Qt.PlainText)
         self.header.setFocusPolicy(Qt.NoFocus)
         self.header.setMinimumSize(0, 0)
@@ -74,12 +74,30 @@ class HistoryPopup(QFrame):
     def set_candidates(self, candidates):
         """Replace the rows and clear selection, keeping their literal text."""
         candidates = tuple(candidates)
-        if candidates != self._candidates:
-            self._candidates = candidates
-            self.list_widget.clear()
-            self.list_widget.addItems(candidates)
+        if candidates == self._candidates:
+            return False
+        self._candidates = candidates
+        self.list_widget.clear()
+        self.list_widget.addItems([self._candidate_label(item) for item in candidates])
         self.select(None)
         self.list_widget.verticalScrollBar().setValue(0)
+        return True
+
+    @staticmethod
+    def _candidate_label(candidate):
+        """Show abbreviated sources without altering the applied input."""
+        if isinstance(candidate, str):
+            return candidate
+        abbreviations = {
+            "history": "H",
+            "field history": "H",
+            "command": "C",
+            "path": "P",
+        }
+        sources = dict.fromkeys(
+            abbreviations.get(source, source) for source in candidate.source.split(", ")
+        )
+        return f"[{','.join(sources)}]   {candidate.label}"
 
     def select(self, index):
         """Highlight a row and scroll it into view, or clear the highlight."""
@@ -132,15 +150,10 @@ class HistoryPopup(QFrame):
             self.list_widget.setFont(font)
         return stylesheet_changed or font_changed
 
-    def update_geometry(self):
-        """Fit the panel near the command line at the viewport's lower edge."""
+    def preferred_size(self, available_width, available_height):
+        """Measure rows; the shared host chooses their actual position."""
         self.ensurePolished()
         self.list_widget.ensurePolished()
-        viewport = self.parentWidget()
-        width, height = viewport.width(), viewport.height()
-        margin = min(8, max(0, (min(width, height) - 1) // 2))
-        available_width = max(1, width - 2 * margin)
-        available_height = max(1, height - 2 * margin)
         margins = self.layout().contentsMargins() + self.contentsMargins()
         horizontal_padding = margins.left() + margins.right()
         vertical_padding = margins.top() + margins.bottom()
@@ -173,13 +186,10 @@ class HistoryPopup(QFrame):
         )
         popup_width = min(available_width, max(self.MIN_WIDTH, wanted_width))
         popup_height = min(available_height, wanted_height)
-        self.setGeometry(
-            margin,
-            height - margin - popup_height,
-            popup_width,
-            popup_height,
-        )
-        self.layout().activate()
+        return QSize(popup_width, popup_height)
+
+    def ensure_selection_visible(self):
+        """Keep the highlighted candidate visible after resizing its container."""
         item = self.list_widget.currentItem()
         if item is not None:
             self.list_widget.scrollToItem(item)

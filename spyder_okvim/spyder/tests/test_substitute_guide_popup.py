@@ -7,10 +7,8 @@ from qtpy.QtWidgets import QApplication, QLineEdit, QWidget
 from spyder.utils.palette import SpyderPalette
 from spyder.utils.stylesheet import APP_STYLESHEET
 
-from spyder_okvim.spyder.substitute_guide import (
-    SUBSTITUTION_OPTIONS,
-    SubstituteGuidePopup,
-)
+from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
+from spyder_okvim.spyder.substitute_guide import SUBSTITUTION_OPTIONS
 from spyder_okvim.utils.ex_parser import (
     ExError,
     SubstituteGuideContext,
@@ -31,7 +29,8 @@ def guide_panel(qtbot, vim_bot):
     viewport.activateWindow()
     line.setFocus()
     QCoreApplication.processEvents()
-    popup = SubstituteGuidePopup(viewport)
+    host = CommandlinePopupHost(viewport)
+    popup = host.guide_popup
     popup.refresh_appearance(QFont("Courier New", 10))
     try:
         yield viewport, line, popup
@@ -44,12 +43,17 @@ def guide_panel(qtbot, vim_bot):
         QCoreApplication.processEvents()
 
 
+def show_guide(popup):
+    host = popup.parentWidget()
+    host.invalidate_geometry()
+    host.show_sections(candidates=False, guide=True)
+
+
 def show(popup, command, previous=None):
     context = scan_substitute_guide(command, len(command), previous)
     assert context is not None
     popup.set_context(context)
-    popup.update_geometry()
-    popup.show()
+    show_guide(popup)
     QCoreApplication.processEvents()
     return context
 
@@ -58,6 +62,7 @@ def show(popup, command, previous=None):
     "command, title, description",
     [
         (":s/", "Search pattern", r"\d = digit"),
+        (":s/foo/", "Replacement text", r"& or \0 = entire match"),
         (":s/foo/bar/", "Substitution options", ""),
         (":s/foo/bar/g 3", "Line count", "number of lines"),
     ],
@@ -77,7 +82,7 @@ def test_stage_help_is_plain_text_and_keeps_input_focus(
     assert QApplication.focusWidget() is line
     assert line.text() == command
     assert line.cursorPosition() == position
-    assert viewport.rect().contains(popup.geometry())
+    assert viewport.rect().contains(popup.parentWidget().geometry())
     assert popup.testAttribute(Qt.WA_ShowWithoutActivating)
     assert popup.testAttribute(Qt.WA_TransparentForMouseEvents)
     for widget in (
@@ -103,6 +108,30 @@ def test_pattern_shows_expression_references(guide_panel):
     assert not popup.range_label.isVisible()
     show(popup, ":%s#old/path#new/path#g 3")
     assert "% selects the entire file" in popup.range_label.text()
+
+
+def test_replacement_help_matches_tokenizer_escape_rules(guide_panel):
+    from spyder_okvim.utils.substitute import tokenize_replacement
+
+    _viewport, _line, popup = guide_panel
+    show(popup, ":s#foo#")
+    text = popup.description.text()
+    assert r"\# = literal delimiter #" in text
+    assert r"\b = backspace" in text
+    assert r"\z inserts z" in text
+    assert "Missing capture groups insert empty text" in text
+    assert "~ is literal" in text
+    assert tokenize_replacement(r"&\0\1\9\&\\\t\b\#\z~", "#") == (
+        0,
+        0,
+        1,
+        9,
+        "&\\\t\b#z~",
+    )
+    for escape in (r"\r", r"\n", r"\u", r"\U", r"\l", r"\L", r"\e", r"\E", r"\="):
+        assert escape in text
+        with pytest.raises(ValueError):
+            tokenize_replacement(escape, "#")
 
 
 def test_basic_option_rows_show_effective_values(guide_panel):
@@ -182,12 +211,12 @@ def test_wrapping_and_scrolling_fit_narrow_viewports(guide_panel):
     show(popup, ":s/foo/bar/gn")
     for width, height in ((160, 140), (600, 500), (20, 20)):
         viewport.resize(width, height)
-        popup.update_geometry()
+        show_guide(popup)
         QCoreApplication.processEvents()
-        assert viewport.rect().contains(popup.geometry())
+        assert viewport.rect().contains(popup.parentWidget().geometry())
         assert QApplication.focusWidget() is line
     viewport.resize(120, 100)
-    popup.update_geometry()
+    show_guide(popup)
     QCoreApplication.processEvents()
     assert popup.scroll_area.verticalScrollBar().maximum() > 0
     popup.scroll_area.ensureWidgetVisible(popup.option_labels[-1][1])
@@ -206,7 +235,7 @@ def test_narrow_guide_wraps_content_inside_scroll_viewport(guide_panel, themed):
     show(popup, ":s/foo/bar/gn")
     for width in (160, 600, 240):
         viewport.resize(width, 400)
-        popup.update_geometry()
+        show_guide(popup)
         QCoreApplication.processEvents()
         assert popup.content_widget.width() == popup.scroll_area.viewport().width()
         assert popup.scroll_area.horizontalScrollBar().maximum() == 0
@@ -247,7 +276,7 @@ def test_font_and_theme_refresh_do_not_repolish_unchanged_help(
 
     font.setPointSize(14)
     assert popup.refresh_appearance(font)
-    popup.update_geometry()
+    show_guide(popup)
     QCoreApplication.processEvents()
     for label in (
         popup.header,

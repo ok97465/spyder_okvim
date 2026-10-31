@@ -52,6 +52,12 @@ class OkvimConfigPage(PluginConfigPage):
         options_layout.addWidget(newcb("ignorecase", "ignorecase"))
         options_layout.addWidget(newcb("smartcase", "smartcase"))
         options_layout.addWidget(newcb("enable Leap two-char search (s/z)", "use_leap"))
+        self.commandline_completion_enabled = newcb(
+            "Show command-line completion suggestions (:)",
+            "commandline_completion_enabled",
+            default=True,
+        )
+        options_layout.addWidget(self.commandline_completion_enabled)
         self.commandline_history_enabled = newcb(
             "Show command-line history suggestions (:, /, ?)",
             "commandline_history_enabled",

@@ -10,6 +10,9 @@ from spyder.utils.stylesheet import APP_STYLESHEET
 
 # Project Libraries
 from spyder_okvim.spyder.commandline_history import HistoryPopup, history_candidates
+from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
+from spyder_okvim.utils.commandline import CompletionCandidate
+from spyder_okvim.utils.ex_parser import scan_substitute_guide
 
 
 @pytest.mark.parametrize(
@@ -44,7 +47,8 @@ def history_panel(qtbot, vim_bot):
     viewport.activateWindow()
     line_edit.setFocus()
     QCoreApplication.processEvents()
-    panel = HistoryPopup(viewport)
+    host = CommandlinePopupHost(viewport)
+    panel = host.popup
     panel.refresh_appearance(QFont("Courier New", 10))
     try:
         yield viewport, line_edit, panel
@@ -57,18 +61,23 @@ def history_panel(qtbot, vim_bot):
         QCoreApplication.processEvents()
 
 
+def show_candidates(panel):
+    host = panel.parentWidget()
+    host.invalidate_geometry()
+    host.show_sections(candidates=True, guide=False)
+
+
 def test_history_panel_preserves_focus_and_starts_without_selection(history_panel):
     viewport, line_edit, panel = history_panel
     panel.set_candidates(["<b>literal</b>", "한글😀"])
-    panel.update_geometry()
-    panel.show()
+    show_candidates(panel)
     QCoreApplication.processEvents()
 
     assert QApplication.focusWidget() is line_edit
     assert panel.list_widget.currentRow() == -1
     assert panel.list_widget.selectedItems() == []
     assert panel.list_widget.item(0).text() == "<b>literal</b>"
-    assert viewport.rect().contains(panel.geometry())
+    assert viewport.rect().contains(panel.parentWidget().geometry())
     assert panel.testAttribute(Qt.WA_TransparentForMouseEvents)
     for widget in (
         panel,
@@ -81,11 +90,60 @@ def test_history_panel_preserves_focus_and_starts_without_selection(history_pane
         assert widget.focusPolicy() == Qt.NoFocus
 
 
+def test_candidate_rows_identify_abbreviated_sources(history_panel):
+    _viewport, _line_edit, panel = history_panel
+    candidate = CompletionCandidate(
+        "history, command", ":write", "full command", ":write original😀", 16
+    )
+    panel.set_candidates([candidate])
+    label = panel.list_widget.item(0).text()
+    assert label == "[H,C]   :write"
+    assert panel._candidates == (candidate,)
+    assert candidate.text == ":write original😀"
+
+
+def test_common_host_stacks_scrollable_sections_inside_the_viewport(history_panel):
+    viewport, line_edit, _panel = history_panel
+    host = CommandlinePopupHost(viewport)
+    host.popup.set_candidates([f":s/foo/value{index}/g" for index in range(20)])
+    host.guide_popup.set_context(scan_substitute_guide(":s/foo/", len(":s/foo/")))
+    for width, height in ((700, 600), (160, 140), (20, 20), (600, 500)):
+        viewport.resize(width, height)
+        host.show_sections(candidates=True, guide=True)
+        QCoreApplication.processEvents()
+        assert viewport.rect().contains(host.geometry())
+        assert host.rect().contains(host.popup.geometry())
+        assert host.rect().contains(host.guide_popup.geometry())
+        assert host.popup.geometry().bottom() < host.guide_popup.geometry().top()
+        assert host.popup.isVisible()
+        assert host.guide_popup.isVisible()
+        assert QApplication.focusWidget() is line_edit
+    assert host.popup.list_widget.verticalScrollBar().maximum() > 0
+
+
+def test_unchanged_host_reuses_measurement_and_selection(history_panel, monkeypatch):
+    viewport, _line_edit, _panel = history_panel
+    host = CommandlinePopupHost(viewport)
+    host.popup.set_candidates(["write", "wall"])
+    host.guide_popup.set_context(scan_substitute_guide(":s/", len(":s/")))
+    host.show_sections(candidates=True, guide=True)
+    host.popup.select(1)
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("Unchanged popup content must not be measured again")
+
+    monkeypatch.setattr(host.popup, "preferred_size", unexpected)
+    monkeypatch.setattr(host.guide_popup, "preferred_size", unexpected)
+    host.hide()
+    for _ in range(3):
+        host.show_sections(candidates=True, guide=True)
+    assert host.popup.list_widget.currentRow() == 1
+
+
 def test_history_panel_scrolls_every_candidate_into_view(history_panel):
     viewport, line_edit, panel = history_panel
     panel.set_candidates([f"command {index}" for index in range(100)])
-    panel.update_geometry()
-    panel.show()
+    show_candidates(panel)
     QCoreApplication.processEvents()
 
     panel.select(99)
@@ -95,11 +153,11 @@ def test_history_panel_scrolls_every_candidate_into_view(history_panel):
     bounds = panel.list_widget.visualItemRect(panel.list_widget.item(99))
     assert panel.list_widget.viewport().rect().contains(bounds)
     assert panel.list_widget.verticalScrollBar().value() > 0
-    assert viewport.rect().contains(panel.geometry())
+    assert viewport.rect().contains(panel.parentWidget().geometry())
     assert QApplication.focusWidget() is line_edit
 
     panel.set_candidates(["replacement"])
-    panel.update_geometry()
+    show_candidates(panel)
     QCoreApplication.processEvents()
     assert panel.list_widget.count() == 1
     assert panel.list_widget.currentRow() == -1
@@ -127,8 +185,7 @@ def test_default_panel_fits_complete_rows_without_scrollbars(
         viewport.setStyleSheet(APP_STYLESHEET.to_string())
     panel.refresh_appearance(QFont("Courier New", font_size))
     panel.set_candidates(candidates)
-    panel.update_geometry()
-    panel.show()
+    show_candidates(panel)
     QCoreApplication.processEvents()
 
     listing = panel.list_widget
@@ -143,7 +200,7 @@ def test_default_panel_fits_complete_rows_without_scrollbars(
         bounds = listing.visualItemRect(listing.item(row))
         assert bounds.height() >= listing.sizeHintForRow(row)
         assert listing.viewport().rect().contains(bounds)
-    assert viewport.rect().contains(panel.geometry())
+    assert viewport.rect().contains(panel.parentWidget().geometry())
 
 
 def test_themed_panel_reserves_scrollbar_space_for_long_commands(history_panel):
@@ -151,8 +208,7 @@ def test_themed_panel_reserves_scrollbar_space_for_long_commands(history_panel):
     viewport.resize(1000, 600)
     viewport.setStyleSheet(APP_STYLESHEET.to_string())
     panel.set_candidates([f"s/{'old' * 15}/한글😀{row}/g" for row in range(12)])
-    panel.update_geometry()
-    panel.show()
+    show_candidates(panel)
     QCoreApplication.processEvents()
 
     listing = panel.list_widget
@@ -170,10 +226,9 @@ def test_history_panel_fits_a_narrow_viewport_after_resize(history_panel):
     panel.set_candidates(["long command " * 20 for _ in range(20)])
     for width, height in ((120, 90), (600, 500), (20, 20)):
         viewport.resize(width, height)
-        panel.update_geometry()
-        panel.show()
+        show_candidates(panel)
         QCoreApplication.processEvents()
-        assert viewport.rect().contains(panel.geometry())
+        assert viewport.rect().contains(panel.parentWidget().geometry())
 
 
 @pytest.mark.parametrize("themed", [False, True])
@@ -184,8 +239,7 @@ def test_history_panel_refreshes_only_when_appearance_changes(
     if themed:
         viewport.setStyleSheet(APP_STYLESHEET.to_string())
     panel.set_candidates(["write"])
-    panel.update_geometry()
-    panel.show()
+    show_candidates(panel)
     QCoreApplication.processEvents()
 
     class AppearanceObserver(QObject):
