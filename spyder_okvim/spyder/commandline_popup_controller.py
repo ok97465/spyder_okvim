@@ -8,18 +8,20 @@ import weakref
 from dataclasses import dataclass, replace
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, QObject, Qt
+from qtpy.QtCore import QEvent, QObject, Qt, QTimer
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.commandline_history import history_candidates
 from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
+from spyder_okvim.spyder.commandline_path_lookup import PathLookupService
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.commandline import (
     CompletionCandidate,
     command_candidates,
     merge_candidates,
+    parse_path_completion,
     substitute_field_candidates,
 )
 from spyder_okvim.utils.ex_parser import scan_substitute_guide
@@ -52,8 +54,24 @@ class PopupAction:
     selected_index: int | None
 
 
+def _directory_completion_cursor(candidate):
+    """Recognize a listed directory without querying the filesystem again."""
+    if "path" not in candidate.source.split(", "):
+        return None
+    cursor = candidate.cursor_position
+    separators = (os.sep,) if os.altsep is None else (os.sep, os.altsep)
+    if candidate.text[:cursor].endswith(separators):
+        return cursor
+    # An intermediate component keeps its existing separator in the suffix.
+    if candidate.text[cursor : cursor + 1] in separators:
+        return cursor + 1
+    return None
+
+
 class CommandlinePopupController(QObject):
     """Share prompt and editor lifetimes while keeping history selection local."""
+
+    PATH_LOOKUP_DELAY_MS = 100
 
     def __init__(self, vim_widget):
         super().__init__(vim_widget)
@@ -65,6 +83,20 @@ class CommandlinePopupController(QObject):
         self._context = None
         self._suppressed = False
         self._closed = False
+        # Display selection and filesystem lookup have independent lifetimes.
+        # None means unqueried; an empty tuple is a completed, empty lookup.
+        self._path_context = None
+        self._path_candidates = None
+        self._path_generation = 0
+        self._path_loading_generation = None
+        self._path_deferred = None
+        self._pending_tab_index = None
+        self._path_lookup = PathLookupService()
+        self._path_lookup.completed.connect(self._paths_ready)
+        self._path_callback = None
+        self._path_timer = QTimer(self)
+        self._path_timer.setSingleShot(True)
+        self._path_timer.setInterval(self.PATH_LOOKUP_DELAY_MS)
         self.completion_enabled = False
         self.history_enabled = False
         self.guide_enabled = False
@@ -97,6 +129,8 @@ class CommandlinePopupController(QObject):
         )
         history = bool(CONF.get(CONF_SECTION, "commandline_history_enabled", True))
         guide = bool(CONF.get(CONF_SECTION, "substitute_guide_enabled", True))
+        if completion != self.completion_enabled:
+            self._invalidate_paths()
         if (completion, history, guide) != (
             self.completion_enabled,
             self.history_enabled,
@@ -183,6 +217,7 @@ class CommandlinePopupController(QObject):
 
     def cancel(self):
         """Release all state when a prompt or its editor is left."""
+        self._invalidate_paths()
         self.clear_candidates()
         self._session = None
         self._suppressed = False
@@ -190,6 +225,7 @@ class CommandlinePopupController(QObject):
     def suppress_history(self):
         """Keep recalled/completed text quiet until a real edit or new prompt."""
         self._suppressed = True
+        self._invalidate_paths()
         self.clear_candidates()
 
     def _edited(self):
@@ -241,8 +277,162 @@ class CommandlinePopupController(QObject):
             os.getcwd() if directory else None,
         )
 
+    def _invalidate_paths(self):
+        """Cancel pending work and reject callbacks from an earlier request."""
+        self._path_timer.stop()
+        self._path_generation += 1
+        self._path_context = None
+        self._path_candidates = None
+        self._path_loading_generation = None
+        self._path_deferred = None
+        self._pending_tab_index = None
+        self._path_lookup.cancel()
+
+    @property
+    def path_tab_pending(self):
+        """Whether an explicit Tab is waiting for its path lookup."""
+        return self._pending_tab_index is not None
+
+    def cancel_pending_tab(self):
+        """Enter and Escape cancel a delayed application before dispatch."""
+        if self.path_tab_pending:
+            self._invalidate_paths()
+
+    def _schedule_paths(self, context, request):
+        """Debounce a new lookup without restarting unchanged pending work."""
+        if context != self._path_context:
+            self._invalidate_paths()
+            self._path_context = context
+        if (
+            self._path_candidates is not None
+            or self._path_timer.isActive()
+            or self._path_loading_generation == self._path_generation
+        ):
+            return
+        if self._path_callback is not None:
+            self._path_timer.timeout.disconnect(self._path_callback)
+        generation = self._path_generation
+        self._path_callback = lambda: self._load_paths(context, request, generation)
+        self._path_timer.timeout.connect(self._path_callback)
+        self._path_timer.start()
+
+    def _load_paths(self, context, request, generation):
+        """Submit only a still-current final input to the filesystem worker."""
+        vim = live_widget(self._vim)
+        if self._closed or vim is None or generation != self._path_generation:
+            return
+        # A nested event loop can deliver a single-shot timeout mid-input.
+        # Leave this request unqueried; input-finished sync will rearm it.
+        if vim.is_processing_input:
+            return
+        if context != self._current_context(directory=True):
+            self._invalidate_paths()
+            self.sync()
+            return
+        self._start_path_lookup(request)
+
+    def _start_path_lookup(self, request):
+        self._path_timer.stop()
+        if self._path_loading_generation != self._path_generation:
+            self._path_loading_generation = self._path_generation
+            self._path_lookup.submit(self._path_generation, request)
+
+    def _paths_ready(self, generation, candidates):
+        """Keep worker results in memory until the outer input boundary."""
+        vim = live_widget(self._vim)
+        if self._closed or vim is None or generation != self._path_generation:
+            return
+        self._path_deferred = generation, tuple(candidates)
+        if not vim.is_processing_input:
+            self.sync()
+
+    def _finish_path_lookup(self, context):
+        """Publish a valid result, optionally applying the requested Tab once."""
+        if self._path_deferred is None:
+            return False
+        generation, candidates = self._path_deferred
+        if (
+            generation != self._path_generation
+            or replace(context, directory=os.getcwd()) != self._path_context
+        ):
+            self._invalidate_paths()
+            return False
+        self._path_deferred = None
+        self._path_loading_generation = None
+        self._path_candidates = candidates
+        if self.path_tab_pending:
+            index = self._pending_tab_index
+            self._apply_path_tab(self._path_context, generation, candidates, index)
+            return True
+        return False
+
+    def _apply_path_tab(self, context, generation, candidates, index):
+        vim = live_widget(self._vim)
+        with vim.input_processing():
+            # Input-start observers can change or cancel the prompt before a
+            # delayed Tab is applied. Recheck after that notification as well.
+            current = self._current_context(directory=True)
+            if generation != self._path_generation or context != current:
+                self._invalidate_paths()
+                return
+            self._pending_tab_index = None
+            vim.commandline._apply_path_completion(candidates, context.directory, index)
+
+    def complete_paths(self, text, cursor, commands, directory, backward=False):
+        """Apply a cached Tab result or queue its application without blocking."""
+        request = parse_path_completion(text, cursor, commands, directory)
+        if request is None:
+            return False
+        context = self._current_context(directory=True)
+        if context is None:
+            return True
+        if context != self._path_context:
+            self._invalidate_paths()
+            self._path_context = context
+        if self._path_candidates is not None:
+            self._apply_path_tab(
+                context,
+                self._path_generation,
+                self._path_candidates,
+                -1 if backward else 0,
+            )
+        else:
+            # Preserve all requested directions while one lookup is in flight.
+            if self._pending_tab_index is None:
+                self._pending_tab_index = -1 if backward else 0
+            else:
+                self._pending_tab_index += -1 if backward else 1
+            self._start_path_lookup(request)
+        return True
+
+    def _sync_path_lookup(self, context):
+        """Schedule only interactive :e arguments; keep candidate reads pure."""
+        vim = live_widget(self._vim)
+        if context.kind != "ex" or vim.commandline.completion_result is not None:
+            self._invalidate_paths()
+            return context
+        directory = os.getcwd()
+        path_context = replace(context, directory=directory)
+        # Explicit Tab can also cache an empty lookup for other commands or
+        # while suggestions are disabled/suppressed. Do not rescan that input.
+        if path_context == self._path_context and (
+            self._path_candidates is not None or self.path_tab_pending
+        ):
+            return path_context
+        if not self.completion_enabled or self._suppressed:
+            self._invalidate_paths()
+            return context
+        request = parse_path_completion(
+            context.text, context.cursor, context.session.SUPPORTED_COMMANDS, directory
+        )
+        if request is None or request.command != "e" or request.explicit_range:
+            self._invalidate_paths()
+            return context
+        self._schedule_paths(path_context, request)
+        return path_context
+
     def _automatic_candidates(self, context):
-        """Only command names and in-memory histories participate while typing."""
+        """Merge in-memory suggestions with a completed matching path lookup."""
         if self._suppressed:
             return []
         vim = live_widget(self._vim)
@@ -250,6 +440,7 @@ class CommandlinePopupController(QObject):
         fields = []
         histories = []
         commands = []
+        paths = []
         if self.history_enabled:
             if context.kind == "ex":
                 fields = substitute_field_candidates(
@@ -275,7 +466,9 @@ class CommandlinePopupController(QObject):
                     context.text, context.cursor, context.session.SUPPORTED_COMMANDS
                 )
             ]
-        return merge_candidates(fields, histories, commands)
+            if context == self._path_context and self._path_candidates is not None:
+                paths = self._path_candidates
+        return merge_candidates(fields, histories, commands, paths)
 
     def _ensure_host(self):
         if self.host is None or widget_is_deleted(self.host):
@@ -306,12 +499,16 @@ class CommandlinePopupController(QObject):
             self._session = session
         context = self._current_context()
         if context is None:
+            self._invalidate_paths()
             if line._history_context(line.text()) is None:
                 self.cancel()
             else:
                 self.clear_candidates()
             return
 
+        if self._finish_path_lookup(context):
+            return
+        context = self._sync_path_lookup(context)
         guide = None
         if self.guide_enabled and context.kind == "ex":
             guide = scan_substitute_guide(
@@ -418,18 +615,41 @@ class CommandlinePopupController(QObject):
         if not self._action_is_current(action):
             self.clear_candidates()
             return
+        directory_cursor = _directory_completion_cursor(candidate)
+        request = (
+            parse_path_completion(
+                candidate.text,
+                directory_cursor,
+                action.context.session.SUPPORTED_COMMANDS,
+                os.getcwd(),
+            )
+            if directory_cursor is not None
+            else None
+        )
+        continue_path = (
+            request is not None
+            and request.command == "e"
+            and not request.explicit_range
+        )
+        cursor = directory_cursor if continue_path else candidate.cursor_position
         self.suppress_history()
         line._reset_navigation()
         line._replace_commandline(
             candidate.text,
-            qt_cursor_position(candidate.text, candidate.cursor_position),
+            qt_cursor_position(candidate.text, cursor),
         )
+        if continue_path:
+            # Accepting a directory continues browsing; file acceptance and
+            # recalled history retain their quiet-until-edited behavior.
+            self._suppressed = False
+            self.sync()
 
     def eventFilter(self, watched, event):
         vim = live_widget(self._vim)
         preview = getattr(vim, "substitute_preview", None) if vim is not None else None
         event_type = event.type()
         if event_type in (QEvent.Hide, QEvent.WindowDeactivate):
+            self._invalidate_paths()
             self.clear_candidates()
             if preview is not None:
                 preview.suspend()
@@ -480,3 +700,5 @@ class CommandlinePopupController(QObject):
             signal.disconnect(slot)
         self._connections = ()
         self._closed = True
+        self._path_lookup.completed.disconnect(self._paths_ready)
+        self._path_lookup.close()

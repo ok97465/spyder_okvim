@@ -460,12 +460,12 @@ class VimLineEdit(QLineEdit):
         return None
 
     def remember_command(self, text) -> None:
-        """Keep and persist confirmed, nonempty inputs in bounded histories."""
+        """Skip single-character Ex entries and consecutive duplicates."""
         context = self._history_context(text)
         if context is None:
             return
         kind, _, body = context
-        if not body or (kind == "ex" and not body.strip()):
+        if not body or (kind == "ex" and len(body.strip()) <= 1):
             return
         history = self.histories[kind]
         if not history or history[-1] != body:
@@ -544,11 +544,13 @@ class VimLineEdit(QLineEdit):
                 self.histories["ex"], text, cursor
             )
             if not self._completion_candidates:
+                commands = self.vim_status.sub_mode.SUPPORTED_COMMANDS
+                if controller.complete_paths(
+                    text, cursor, commands, working_directory, backward
+                ):
+                    return
                 self._completion_candidates = completion_items(
-                    text,
-                    cursor,
-                    self.vim_status.sub_mode.SUPPORTED_COMMANDS,
-                    working_directory,
+                    text, cursor, commands, working_directory
                 )
             self._completion_index = (
                 len(self._completion_candidates) - 1 if backward else 0
@@ -558,6 +560,18 @@ class VimLineEdit(QLineEdit):
             self._completion_index = (self._completion_index + step) % len(
                 self._completion_candidates
             )
+        self._apply_completion_candidate()
+
+    def _apply_path_completion(self, candidates, directory, index):
+        """Start the original Tab cycle after a cached or worker lookup."""
+        with self.vim_widget.input_processing():
+            self.vim_widget.commandline_popup.clear_candidates()
+            self._completion_candidates = list(candidates)
+            self._completion_directory = directory
+            self._completion_index = index % len(candidates) if candidates else 0
+            self._apply_completion_candidate()
+
+    def _apply_completion_candidate(self):
         if not self._completion_candidates:
             return
         candidate = self._completion_candidates[self._completion_index]
@@ -654,6 +668,8 @@ class VimLineEdit(QLineEdit):
 
     def _handle_key_press(self, e: QKeyEvent, history_action=None) -> None:
         """Process a key before synchronizing hints at the outer input boundary."""
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape):
+            self.vim_widget.commandline_popup.cancel_pending_tab()
         if history_action is not None:
             self.vim_widget.commandline_popup.handle_key(history_action, e)
             return

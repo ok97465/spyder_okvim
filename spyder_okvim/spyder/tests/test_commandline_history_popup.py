@@ -1,5 +1,8 @@
 """History suggestions share the existing command-line input and lifetime."""
 
+import os
+from threading import Event
+from time import perf_counter
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -856,6 +859,7 @@ def test_selected_path_rechecks_working_directory_before_acceptance(
     monkeypatch.chdir(first)
     state.qtbot.keyClicks(state.line, ":e al")
     state.qtbot.keyPress(state.line, Qt.Key_Tab)
+    state.qtbot.waitUntil(lambda: not state.controller.path_tab_pending, timeout=2000)
     assert state.line.text() == ":e alpha.py"
     select_next(state)
     assert (
@@ -878,3 +882,675 @@ def test_selected_path_rechecks_working_directory_before_acceptance(
     assert state.status.sub_mode is not None
     assert state.controller.selected_index is None
     remember.assert_not_called()
+
+
+@pytest.fixture
+def path_popup(history_popup, monkeypatch, tmp_path):
+    """Observe filesystem enumeration after preparing a small completion folder."""
+    state = history_popup
+    (tmp_path / "alpha.py").touch()
+    (tmp_path / "alpine.json").touch()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "child.toml").touch()
+    monkeypatch.chdir(tmp_path)
+    state.root = tmp_path
+    state.scans = Mock(wraps=os.scandir)
+    monkeypatch.setattr(os, "scandir", state.scans)
+    return state
+
+
+def path_rows(state):
+    return [
+        candidate.text
+        for candidate in state.controller.candidates
+        if "path" in candidate.source.split(", ")
+    ]
+
+
+def wait_for_paths(state):
+    state.qtbot.waitUntil(lambda: bool(path_rows(state)), timeout=2000)
+
+
+def test_edit_argument_automatically_lists_paths_without_changing_input(path_popup):
+    state = path_popup
+    original = state.editor.toPlainText()
+    position = state.editor.textCursor().position()
+    revision = state.editor.document().revision()
+
+    state.qtbot.keyClicks(state.line, ":e ")
+
+    assert path_rows(state) == []
+    state.scans.assert_not_called()
+    wait_for_paths(state)
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json", ":e src" + os.sep]
+    assert state.line.text() == ":e "
+    assert state.line.cursorPosition() == 3
+    assert state.controller.selected_index is None
+    assert state.controller.popup.list_widget.currentRow() == -1
+    assert state.line.histories["ex"] == []
+    assert state.editor.toPlainText() == original
+    assert state.editor.textCursor().position() == position
+    assert state.editor.document().revision() == revision
+    state.scans.assert_called_once()
+
+
+def test_automatic_path_enter_accepts_then_opens_on_next_enter(path_popup, monkeypatch):
+    state = path_popup
+    load = Mock()
+    monkeypatch.setattr(state.status.editor_widget, "load", load, raising=False)
+    state.qtbot.keyClicks(state.line, ":e al")
+    wait_for_paths(state)
+
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+
+    assert state.line.text() == ":e alpha.py"
+    assert state.status.sub_mode is not None
+    assert state.line.histories["ex"] == []
+    assert not shown(state)
+    load.assert_not_called()
+    state.qtbot.wait(160)
+    state.controller.sync()
+    assert not shown(state)
+    state.scans.assert_called_once()
+
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+
+    load.assert_called_once_with(str(state.root / "alpha.py"))
+    assert state.line.histories["ex"] == ["e alpha.py"]
+    assert state.status.sub_mode is None
+
+
+@pytest.mark.parametrize(
+    "draft",
+    [
+        ":e",
+        ":%e ",
+        ":1,2e ",
+        ":edit ",
+        ":unknown ",
+        ":q ",
+        ":marks ",
+        ":w al",
+        ":s/al/be/",
+        "/al",
+        "?al",
+    ],
+)
+def test_automatic_paths_only_scan_unranged_edit_arguments(path_popup, draft):
+    state = path_popup
+
+    state.qtbot.keyClicks(state.line, draft)
+    state.qtbot.wait(160)
+    for _ in range(3):
+        state.controller.sync()
+
+    assert path_rows(state) == []
+    state.scans.assert_not_called()
+
+
+def test_path_results_merge_after_current_history_without_selecting(path_popup):
+    state = path_popup
+    state.line.histories["ex"][:] = ["e another.py", "e alpha.py"]
+    state.qtbot.keyClicks(state.line, ":e a")
+
+    assert [candidate.text for candidate in state.controller.candidates] == [
+        ":e alpha.py",
+        ":e another.py",
+    ]
+    state.scans.assert_not_called()
+    select_next(state)
+    assert state.controller.selected_index == 0
+    wait_for_paths(state)
+
+    assert [candidate.text for candidate in state.controller.candidates] == [
+        ":e alpha.py",
+        ":e another.py",
+        ":e alpine.json",
+    ]
+    assert state.controller.candidates[0].source == "history, path"
+    assert state.controller.selected_index is None
+    assert state.line.text() == ":e a"
+    state.scans.assert_called_once()
+
+
+def test_sync_and_path_selection_reuse_completed_query(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+    wait_for_paths(state)
+
+    for _ in range(3):
+        state.controller.sync()
+        select_next(state)
+        state.qtbot.keyPress(state.line, Qt.Key_P, Qt.ControlModifier)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.wait(160)
+
+    assert state.line.text() == ":e alpine.json"
+    state.scans.assert_called_once()
+
+
+def test_fast_edits_scan_only_final_input_and_cache_empty_results(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e a")
+    state.qtbot.keyPress(state.line, Qt.Key_Backspace)
+    state.qtbot.keyClicks(state.line, "missing")
+    state.scans.assert_not_called()
+
+    state.qtbot.waitUntil(lambda: state.scans.call_count == 1, timeout=2000)
+    for _ in range(3):
+        state.controller.sync()
+    state.qtbot.wait(160)
+
+    assert state.line.text() == ":e missing"
+    assert path_rows(state) == []
+    assert not shown(state)
+    state.scans.assert_called_once()
+
+
+def test_old_paths_disappear_during_next_query_while_history_remains(path_popup):
+    state = path_popup
+    state.line.histories["ex"][:] = ["e alphabet.py"]
+    state.qtbot.keyClicks(state.line, ":e a")
+    wait_for_paths(state)
+
+    state.qtbot.keyClicks(state.line, "lphab")
+
+    assert path_rows(state) == []
+    assert history_bodies(state) == ["e alphabet.py"]
+    assert state.controller.selected_index is None
+    assert state.scans.call_count == 1
+    state.qtbot.waitUntil(lambda: state.scans.call_count == 2, timeout=2000)
+    assert history_bodies(state) == ["e alphabet.py"]
+    assert path_rows(state) == []
+
+
+@pytest.mark.parametrize(
+    "transition", ["escape", "setting", "focus", "deactivate", "editor"]
+)
+def test_pending_path_query_is_cancelled_on_lifecycle_transition(
+    path_popup, transition
+):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+    state.scans.assert_not_called()
+
+    if transition == "escape":
+        state.qtbot.keyPress(state.line, Qt.Key_Escape)
+    elif transition == "setting":
+        CONF.set(CONF_SECTION, "commandline_completion_enabled", False)
+        state.widget.apply_settings()
+    elif transition == "focus":
+        state.editor.setFocus()
+    elif transition == "deactivate":
+        QCoreApplication.sendEvent(state.line.window(), QEvent(QEvent.WindowDeactivate))
+    else:
+        state.stack.set_stack_index(1)
+        state.vim._use_stack(state.stack)
+    state.qtbot.wait(160)
+
+    state.scans.assert_not_called()
+    assert path_rows(state) == []
+    assert not shown(state)
+
+
+@pytest.mark.parametrize("suppression", ["recording", "playback", "dot"])
+def test_pending_path_query_is_invalidated_by_macro_and_dot(path_popup, suppression):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+    if suppression == "recording":
+        state.status.manager_macro.start_record("a")
+    elif suppression == "playback":
+        state.widget._macro_generation = 1
+    else:
+        state.status.running_dot_cmd = True
+    state.controller.sync()
+    state.qtbot.wait(160)
+
+    state.scans.assert_not_called()
+    assert path_rows(state) == []
+    assert not shown(state)
+
+
+def test_ime_cancels_pending_query_and_resumes_after_composition(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e a")
+    send_ime(state, preedit="한")
+    state.qtbot.wait(160)
+    state.scans.assert_not_called()
+    assert not shown(state)
+
+    send_ime(state)
+    wait_for_paths(state)
+
+    assert state.line.text() == ":e a"
+    assert state.controller.selected_index is None
+    state.scans.assert_called_once()
+
+
+@pytest.mark.parametrize("change_input", [False, True])
+def test_expired_path_timer_defers_until_outer_input_finishes(path_popup, change_input):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e a")
+
+    with state.widget.input_processing():
+        if change_input:
+            state.line.setText(":e al")
+            state.line.setCursorPosition(len(state.line.text()))
+        state.qtbot.wait(160)
+        state.controller.sync()
+        state.scans.assert_not_called()
+        assert not shown(state)
+
+    wait_for_paths(state)
+
+    assert state.line.text() == (":e al" if change_input else ":e a")
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
+    assert state.controller.selected_index is None
+    state.scans.assert_called_once()
+
+
+def test_completed_paths_are_invalidated_when_cwd_changes(path_popup, monkeypatch):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e ")
+    wait_for_paths(state)
+    select_next(state)
+
+    monkeypatch.chdir(state.root / "src")
+    state.controller.sync()
+
+    assert path_rows(state) == []
+    assert state.controller.selected_index is None
+    wait_for_paths(state)
+    assert path_rows(state) == [":e child.toml"]
+    assert state.scans.call_count == 2
+
+
+def test_directory_history_recall_waits_for_real_edit(path_popup):
+    state = path_popup
+    state.line.histories["ex"][:] = ["e src" + os.sep]
+    state.qtbot.keyClicks(state.line, ":e s")
+    state.qtbot.keyPress(state.line, Qt.Key_Up)
+
+    state.qtbot.wait(160)
+    state.controller.sync()
+
+    assert state.line.text() == ":e src" + os.sep
+    assert not shown(state)
+    state.scans.assert_not_called()
+    state.qtbot.keyClicks(state.line, "c")
+    wait_for_paths(state)
+    assert path_rows(state) == [":e src" + os.sep + "child.toml"]
+    state.scans.assert_called_once()
+
+
+def test_directory_acceptance_automatically_lists_unselected_children(
+    path_popup, monkeypatch
+):
+    state = path_popup
+    state.line.histories["ex"][:] = ["e src" + os.sep]
+    state.qtbot.keyClicks(state.line, ":e s")
+    wait_for_paths(state)
+    select_next(state)
+    original = state.editor.toPlainText()
+
+    def unexpected_path_check(*args, **kwargs):
+        pytest.fail("Accepting a directory must use the cached candidate metadata")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os.path, "isdir", unexpected_path_check)
+        patch.setattr(os.path, "isfile", unexpected_path_check)
+        state.qtbot.keyPress(state.line, Qt.Key_Return)
+
+    state.qtbot.waitUntil(
+        lambda: path_rows(state) == [":e src" + os.sep + "child.toml"], timeout=2000
+    )
+    assert state.line.text() == ":e src" + os.sep
+    assert state.status.sub_mode is not None
+    assert state.controller.selected_index is None
+    assert state.controller.popup.list_widget.currentRow() == -1
+    assert state.line.histories["ex"] == ["e src" + os.sep]
+    assert state.editor.toPlainText() == original
+    assert state.scans.call_count == 2
+
+
+def test_directory_acceptance_can_descend_through_nested_directories(path_popup):
+    state = path_popup
+    nested = state.root / "docs" / "nested"
+    nested.mkdir(parents=True)
+    (nested / "leaf.py").touch()
+    state.qtbot.keyClicks(state.line, ":e docs")
+    wait_for_paths(state)
+
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.waitUntil(
+        lambda: path_rows(state) == [":e docs" + os.sep + "nested" + os.sep],
+        timeout=2000,
+    )
+    assert state.line.text() == ":e docs" + os.sep
+    assert state.controller.selected_index is None
+
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.waitUntil(
+        lambda: path_rows(state)
+        == [":e docs" + os.sep + "nested" + os.sep + "leaf.py"],
+        timeout=2000,
+    )
+    assert state.line.text() == ":e docs" + os.sep + "nested" + os.sep
+    assert state.controller.selected_index is None
+    assert state.line.histories["ex"] == []
+    assert state.scans.call_count == 3
+
+
+def test_enter_without_selecting_child_executes_current_directory_command(
+    path_popup, monkeypatch
+):
+    state = path_popup
+    execute = Mock()
+    monkeypatch.setattr(ExecutorColon, "e", execute)
+    state.qtbot.keyClicks(state.line, ":e s")
+    wait_for_paths(state)
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.waitUntil(
+        lambda: path_rows(state) == [":e src" + os.sep + "child.toml"], timeout=2000
+    )
+    execute.assert_not_called()
+    assert state.controller.selected_index is None
+
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+
+    execute.assert_called_once_with("src" + os.sep)
+    assert state.line.text() == ""
+    assert state.status.sub_mode is None
+    assert state.line.histories["ex"] == ["e src" + os.sep]
+    assert not shown(state)
+
+
+def test_cursor_move_invalidates_completed_path_query(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+    wait_for_paths(state)
+
+    state.line.setCursorPosition(4)
+
+    assert path_rows(state) == []
+    state.scans.assert_called_once()
+    wait_for_paths(state)
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
+    assert state.scans.call_count == 2
+    assert state.line.text() == ":e al"
+    assert state.line.cursorPosition() == 4
+
+
+def test_reenabling_completion_queries_after_discarding_old_path_cache(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+    wait_for_paths(state)
+    CONF.set(CONF_SECTION, "commandline_completion_enabled", False)
+    state.widget.apply_settings()
+    assert path_rows(state) == []
+    assert not shown(state)
+    state.qtbot.wait(160)
+    state.scans.assert_called_once()
+
+    CONF.set(CONF_SECTION, "commandline_completion_enabled", True)
+    state.widget.apply_settings()
+    wait_for_paths(state)
+
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
+    assert state.scans.call_count == 2
+    assert state.controller.selected_index is None
+
+
+def test_cancelled_callback_cannot_reuse_same_input_after_composition(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+    previous_callback = state.controller._path_callback
+    send_ime(state, preedit="한")
+    send_ime(state)
+    assert state.line.text() == ":e al"
+
+    previous_callback()
+
+    state.scans.assert_not_called()
+    assert path_rows(state) == []
+    wait_for_paths(state)
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
+    state.scans.assert_called_once()
+
+
+def test_repeated_sync_does_not_postpone_unchanged_pending_query(path_popup):
+    state = path_popup
+    state.qtbot.keyClicks(state.line, ":e al")
+
+    for _ in range(6):
+        state.qtbot.wait(25)
+        state.controller.sync()
+
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
+    state.scans.assert_called_once()
+
+
+@pytest.fixture
+def blocked_path_lookup(path_popup, monkeypatch):
+    """Hold a filesystem worker while allowing the GUI event loop to continue."""
+    from spyder_okvim.spyder import commandline_path_lookup
+
+    state = path_popup
+    lookup = commandline_path_lookup.path_completion_items
+    state.lookup_started = Event()
+    state.lookup_released = Event()
+    state.lookup_finished = Event()
+
+    def blocked(request, cancelled=None):
+        state.lookup_started.set()
+        try:
+            if not state.lookup_released.wait(timeout=5):
+                raise AssertionError("test did not release the path lookup")
+            return lookup(request, cancelled)
+        finally:
+            state.lookup_finished.set()
+
+    state.lookup = Mock(side_effect=blocked)
+    monkeypatch.setattr(commandline_path_lookup, "path_completion_items", state.lookup)
+    try:
+        yield state
+    finally:
+        state.lookup_released.set()
+        if state.lookup_started.is_set():
+            state.qtbot.waitUntil(state.lookup_finished.is_set, timeout=2000)
+            # Deliver the queued worker completion before restoring the fixture.
+            state.qtbot.wait(30)
+
+
+def start_blocked_lookup(state):
+    state.qtbot.keyClicks(state.line, ":e a")
+    state.qtbot.waitUntil(state.lookup_started.is_set, timeout=2000)
+    assert not state.lookup_finished.is_set()
+    assert not shown(state)
+
+
+def finish_blocked_lookup(state):
+    state.lookup_released.set()
+    state.qtbot.waitUntil(state.lookup_finished.is_set, timeout=2000)
+    state.qtbot.wait(30)
+
+
+def test_worker_result_waits_for_outer_input_without_repeating_lookup(
+    blocked_path_lookup,
+):
+    state = blocked_path_lookup
+    start_blocked_lookup(state)
+
+    with state.widget.input_processing():
+        finish_blocked_lookup(state)
+        state.qtbot.waitUntil(
+            lambda: state.controller._path_deferred is not None, timeout=2000
+        )
+        state.controller.sync()
+        assert path_rows(state) == []
+        assert not shown(state)
+        state.lookup.assert_called_once()
+
+    wait_for_paths(state)
+
+    assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
+    state.lookup.assert_called_once()
+    state.scans.assert_called_once()
+
+
+@pytest.mark.parametrize("transition", ["edit", "cancel"])
+def test_deferred_worker_result_is_discarded_when_input_changes(
+    blocked_path_lookup, transition
+):
+    state = blocked_path_lookup
+    start_blocked_lookup(state)
+
+    with state.widget.input_processing():
+        finish_blocked_lookup(state)
+        state.qtbot.waitUntil(
+            lambda: state.controller._path_deferred is not None, timeout=2000
+        )
+        assert not shown(state)
+        if transition == "edit":
+            state.line.setText(":e s")
+            state.line.setCursorPosition(len(state.line.text()))
+        else:
+            state.line.esc_pressed()
+        assert path_rows(state) == []
+
+    if transition == "edit":
+        wait_for_paths(state)
+        assert path_rows(state) == [":e src" + os.sep]
+        assert state.lookup.call_count == 2
+    else:
+        state.qtbot.wait(160)
+        assert state.line.text() == ""
+        assert state.status.sub_mode is None
+        assert path_rows(state) == []
+        assert not shown(state)
+        state.lookup.assert_called_once()
+
+
+def test_slow_path_worker_keeps_typing_and_escape_responsive(blocked_path_lookup):
+    state = blocked_path_lookup
+    start_blocked_lookup(state)
+    started = perf_counter()
+
+    state.qtbot.keyClicks(state.line, "l")
+    assert state.line.text() == ":e al"
+    state.qtbot.keyPress(state.line, Qt.Key_Escape)
+
+    assert perf_counter() - started < 0.2
+    assert not state.lookup_finished.is_set()
+    assert state.line.text() == ""
+    assert state.status.sub_mode is None
+    assert not shown(state)
+    finish_blocked_lookup(state)
+    state.qtbot.wait(160)
+    assert path_rows(state) == []
+    assert not shown(state)
+    state.lookup.assert_called_once()
+
+
+def test_cleanup_does_not_wait_for_worker_and_ignores_late_result(blocked_path_lookup):
+    state = blocked_path_lookup
+    state.qtbot.keyClicks(state.line, ":e a")
+    state.controller.cancel()
+    controller = type(state.controller)(state.widget)
+    controller.set_editor(state.editor)
+    controller.sync()
+    state.qtbot.waitUntil(state.lookup_started.is_set, timeout=2000)
+    assert not state.lookup_finished.is_set()
+    started = perf_counter()
+
+    controller.cleanup()
+
+    assert perf_counter() - started < 0.2
+    assert not state.lookup_finished.is_set()
+    assert controller.popup is None
+    assert controller.candidates == []
+    finish_blocked_lookup(state)
+    assert controller.popup is None
+    assert controller.candidates == []
+    state.lookup.assert_called_once()
+    controller.deleteLater()
+
+
+@pytest.mark.parametrize("transition", ["setting", "escape"])
+def test_directory_child_lookup_cannot_show_popup_after_cancellation(
+    blocked_path_lookup, transition
+):
+    state = blocked_path_lookup
+    state.lookup_released.set()
+    state.qtbot.keyClicks(state.line, ":e s")
+    wait_for_paths(state)
+    state.lookup_started.clear()
+    state.lookup_finished.clear()
+    state.lookup_released.clear()
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.waitUntil(state.lookup_started.is_set, timeout=2000)
+    assert state.line.text() == ":e src" + os.sep
+    assert not state.lookup_finished.is_set()
+
+    if transition == "setting":
+        CONF.set(CONF_SECTION, "commandline_completion_enabled", False)
+        state.widget.apply_settings()
+    else:
+        state.qtbot.keyPress(state.line, Qt.Key_Escape)
+    finish_blocked_lookup(state)
+    state.qtbot.wait(160)
+
+    assert path_rows(state) == []
+    assert not shown(state)
+    assert state.controller.selected_index is None
+    assert state.lookup.call_count == 2
+
+
+def test_directory_acceptance_preserves_quoted_emoji_suffix_and_advances_cursor(
+    path_popup,
+):
+    state = path_popup
+    directory = "docs 😀"
+    nested = state.root / directory / "nested"
+    nested.mkdir(parents=True)
+    (nested / "leaf.py").touch()
+    state.qtbot.keyClicks(
+        state.line, ':e "do' + os.sep + "nested" + os.sep + 'leaf.py"'
+    )
+    state.line.setCursorPosition(len(':e "do'))
+    wait_for_paths(state)
+    expected = ':e "' + directory + os.sep + "nested" + os.sep + 'leaf.py"'
+    assert path_rows(state) == [expected]
+
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.waitUntil(lambda: state.scans.call_count == 2, timeout=2000)
+    wait_for_paths(state)
+
+    assert state.line.text() == expected
+    assert (
+        state.line.cursorPosition()
+        == len((':e "' + directory + os.sep).encode("utf-16-le")) // 2
+    )
+    assert path_rows(state) == [expected]
+    assert state.controller.selected_index is None
+
+    select_next(state)
+    state.qtbot.keyPress(state.line, Qt.Key_Return)
+    state.qtbot.waitUntil(lambda: state.scans.call_count == 3, timeout=2000)
+    wait_for_paths(state)
+
+    assert state.line.text() == expected
+    assert (
+        state.line.cursorPosition()
+        == len((':e "' + directory + os.sep + "nested" + os.sep).encode("utf-16-le"))
+        // 2
+    )
+    assert path_rows(state) == [expected]
+    assert state.controller.selected_index is None
+    assert state.line.histories["ex"] == []

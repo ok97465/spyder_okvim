@@ -8,6 +8,7 @@ from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtGui import QInputMethodEvent
 from spyder.config.manager import CONF
 
+from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.spyder.vim_widgets import VimWidget
 from spyder_okvim.utils.commandline_history import load_history, save_history
 from spyder_okvim.vim import VimState
@@ -59,10 +60,10 @@ def submit(commandline, qtbot, text):
 def test_ex_and_search_histories_are_separate(history_bot):
     """Both search directions share words while Ex keeps its own commands."""
     _, _, commandline, qtbot = history_bot
-    for text in (":1", "/foo", ":2", "?x"):
+    for text in (":01", "/foo", ":02", "?x"):
         submit(commandline, qtbot, text)
 
-    assert commandline.histories == {"ex": ["1", "2"], "search": ["foo", "x"]}
+    assert commandline.histories == {"ex": ["01", "02"], "search": ["foo", "x"]}
 
     qtbot.keyClicks(commandline, "?")
     qtbot.keyPress(commandline, Qt.Key_Up)
@@ -73,7 +74,7 @@ def test_ex_and_search_histories_are_separate(history_bot):
 
     qtbot.keyClicks(commandline, ":")
     qtbot.keyPress(commandline, Qt.Key_Up)
-    assert commandline.text() == ":2"
+    assert commandline.text() == ":02"
 
 
 @pytest.mark.parametrize(
@@ -211,7 +212,7 @@ def test_new_session_does_not_restore_a_cancelled_draft(
 @pytest.mark.parametrize(
     "commands, kind, expected",
     [
-        ([":1", ":1", ":2", ":1"], "ex", ["1", "2", "1"]),
+        ([":01", ":01", ":02", ":01"], "ex", ["01", "02", "01"]),
         (["/foo", "?foo", "/x", "/foo"], "search", ["foo", "x", "foo"]),
     ],
 )
@@ -227,35 +228,41 @@ def test_only_adjacent_duplicate_entries_are_removed(
     assert load_history(commandline._history_file) == commandline.histories
 
 
-@pytest.mark.parametrize("text", [":2", "/foo"])
-def test_saved_duplicate_does_not_write_again(history_bot, monkeypatch, text):
+@pytest.mark.parametrize(
+    "text, method", [(":02", None), (":marks", "marks"), ("/foo", None)]
+)
+def test_saved_duplicate_does_not_write_again(history_bot, monkeypatch, text, method):
     """Repeated confirmed input does not rewrite an unchanged history file."""
     _, _, commandline, qtbot = history_bot
     save = Mock(wraps=save_history)
     monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+    if method is not None:
+        monkeypatch.setattr(ExecutorColon, method, Mock())
 
     submit(commandline, qtbot, text)
     submit(commandline, qtbot, text)
 
     save.assert_called_once()
+    kind = "ex" if text.startswith(":") else "search"
+    assert commandline.histories[kind] == [text[1:]]
     assert load_history(commandline._history_file) == commandline.histories
 
 
-@pytest.mark.parametrize("entry", ["2\r", "2\n"])
+@pytest.mark.parametrize("entry", ["02\r", "02\n"])
 def test_damaged_history_cannot_execute_on_recall(history_bot, entry):
     """Restored single-line entries wait for Enter before executing."""
     editor, status, commandline, qtbot = history_bot
     editor.set_text("one\ntwo")
     status.cursor.set_cursor_pos(0)
     commandline._history_file.write_text(
-        json.dumps({"ex": ["1", entry]}), encoding="utf-8"
+        json.dumps({"ex": ["01", entry]}), encoding="utf-8"
     )
     commandline.histories = load_history(commandline._history_file)
 
     qtbot.keyClicks(commandline, ":")
     qtbot.keyPress(commandline, Qt.Key_Up)
 
-    assert commandline.text() == ":1"
+    assert commandline.text() == ":01"
     assert editor.textCursor().position() == 0
     assert status.sub_mode is not None
 
@@ -270,6 +277,152 @@ def test_empty_commands_do_not_create_history(history_bot, command):
     assert status.sub_mode is None
     assert commandline.text() == ""
     assert not commandline._history_file.exists()
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["w", "q", "e", "s", "&", "~", "2", "한", "😀", "  w", "w  ", " \tw\t "],
+)
+def test_one_character_ex_inputs_do_not_change_or_save_history(
+    history_bot, monkeypatch, body
+):
+    """A one-character body leaves existing memory and saved history intact."""
+    _, _, commandline, qtbot = history_bot
+    commandline.histories = {"ex": ["e notes.py"], "search": ["foo"]}
+    assert save_history(commandline._history_file, commandline.histories)
+    original = commandline._history_file.read_bytes()
+    save = Mock(
+        side_effect=AssertionError("one-character command attempted a history save")
+    )
+    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+    qtbot.keyClicks(commandline, ":")
+
+    commandline.remember_command(":" + body)
+
+    assert commandline.histories == {"ex": ["e notes.py"], "search": ["foo"]}
+    assert commandline._history_file.read_bytes() == original
+    assert not commandline._history_dirty
+    save.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "command, method",
+    [
+        (":w", "w"),
+        (":q", "q"),
+        (":e", "e"),
+    ],
+)
+def test_one_character_ex_commands_still_execute_without_creating_history(
+    history_bot, monkeypatch, command, method
+):
+    """Skipping persistence does not prevent the confirmed command dispatch."""
+    _, status, commandline, qtbot = history_bot
+    execute = Mock()
+    monkeypatch.setattr(ExecutorColon, method, execute)
+    save = Mock(
+        side_effect=AssertionError("one-character command attempted a history save")
+    )
+    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+
+    submit(commandline, qtbot, command)
+
+    execute.assert_called_once_with("")
+    assert commandline.histories == {"ex": [], "search": []}
+    assert not commandline._history_file.exists()
+    assert not commandline._history_dirty
+    assert commandline.text() == ""
+    assert status.sub_mode is None
+    save.assert_not_called()
+
+
+def test_one_character_line_address_executes_without_history(history_bot):
+    """Numeric addresses follow the same length rule without losing motion."""
+    editor, status, commandline, qtbot = history_bot
+    editor.set_text("one\ntwo")
+    status.cursor.set_cursor_pos(0)
+
+    submit(commandline, qtbot, ":2")
+
+    assert editor.textCursor().position() == 4
+    assert commandline.histories == {"ex": [], "search": []}
+    assert not commandline._history_file.exists()
+    assert status.sub_mode is None
+
+
+@pytest.mark.parametrize(
+    "command, method", [(":q!", "qexclamation"), (":wq", "wq"), (":marks", "marks")]
+)
+def test_multiple_character_commands_execute_and_are_saved(
+    history_bot, monkeypatch, command, method
+):
+    """Argument-free commands with multiple characters still enter history."""
+    _, status, commandline, qtbot = history_bot
+    execute = Mock()
+    monkeypatch.setattr(ExecutorColon, method, execute)
+
+    submit(commandline, qtbot, command)
+
+    execute.assert_called_once_with("")
+    assert commandline.histories == {"ex": [command[1:]], "search": []}
+    assert load_history(commandline._history_file) == commandline.histories
+    assert status.sub_mode is None
+
+
+def test_duplicate_filter_compares_the_exact_previous_input(history_bot, monkeypatch):
+    """Whitespace is preserved for accepted entries and exact repeats are quiet."""
+    _, _, commandline, qtbot = history_bot
+    qtbot.keyClicks(commandline, ":")
+    save = Mock(wraps=save_history)
+    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+
+    for body in ("marks", " marks", " marks"):
+        commandline.remember_command(":" + body)
+
+    assert commandline.histories == {"ex": ["marks", " marks"], "search": []}
+    assert save.call_count == 2
+    assert load_history(commandline._history_file) == commandline.histories
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "e docs/guide.py",
+        'w "notes file.py"',
+        "s/foo/bar/g",
+        "%s/foo/bar/g",
+        "1,2s",
+        "%&",
+        "02",
+        "q!",
+        "wq",
+        "marks",
+        "&&",
+        "한글",
+        "😀😀",
+    ],
+)
+def test_multiple_character_ex_inputs_remain_in_history(history_bot, body):
+    """Length, rather than argument or token count, determines eligibility."""
+    _, _, commandline, qtbot = history_bot
+    qtbot.keyClicks(commandline, ":")
+
+    commandline.remember_command(":" + body)
+
+    assert commandline.histories == {"ex": [body], "search": []}
+    assert load_history(commandline._history_file) == commandline.histories
+
+
+@pytest.mark.parametrize("prompt, body", [("/", "w"), ("?", "q"), ("2/", "foo")])
+def test_single_word_searches_remain_in_history(history_bot, prompt, body):
+    """Single-word patterns remain useful even when they spell an Ex command."""
+    _, _, commandline, qtbot = history_bot
+    qtbot.keyClicks(commandline, prompt)
+
+    commandline.remember_command(prompt + body)
+
+    assert commandline.histories == {"ex": [], "search": [body]}
+    assert load_history(commandline._history_file) == commandline.histories
 
 
 def test_repeated_empty_search_does_not_store_an_empty_entry(history_bot):
@@ -308,14 +461,14 @@ def test_ime_committed_search_word_round_trips_through_history(history_bot):
 def test_new_widget_restores_saved_histories(history_bot, monkeypatch):
     """A new input widget loads confirmed entries and can recall both kinds."""
     _, _, commandline, qtbot = history_bot
-    qtbot.keyClicks(commandline, ":2")
+    qtbot.keyClicks(commandline, ":02")
     assert not commandline._history_file.exists()
     qtbot.keyPress(commandline, Qt.Key_Return)
     submit(commandline, qtbot, "/foo")
     qtbot.keyClicks(commandline, "?")
     commandline.insert("한글😀")
     qtbot.keyPress(commandline, Qt.Key_Return)
-    expected = {"ex": ["2"], "search": ["foo", "한글😀"]}
+    expected = {"ex": ["02"], "search": ["foo", "한글😀"]}
     assert load_history(commandline._history_file) == expected
 
     monkeypatch.setattr(
@@ -330,7 +483,7 @@ def test_new_widget_restores_saved_histories(history_bot, monkeypatch):
         QCoreApplication.processEvents()
         qtbot.keyClicks(restored.commandline, ":")
         qtbot.keyPress(restored.commandline, Qt.Key_Up)
-        assert restored.commandline.text() == ":2"
+        assert restored.commandline.text() == ":02"
         qtbot.keyPress(restored.commandline, Qt.Key_Escape)
         qtbot.keyClicks(restored.commandline, "/")
         qtbot.keyPress(restored.commandline, Qt.Key_Up)
@@ -356,7 +509,7 @@ def test_saved_history_keeps_latest_100_entries(history_bot):
 
 
 @pytest.mark.parametrize(
-    "text, kind, body", [(":2", "ex", "2"), ("/two", "search", "two")]
+    "text, kind, body", [(":02", "ex", "02"), ("/two", "search", "two")]
 )
 def test_save_failure_does_not_interrupt_execution(
     history_bot, monkeypatch, caplog, text, kind, body

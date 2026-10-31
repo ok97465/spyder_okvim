@@ -1,4 +1,4 @@
-"""Read-only command-line candidates and explicit filesystem completion."""
+"""Read-only command-line candidates and filesystem completion."""
 
 from __future__ import annotations
 
@@ -7,9 +7,7 @@ import os
 from dataclasses import dataclass, replace
 from functools import lru_cache
 
-# Third Party Libraries
-from spyder.utils.encoding import is_text_file
-
+# Project Libraries
 from spyder_okvim.utils.ex_parser import (
     ExError,
     is_substitute,
@@ -18,6 +16,9 @@ from spyder_okvim.utils.ex_parser import (
     scan_substitute_fields,
     scan_substitute_guide,
 )
+
+
+PATH_COMPLETION_EXTENSIONS = frozenset({".py", ".json", ".toml"})
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,22 @@ class CompletionCandidate:
     apply_scope: str
     text: str
     cursor_position: int
+
+
+@dataclass(frozen=True)
+class PathCompletionRequest:
+    """Immutable lookup data, parsed without enumerating the filesystem.
+
+    ``replacement_prefix`` preserves the prompt, quotes, and typed directory
+    spelling. ``suffix`` preserves the rest of the path and closing quote.
+    """
+
+    command: str
+    explicit_range: bool
+    directory: str
+    prefix: str
+    replacement_prefix: str
+    suffix: str
 
 
 def merge_candidates(*groups):
@@ -95,7 +112,8 @@ def completion_items(text, cursor_position, commands, base_directory):
 
     Each path argument is treated as one path, preserving spaces, quotes, and
     any suffix after the cursor. Only its current directory is scanned; results
-    include text files and directories, excluding ``__pycache__`` folders.
+    include supported file extensions and directories, excluding
+    ``__pycache__`` folders. File contents are never inspected.
     """
     commands = tuple(commands)
     names = command_candidates(text, cursor_position, commands)
@@ -104,30 +122,26 @@ def completion_items(text, cursor_position, commands, base_directory):
             CompletionCandidate("command", value, "command", value, cursor)
             for value, cursor in names
         ]
-    return [
-        CompletionCandidate("path", value, "path", value, cursor)
-        for value, cursor in path_candidates(
-            text, cursor_position, commands, base_directory
-        )
-    ]
+    request = parse_path_completion(text, cursor_position, commands, base_directory)
+    return path_completion_items(request) if request is not None else []
 
 
-def path_candidates(text, cursor_position, commands, base_directory):
-    """Complete a single path argument, scanning only its current directory."""
+def parse_path_completion(text, cursor_position, commands, base_directory):
+    """Parse a single path argument without accessing directory entries."""
     header = _completion_header(text, cursor_position)
     if header is None:
-        return []
+        return None
     command = header.command
     command_start, command_end = header.command_start + 1, header.command_end + 1
     if command_start <= cursor_position <= command_end:
-        return []
+        return None
     if (
         command not in commands
         or is_substitute(command)
         or command_end == len(text)
         or not text[command_end].isspace()
     ):
-        return []
+        return None
 
     path_start, path_end = header.argument_start + 1, len(text)
     if path_start < path_end and text[path_start] in "\"'":
@@ -139,7 +153,7 @@ def path_candidates(text, cursor_position, commands, base_directory):
             if cursor_position == closing + 1:
                 cursor_position = closing
     if not path_start <= cursor_position <= path_end:
-        return []
+        return None
 
     before_cursor = text[path_start:cursor_position]
     separators = (os.sep,) if os.altsep is None else (os.sep, os.altsep)
@@ -158,10 +172,28 @@ def path_candidates(text, cursor_position, commands, base_directory):
     if not os.path.isabs(directory):
         directory = os.path.join(base_directory, directory)
 
+    return PathCompletionRequest(
+        command,
+        header.explicit_range,
+        directory,
+        prefix,
+        text[:path_start] + directory_prefix,
+        suffix,
+    )
+
+
+def path_completion_items(request, cancelled=None):
+    """Scan one directory using extension and entry-type checks only."""
+    if cancelled is not None and cancelled():
+        return []
+    separators = (os.sep,) if os.altsep is None else (os.sep, os.altsep)
+    prefix, suffix = request.prefix, request.suffix
     results = []
     try:
-        with os.scandir(directory) as entries:
+        with os.scandir(request.directory) as entries:
             for entry in entries:
+                if cancelled is not None and cancelled():
+                    return []
                 if not entry.name.startswith(prefix):
                     continue
                 if entry.name.startswith(".") and not prefix.startswith("."):
@@ -173,8 +205,9 @@ def path_candidates(text, cursor_position, commands, base_directory):
                             continue
                     elif (
                         suffix.startswith(separators)
+                        or os.path.splitext(entry.name)[1].casefold()
+                        not in PATH_COMPLETION_EXTENSIONS
                         or not entry.is_file()
-                        or not is_text_file(entry.path)
                     ):
                         continue
                 except OSError:
@@ -184,11 +217,30 @@ def path_candidates(text, cursor_position, commands, base_directory):
                 # completing an intermediate directory component.
                 if is_directory and not suffix.startswith(separators):
                     name += os.sep
-                replacement = text[:path_start] + directory_prefix + name
-                results.append((replacement + suffix, len(replacement)))
+                replacement = request.replacement_prefix + name
+                value = replacement + suffix
+                results.append(
+                    CompletionCandidate("path", value, "path", value, len(replacement))
+                )
     except OSError:
         return []
-    return sorted(results)
+    if cancelled is not None and cancelled():
+        return []
+    results = sorted(
+        results, key=lambda candidate: (candidate.text, candidate.cursor_position)
+    )
+    return [] if cancelled is not None and cancelled() else results
+
+
+def path_candidates(text, cursor_position, commands, base_directory):
+    """Complete a single path argument, scanning only its current directory."""
+    request = parse_path_completion(text, cursor_position, commands, base_directory)
+    if request is None:
+        return []
+    return [
+        (candidate.text, candidate.cursor_position)
+        for candidate in path_completion_items(request)
+    ]
 
 
 @lru_cache(maxsize=1)

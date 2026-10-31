@@ -12,6 +12,8 @@ from spyder_okvim.utils.commandline import (
     command_candidates,
     completion_items,
     merge_candidates,
+    parse_path_completion,
+    path_completion_items,
     substitute_field_candidates,
 )
 
@@ -163,17 +165,25 @@ def test_component_remainder_is_replaced_and_suffix_preserved(tmp_path):
     ]
 
 
+def test_quoted_emoji_component_preserves_following_path(tmp_path):
+    """Python cursor offsets preserve both non-BMP text and quoted suffixes."""
+    (tmp_path / "📂 자료").mkdir()
+    text = ":e '📂 OLD" + os.sep + "child.py'"
+    expected = ":e '📂 자료" + os.sep + "child.py'"
+    assert complete(text, tmp_path, len(":e '📂 ")) == [(expected, len(":e '📂 자료"))]
+
+
 def test_hidden_files_require_dot_prefix(tmp_path):
     """Normal directory completion hides dotfiles until explicitly requested."""
-    (tmp_path / ".hidden").touch()
-    (tmp_path / "visible").touch()
-    assert complete(":w ", tmp_path) == [(":w visible", len(":w visible"))]
-    assert complete(":w .", tmp_path) == [(":w .hidden", len(":w .hidden"))]
+    (tmp_path / ".hidden.py").touch()
+    (tmp_path / "visible.py").touch()
+    assert complete(":w ", tmp_path) == [(":w visible.py", len(":w visible.py"))]
+    assert complete(":w .", tmp_path) == [(":w .hidden.py", len(":w .hidden.py"))]
 
 
 @pytest.mark.parametrize("command", [":e ", ":w "])
-def test_path_completion_keeps_text_files_and_normal_directories(tmp_path, command):
-    """Content filtering retains text regardless of extension or encoding."""
+def test_path_completion_filters_extensions_and_keeps_directories(tmp_path, command):
+    """Extensions determine file eligibility, regardless of encoding or content."""
     (tmp_path / "source").mkdir()
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "README").write_text("Project notes\n", encoding="utf-8")
@@ -183,10 +193,24 @@ def test_path_completion_keeps_text_files_and_normal_directories(tmp_path, comma
     (tmp_path / "module.pyc").write_bytes(b"\x00\x01\x02\x03")
     (tmp_path / "binary.py").write_bytes(b"\x00\x01\x02\x03")
     (tmp_path / "binary").write_bytes(b"\x00\x01\x02\x03")
+    (tmp_path / "config.json").touch()
+    (tmp_path / "project.toml").touch()
+    (tmp_path / "upper.PY").touch()
+    (tmp_path / "upper.JSON").touch()
+    (tmp_path / "upper.TOML").touch()
 
     expected = [
         command + name
-        for name in ("README", "empty.txt", "source" + os.sep, "utf16.txt", "한글.py")
+        for name in (
+            "binary.py",
+            "config.json",
+            "project.toml",
+            "source" + os.sep,
+            "upper.JSON",
+            "upper.PY",
+            "upper.TOML",
+            "한글.py",
+        )
     ]
     assert complete(command, tmp_path) == [(text, len(text)) for text in expected]
 
@@ -199,14 +223,66 @@ def test_cache_directories_are_not_completed(tmp_path, prefix):
 
 
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires named pipes")
-def test_special_files_are_not_opened_for_text_detection(tmp_path, monkeypatch):
+def test_special_files_are_excluded_even_with_allowed_extension(tmp_path, monkeypatch):
     """Completing a FIFO must not block waiting for a writer."""
-    os.mkfifo(tmp_path / "pipe")
+    os.mkfifo(tmp_path / "pipe.py")
 
-    def unexpected_read(path):
-        pytest.fail("Special files must not be opened to detect text")
+    def unexpected_read(*args, **kwargs):
+        pytest.fail("Completion must never open file contents")
 
-    monkeypatch.setattr("spyder_okvim.utils.commandline.is_text_file", unexpected_read)
+    monkeypatch.setattr("builtins.open", unexpected_read)
+    assert complete(":e ", tmp_path) == []
+
+
+def test_file_contents_are_never_opened(tmp_path, monkeypatch):
+    """An allowed extension remains eligible even when its contents are binary."""
+    (tmp_path / "binary.py").write_bytes(b"\x00\x01\x02\x03")
+
+    def unexpected_read(*args, **kwargs):
+        pytest.fail("Completion must never open file contents")
+
+    monkeypatch.setattr("builtins.open", unexpected_read)
+    monkeypatch.setattr("io.open", unexpected_read)
+    monkeypatch.setattr(os, "open", unexpected_read)
+    assert complete(":e ", tmp_path) == [(":e binary.py", len(":e binary.py"))]
+
+
+def test_symlinks_follow_existing_file_and_directory_policy(tmp_path):
+    """Valid symlink targets are checked by type; broken links are excluded."""
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "real.py").touch()
+    try:
+        (tmp_path / "linked.py").symlink_to(target / "real.py")
+        (tmp_path / "linked_directory").symlink_to(target, target_is_directory=True)
+        (tmp_path / "missing.py").symlink_to(target / "missing.py")
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlinks are not available")
+    expected = [":e linked.py", ":e linked_directory" + os.sep]
+    assert complete(":e linked", tmp_path) == [(text, len(text)) for text in expected]
+    assert complete(":e missing", tmp_path) == []
+
+
+def test_excluded_extensions_skip_file_type_check(tmp_path, monkeypatch):
+    """Rejected extensions do not require a regular-file check."""
+
+    class Entry:
+        name = "notes.txt"
+
+        def is_dir(self):
+            return False
+
+        def is_file(self):
+            pytest.fail("An excluded extension must be rejected before is_file()")
+
+    class Entries:
+        def __enter__(self):
+            return iter([Entry()])
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(os, "scandir", lambda directory: Entries())
     assert complete(":e ", tmp_path) == []
 
 
@@ -261,9 +337,67 @@ def test_automatic_candidates_do_not_query_filesystem(monkeypatch):
         pytest.fail("Automatic candidates must use in-memory data")
 
     monkeypatch.setattr(os, "scandir", unexpected_read)
-    monkeypatch.setattr("spyder_okvim.utils.commandline.is_text_file", unexpected_read)
     monkeypatch.setattr("builtins.open", unexpected_read)
     assert command_candidates(":w", 2, COMMANDS) == [(":w", 2), (":wq", 3)]
+
+
+def test_path_parsing_is_independent_of_directory_lookup(tmp_path, monkeypatch):
+    """Request construction preserves the range, raw spelling, and suffix."""
+    text = ":%e 'folder" + os.sep + "repOLD.py'"
+    cursor = len(":%e 'folder" + os.sep + "rep")
+
+    def unexpected_scan(*args, **kwargs):
+        pytest.fail("Parsing must not enumerate directory entries")
+
+    monkeypatch.setattr(os, "scandir", unexpected_scan)
+    request = parse_path_completion(text, cursor, COMMANDS, str(tmp_path))
+    assert request.command == "e"
+    assert request.explicit_range
+    assert request.directory == str(tmp_path / "folder") + os.sep
+    assert request.prefix == "rep"
+    assert request.replacement_prefix == ":%e 'folder" + os.sep
+    assert request.suffix == "'"
+
+
+@pytest.mark.parametrize(
+    "text, cursor",
+    [(":e", 2), (":e file.py", 2), ("/e ", 3), (":unknown ", 9), (":s/foo/bar", 10)],
+)
+def test_invalid_path_requests_are_rejected_without_lookup(tmp_path, text, cursor):
+    assert parse_path_completion(text, cursor, COMMANDS, str(tmp_path)) is None
+
+
+def test_path_request_can_be_scanned_later(tmp_path):
+    """The scan consumes only immutable parsing data."""
+    request = parse_path_completion(":e fi", 5, COMMANDS, str(tmp_path))
+    (tmp_path / "file.py").touch()
+    assert path_completion_items(request) == [
+        CompletionCandidate("path", ":e file.py", "path", ":e file.py", 10)
+    ]
+
+
+def test_cancelled_path_request_does_not_enumerate_directory(tmp_path, monkeypatch):
+    request = parse_path_completion(":e ", 3, COMMANDS, str(tmp_path))
+
+    def unexpected_scan(directory):
+        pytest.fail("An already cancelled lookup must not touch the filesystem")
+
+    monkeypatch.setattr(os, "scandir", unexpected_scan)
+    assert path_completion_items(request, lambda: True) == []
+
+
+def test_path_scan_checks_cancellation_between_entries(tmp_path):
+    for index in range(10):
+        (tmp_path / "file{}.py".format(index)).touch()
+    request = parse_path_completion(":e ", 3, COMMANDS, str(tmp_path))
+    checks = []
+
+    def cancelled():
+        checks.append(True)
+        return len(checks) == 4
+
+    assert path_completion_items(request, cancelled) == []
+    assert len(checks) == 4
 
 
 def test_merge_distinguishes_application_cursor_and_keeps_literal_text():
