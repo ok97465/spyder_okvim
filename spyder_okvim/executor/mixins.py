@@ -247,6 +247,7 @@ class SelectionMixin:
         use_leap = self.vim_status.settings.use_leap
         if use_leap:
             executor_sub = self.submodes.leap_input
+            executor_sub.begin()
             self.set_parent_info_to_submode(executor_sub, count, count_text)
             executor_sub.set_func_list_deferred(
                 [DeferredAction(self.apply_motion_info_in_sel, True)]

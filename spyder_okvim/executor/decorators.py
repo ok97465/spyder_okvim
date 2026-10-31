@@ -5,6 +5,8 @@ count and packages the transition for the caller. Preparing a continuation does
 not execute its deferred edit or selection callback.
 """
 
+from __future__ import annotations
+
 # Standard Libraries
 from collections.abc import Callable
 from functools import wraps

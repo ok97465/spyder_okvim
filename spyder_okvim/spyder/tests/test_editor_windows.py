@@ -285,7 +285,7 @@ def test_yanky_shared_history_and_view_lifetime(editor_windows, host):
     state.qtbot.keyClicks(state.commandline, "p")
     widget.show_yank_history()
     dialog = widget._yank_picker.dialog
-    assert dialog.parentWidget() is code.window()
+    assert dialog.parentWidget() is code
     state.qtbot.keyClick(dialog.list_viewer, Qt.Key_Return)
     _settle()
     assert widget.put_controller.can_cycle()

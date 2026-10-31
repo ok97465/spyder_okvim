@@ -17,6 +17,7 @@ from spyder.utils.palette import SpyderPalette
 
 # Project Libraries
 from spyder_okvim.utils.qtcompat import text_width
+from spyder_okvim.spyder.popup_geometry import popup_area
 
 
 def display_key(key):
@@ -32,11 +33,13 @@ def display_key(key):
 
 
 class WhichKeyPopup(QFrame):
-    """A compact, non-focusable two-column panel inside the viewport."""
+    """A compact, non-focusable panel with columns fitted to the editor."""
 
     def __init__(self, viewport):
         super().__init__(viewport)
         self.setObjectName("whichKeyPopup")
+        self.setAccessibleName("Next command keys")
+        self.setAccessibleDescription("Available keys for the pending Vim command")
         self.setFocusPolicy(Qt.NoFocus)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self._contents = None
@@ -115,6 +118,21 @@ class WhichKeyPopup(QFrame):
             self.candidate_labels.append((key_label, description_label))
         self._grid.invalidate()
 
+    def _set_column_count(self, count):
+        """Reflow existing labels without recreating their content."""
+        if count == self.column_count:
+            return
+        self.column_count = count
+        while self._grid.count():
+            self._grid.takeAt(0)
+        for column in range(4):
+            self._grid.setColumnStretch(column, int(column < count * 2 and column % 2))
+        for index, (key_label, description_label) in enumerate(self.candidate_labels):
+            row, group = divmod(index, count)
+            self._grid.addWidget(key_label, row, group * 2, Qt.AlignTop)
+            self._grid.addWidget(description_label, row, group * 2 + 1)
+        self._grid.invalidate()
+
     def refresh_appearance(self, font):
         """Use a smaller UI font and the palette applied by Spyder."""
         compact_font = QFont(font)
@@ -164,10 +182,12 @@ class WhichKeyPopup(QFrame):
         """Fit wrapped rows, allowing overflow menus to scroll without focus."""
         self.ensurePolished()
         viewport = self.parentWidget()
-        width, height = viewport.width(), viewport.height()
-        margin = min(8, max(0, (min(width, height) - 1) // 2))
-        available_width = max(1, width - 2 * margin)
-        available_height = max(1, height - 2 * margin)
+        area = popup_area(viewport)
+        available_width = area.width()
+        available_height = area.height()
+        # Use text metrics so high DPI and larger UI fonts switch sooner.
+        column_minimum = text_width(self.fontMetrics(), "M" * 22)
+        self._set_column_count(1 if available_width < 2 * column_minimum else 2)
         margins = self.layout().contentsMargins() + self.contentsMargins()
         horizontal_padding = margins.left() + margins.right()
         vertical_padding = margins.top() + margins.bottom()
@@ -194,8 +214,8 @@ class WhichKeyPopup(QFrame):
         self.body.setMinimumHeight(max(0, body_height))
         popup_height = min(wanted_height, available_height)
         self.setGeometry(
-            margin,
-            height - margin - popup_height,
+            area.left(),
+            area.bottom() - popup_height + 1,
             popup_width,
             popup_height,
         )

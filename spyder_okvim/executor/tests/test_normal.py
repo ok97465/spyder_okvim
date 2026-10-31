@@ -12,7 +12,6 @@ from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.spyder.vim_widgets import enable_coverage_tracing
 from spyder_okvim.utils.motion import MotionInfo
 from spyder_okvim.vim.state import VimState
 from tests.qt_support import reset_vim_state
@@ -2624,10 +2623,6 @@ def test_q_cmd(vim_bot):
     vim.vim_cmd.vim_status.disconnect_from_editor()  # TODO: Fix
     qtbot.keyClicks(cmd_line, "q")
     qtbot.keyClicks(cmd_line, "@a")
-
-    # to meet coverage
-    foo = enable_coverage_tracing(print)
-    foo()
 
 
 def test_squarebracket_d_cmd(vim_bot):

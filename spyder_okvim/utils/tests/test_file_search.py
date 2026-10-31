@@ -149,3 +149,83 @@ def test_valid_folder(qtbot, tmpdir):
     qtbot.keyClicks(edit, "ok9")
     qtbot.keyPress(edit, Qt.Key_Enter)
     assert pf.get_selected_path() != ""
+
+
+def test_empty_search_clears_selection_and_enter_keeps_search_open(qtbot, tmp_path):
+    """A failed query cannot confirm the last successful query's file."""
+    (tmp_path / "source.py").write_text("content", encoding="utf-8")
+    dialog = FileSearchDialog(str(tmp_path))
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert dialog.list_viewer.currentIndex().isValid()
+
+    dialog.edit.setText("missing-file")
+    assert dialog.list_model.rowCount() == 0
+    assert not dialog.list_viewer.currentIndex().isValid()
+    assert not dialog.list_viewer.selectionModel().hasSelection()
+    assert "missing-file" in dialog.status_label.text()
+    qtbot.keyClick(dialog.edit, Qt.Key_Return)
+    assert dialog.isVisible()
+    assert dialog.get_selected_path() == ""
+
+    dialog.edit.clear()
+    assert dialog.list_model.rowCount() == 1
+    assert dialog.list_viewer.currentIndex().row() == 0
+    qtbot.keyClick(dialog.edit, Qt.Key_Return)
+    assert dialog.get_selected_path() == str(tmp_path / "source.py")
+
+
+def test_empty_project_and_missing_project_have_distinct_status(qtbot, tmp_path):
+    empty = FileSearchDialog(str(tmp_path))
+    missing = FileSearchDialog(None)
+    for dialog in (empty, missing):
+        qtbot.addWidget(dialog)
+        dialog.show()
+        assert not dialog.list_viewer.currentIndex().isValid()
+        qtbot.keyClick(dialog.edit, Qt.Key_Return)
+        assert dialog.isVisible()
+        assert dialog.get_selected_path() == ""
+    assert empty.status_label.text() == "No files in this project."
+    assert missing.status_label.text() == "No project is open."
+
+
+def test_recollect_paths_replaces_files_and_cached_queries(qtbot, tmp_path):
+    """Refreshing a project cannot reuse matches from the previous file list."""
+    old_file = tmp_path / "old.py"
+    old_file.write_text("content", encoding="utf-8")
+    dialog = FileSearchDialog(str(tmp_path))
+    qtbot.addWidget(dialog)
+    dialog.edit.setText("old")
+    assert dialog.list_model.rowCount() == 1
+
+    old_file.unlink()
+    (tmp_path / "new.py").write_text("content", encoding="utf-8")
+    dialog.collect_paths()
+    dialog.collect_paths()
+    dialog.update_list()
+
+    assert dialog.path_list == ["new.py"]
+    assert dialog.list_model.rowCount() == 0
+    dialog.edit.setText("new")
+    assert dialog.list_model.item(0, 0).text() == "new.py"
+
+
+def test_path_mouse_selection_preserves_search_focus_and_double_click_opens(
+    qtbot, tmp_path
+):
+    for name in ("a.py", "b.py"):
+        (tmp_path / name).write_text("content", encoding="utf-8")
+    dialog = FileSearchDialog(str(tmp_path))
+    qtbot.addWidget(dialog)
+    dialog.show()
+    index = dialog.list_model.index(1, 0)
+    point = dialog.list_viewer.visualRect(index).center()
+    qtbot.mouseClick(dialog.list_viewer.viewport(), Qt.LeftButton, pos=point)
+    assert dialog.list_viewer.currentIndex().row() == 1
+    assert dialog.edit.hasFocus()
+    assert dialog.get_selected_path() == ""
+    assert dialog.isVisible()
+    assert index.data(Qt.ToolTipRole) == str(tmp_path / "b.py")
+
+    qtbot.mouseDClick(dialog.list_viewer.viewport(), Qt.LeftButton, pos=point)
+    assert dialog.get_selected_path() == str(tmp_path / "b.py")

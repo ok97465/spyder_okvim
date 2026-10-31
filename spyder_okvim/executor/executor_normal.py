@@ -382,6 +382,7 @@ class NormalModeExecutor(MovementMixin, ExecutorBase):
         use_leap = self.vim_status.settings.use_leap
         if use_leap:
             executor_sub = self.submodes.leap_input
+            executor_sub.begin()
 
             self.set_parent_info_to_submode(executor_sub, count, count_text)
 
@@ -400,6 +401,7 @@ class NormalModeExecutor(MovementMixin, ExecutorBase):
         use_leap = self.vim_status.settings.use_leap
         if use_leap:
             executor_sub = self.submodes.leap_input
+            executor_sub.begin()
 
             self.set_parent_info_to_submode(executor_sub, count, count_text)
 

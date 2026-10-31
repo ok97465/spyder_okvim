@@ -3,7 +3,15 @@
 
 from __future__ import annotations
 
+# Standard Libraries
+from types import SimpleNamespace
+
+# Third Party Libraries
+import pytest
+from qtpy.QtWidgets import QPlainTextEdit
+
 # Project Libraries
+from spyder_okvim.utils.leap_helpers import LeapHelper
 from tests.qt_support import reset_vim_state
 
 
@@ -12,6 +20,22 @@ def _set_editor_text(editor, qtbot, text: str) -> None:
     editor.set_text(text)
     editor.highlighter.rehighlight()
     qtbot.waitUntil(lambda: editor.toPlainText() == text, timeout=2000)
+
+
+@pytest.mark.parametrize(
+    "text,query,expected",
+    [("x aaa", "aa", [2, 3]), ("x 😀😀😀", "😀😀", [2, 4])],
+)
+def test_leap_includes_overlapping_targets(qtbot, text, query, expected):
+    """A two-character target can begin inside the preceding match."""
+    editor = QPlainTextEdit(text)
+    qtbot.addWidget(editor)
+    editor.resize(600, 200)
+    editor.show()
+    helper = LeapHelper(SimpleNamespace(get_editor=lambda: editor))
+
+    assert helper.search_in_view(query, full_view=True) == expected
+    assert helper.search_in_view(query, reverse=True, full_view=True) == expected[::-1]
 
 
 def test_search_in_view_covers_full_viewport(vim_bot):
@@ -68,3 +92,39 @@ def test_search_in_view_covers_full_viewport(vim_bot):
     finally:
         _set_editor_text(editor, qtbot, original_text)
         reset_vim_state(vim_status)
+
+
+def test_leap_uses_utf16_positions_and_anchors(vim_bot):
+    """An emoji before/inside a target must not shift or split its label."""
+    _, _, editor, vim, qtbot = vim_bot
+    status = vim.vim_cmd.vim_status
+    reset_vim_state(status)
+    text = "x😀가나 😀가나"
+    _set_editor_text(editor, qtbot, text)
+    status.cursor.set_cursor_pos(0)
+    helper = vim.vim_cmd.executor_normal_cmd.motions.leap_helper
+    assert helper.search_in_view("😀가", full_view=True) == [1, 6]
+    assert helper._get_pair_key(editor.document(), 1) == "😀가"
+    assert helper._label_anchor_position(editor.document(), 1) == 4
+
+
+def test_leap_labels_remain_selectable_and_stable(vim_bot):
+    """Two-key labels have reserved prefixes and retain the preview assignment."""
+    _, _, editor, vim, qtbot = vim_bot
+    status = vim.vim_cmd.vim_status
+    reset_vim_state(status)
+    _set_editor_text(editor, qtbot, "x\n" + ("ab " * 7 + "\n") * 5)
+    status.cursor.set_cursor_pos(0)
+    helper = vim.vim_cmd.executor_normal_cmd.motions.leap_helper
+    helper.preview_first_char("a", False, full_view=True)
+    preview = dict(helper._preview_labels_by_pos)
+    positions = helper.search_in_view("ab", full_view=True)
+    labels = helper.build_label_map(positions)
+    assert any(len(label) == 2 for label in labels)
+    assert all(preview[position] == label for label, position in labels.items())
+    assert not any(
+        longer.startswith(shorter)
+        for shorter in labels
+        for longer in labels
+        if shorter != longer
+    )

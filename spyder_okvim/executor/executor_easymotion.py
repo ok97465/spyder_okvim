@@ -18,41 +18,41 @@ from spyder_okvim.executor.executor_base import (
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
+def _viewport_positions(editor):
+    """Return the document offsets at the visible viewport corners."""
+    start = editor.cursorForPosition(QPoint(0, 0)).position()
+    bottom_right = QPoint(editor.viewport().width() - 1, editor.viewport().height() - 1)
+    return start, editor.cursorForPosition(bottom_right).position()
+
+
+def _show_marker_state(status):
+    """Report remaining targets and the finite label budget."""
+    manager = status.manager_marker_easymotion
+    message = f"EasyMotion: select label · {len(manager.position_list)} candidates"
+    if manager.total_count > manager.visible_count:
+        message += f" · showing {manager.visible_count}/{manager.total_count}; scroll and retry"
+    status.set_message(message + " · Backspace undo label · Esc cancel")
+
+
+def _starts_with_letter_or_number(cursor):
+    """Inspect one Unicode character without scanning the document prefix."""
+    character_cursor = QTextCursor(cursor)
+    character_cursor.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
+    character = character_cursor.selectedText()
+    return bool(character) and character[0].isalnum()
+
+
 class ExecutorSelectMarkerEasymotion(ExecutorSubBase):
     """Submode for selecting marker of easymotion."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
         self.allow_leaderkey = False
-        self.motion_info = MotionInfo()
-
-    def _set_motion_info(
-        self,
-        cur_pos: int | None,
-        sel_start: int | None = None,
-        sel_end: int | None = None,
-        motion_type: int = MotionType.LineWise,
-    ):
-        """Set motion info.
-
-        Args:
-            cur_pos: the position of cursor.
-            sel_start: the start position of selection.
-            sel_end: the end position of selection.
-            motion_type: motion type
-
-        Returns:
-            MotionInfo
-
-        """
-        self.motion_info.cursor_pos = cur_pos
-        self.motion_info.sel_start = sel_start
-        self.motion_info.sel_end = sel_end
-        self.motion_info.motion_type = motion_type
-
-        return self.motion_info
 
     def __call__(self, txt: str):
+        if txt == "\x1b":
+            self.on_escape()
+            return True
         manager_marker = self.vim_status.manager_marker_easymotion
         manager_marker.handle_user_input(txt)
 
@@ -60,18 +60,27 @@ class ExecutorSelectMarkerEasymotion(ExecutorSubBase):
         pos_list = manager_marker.position_list
         len_pos = len(pos_list)
 
-        if len_pos > 1:
+        if txt == "\b" or len_pos > 1:
             self.vim_status.update_marker_for_easymotion()
+            _show_marker_state(self.vim_status)
             return True
         elif len_pos == 0:
             self.vim_status.remove_marker_of_easymotion()
             self.vim_status.sub_mode = None
+            self.vim_status.set_message("EasyMotion: no target for that label")
             return True
         else:
             self.vim_status.remove_marker_of_easymotion()
             self.vim_status.sub_mode = None
-            self._set_motion_info(pos_list[0], motion_type=motion_type)
-            return self.process_return(self.execute_func_deferred(self.motion_info))
+            self.vim_status.set_message("")
+            motion_info = MotionInfo(pos_list[0], motion_type=motion_type)
+            return self.process_return(self.execute_func_deferred(motion_info))
+
+    def on_escape(self):
+        """Release overlays and stage feedback on cancellation."""
+        self.vim_status.remove_marker_of_easymotion()
+        self.vim_status.set_message("")
+        self.vim_status.sub_mode = None
 
 
 class ExecutorSearchCharEasymotion(ExecutorSubBase):
@@ -86,6 +95,10 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
 
     def __call__(self, txt: str):
         if len(txt) < self.n_input_required:
+            remaining = self.n_input_required - len(txt)
+            self.vim_status.set_message(
+                f"EasyMotion: enter {remaining} more characters · Esc cancel"
+            )
             return False
 
         self.vim_status.sub_mode = None
@@ -93,23 +106,7 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
         if self.search_method:
             ret = self.search_method(txt)
 
-        if ret:
-            self.vim_status.sub_mode = ret.sub_mode
-            return ret.clear_command_line
-        else:
-            self.vim_status.sub_mode = None
-            return True
-
-    def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
-        """Get the cursor position of viewport of editor."""
-        editor = self.vim_status.get_editor()
-        start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
-        bottom_right = QPoint(
-            editor.viewport().width() - 1, editor.viewport().height() - 1
-        )
-        end_pos = editor.cursorForPosition(bottom_right).position()
-
-        return start_pos, end_pos
+        return self.process_return(ret)
 
     def set_search_method(self, method_name: str):
         "Set search method."
@@ -126,22 +123,27 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
                 self.func_list_deferred, self.return_deferred
             )
             self.vim_status.set_marker_for_easymotion(positions, motion_type)
+            _show_marker_state(self.vim_status)
             return ExecutorTransition(executor_sub, True)
+        self.vim_status.set_message("EasyMotion: no matching target in this view")
+
+    def on_escape(self):
+        self.vim_status.set_message("")
 
     def forwards_find_char(self, characters: str):
         """Find characters forwards."""
         editor = self.vim_status.get_editor()
 
         cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
-        start_pos = min([view_end_pos, cur_pos]) + 1
+        view_start_pos, view_end_pos = _viewport_positions(editor)
+        start_pos = max(view_start_pos, cur_pos + 1)
 
         positions = []
-        while view_start_pos <= start_pos <= view_end_pos:
+        while start_pos <= view_end_pos:
             cursor = editor.document().find(characters, start_pos)
-            if cursor.isNull():
+            if cursor.isNull() or cursor.selectionStart() > view_end_pos:
                 break
-            positions.append(cursor.position() - len(characters))
+            positions.append(cursor.selectionStart())
             start_pos = cursor.position()
 
         return self.set_position_result_to_vim_status(
@@ -153,18 +155,20 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
         editor = self.vim_status.get_editor()
 
         cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
-        start_pos = max([view_start_pos, cur_pos]) - 1
+        view_start_pos, view_end_pos = _viewport_positions(editor)
+        # Qt's backward search excludes its offset. Keep the last visible
+        # character eligible even when scrolling has moved the cursor offscreen.
+        start_pos = min(view_end_pos + 1, cur_pos)
 
         positions = []
-        while view_start_pos <= start_pos <= view_end_pos:
+        while start_pos > view_start_pos:
             cursor = editor.document().find(
                 characters, start_pos, QTextDocument.FindBackward
             )
-            if cursor.isNull():
+            if cursor.isNull() or cursor.selectionStart() < view_start_pos:
                 break
-            positions.append(cursor.position() - len(characters))
-            start_pos = cursor.position() - len(characters)
+            positions.append(cursor.selectionStart())
+            start_pos = cursor.selectionStart()
 
         return self.set_position_result_to_vim_status(positions, MotionType.CharWise)
 
@@ -206,23 +210,7 @@ class ExecutorEasymotion(ExecutorSubBase):
         if method:
             ret = method(count, count_text)
 
-        if ret:
-            self.vim_status.sub_mode = ret.sub_mode
-            return ret.clear_command_line
-        else:
-            self.vim_status.sub_mode = None
-            return True
-
-    def get_cursor_pos_of_viewport(self) -> tuple[int, int]:
-        """Get the cursor position of viewport of editor."""
-        editor = self.vim_status.get_editor()
-        start_pos = editor.cursorForPosition(QPoint(0, 0)).position()
-        bottom_right = QPoint(
-            editor.viewport().width() - 1, editor.viewport().height() - 1
-        )
-        end_pos = editor.cursorForPosition(bottom_right).position()
-
-        return start_pos, end_pos
+        return self.process_return(ret)
 
     def set_position_result_to_vim_status(self, positions, motion_type):
         """Set positions to vim status for easymotion."""
@@ -233,18 +221,19 @@ class ExecutorEasymotion(ExecutorSubBase):
                 self.return_deferred,
             )
             self.vim_status.set_marker_for_easymotion(positions, motion_type)
+            _show_marker_state(self.vim_status)
             return ExecutorTransition(executor_sub, True)
+        self.vim_status.set_message("EasyMotion: no matching target in this view")
 
     def forward_words(self, count=1, count_text=""):
         """Easymotion-w."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        view_start_pos, view_end_pos = _viewport_positions(editor)
         start_pos = max([view_start_pos, cur_pos])
 
         cursor = editor.textCursor()
         cursor.setPosition(start_pos)
-        texts = editor.toPlainText()
 
         positions = []
         while 1:
@@ -253,8 +242,7 @@ class ExecutorEasymotion(ExecutorSubBase):
                 break
             if cursor.atBlockEnd():
                 continue
-            ch = texts[cursor.position()]
-            if not ch.isalnum():
+            if not _starts_with_letter_or_number(cursor):
                 continue
 
             positions.append(cursor.position())
@@ -265,21 +253,21 @@ class ExecutorEasymotion(ExecutorSubBase):
         """Easymotion-b."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        view_start_pos, view_end_pos = _viewport_positions(editor)
         start_pos = min([view_end_pos, cur_pos])
 
         cursor = editor.textCursor()
         cursor.setPosition(start_pos)
-        texts = editor.toPlainText()
 
         positions = []
         while 1:
             if cursor.movePosition(QTextCursor.PreviousWord) is False:
                 break
+            if cursor.position() < view_start_pos:
+                break
             if cursor.atBlockEnd():
                 continue
-            ch = texts[cursor.position()]
-            if not ch.isalnum():
+            if not _starts_with_letter_or_number(cursor):
                 continue
 
             positions.append(cursor.position())
@@ -292,7 +280,7 @@ class ExecutorEasymotion(ExecutorSubBase):
         """Easymotion-j."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        view_start_pos, view_end_pos = _viewport_positions(editor)
         start_pos = max([view_start_pos, cur_pos])
 
         cursor = editor.textCursor()
@@ -318,7 +306,7 @@ class ExecutorEasymotion(ExecutorSubBase):
         """Easymotion-j."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
-        view_start_pos, view_end_pos = self.get_cursor_pos_of_viewport()
+        view_start_pos, view_end_pos = _viewport_positions(editor)
         start_pos = min([view_end_pos, cur_pos])
 
         cursor = editor.textCursor()
@@ -345,6 +333,9 @@ class ExecutorEasymotion(ExecutorSubBase):
         executor_sub = self.executor_search_char
         executor_sub.set_search_method("ch_forwards")
         executor_sub.n_input_required = count
+        self.vim_status.set_message(
+            f"EasyMotion: enter {count} characters · Esc cancel"
+        )
         executor_sub.set_func_list_deferred(
             self.func_list_deferred, self.return_deferred
         )
@@ -355,6 +346,9 @@ class ExecutorEasymotion(ExecutorSubBase):
         executor_sub = self.executor_search_char
         executor_sub.set_search_method("ch_backwards")
         executor_sub.n_input_required = count
+        self.vim_status.set_message(
+            f"EasyMotion: enter {count} characters · Esc cancel"
+        )
         executor_sub.set_func_list_deferred(
             self.func_list_deferred, self.return_deferred
         )

@@ -6,7 +6,8 @@ from qtpy.QtWidgets import QFrame
 
 # Project Libraries
 from spyder_okvim.spyder.commandline_history import HistoryPopup
-from spyder_okvim.spyder.substitute_guide import SubstituteGuidePopup
+from spyder_okvim.spyder.popup_geometry import popup_area
+from spyder_okvim.spyder.prompt_guide import PromptGuidePopup
 
 
 class CommandlinePopupHost(QFrame):
@@ -17,15 +18,16 @@ class CommandlinePopupHost(QFrame):
     def __init__(self, viewport):
         super().__init__(viewport)
         self.setObjectName("commandlinePopupHost")
+        self.setAccessibleName("Command suggestions and help")
         self.setMinimumSize(0, 0)
         self.setFocusPolicy(Qt.NoFocus)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.popup = HistoryPopup(self)
-        self.guide_popup = SubstituteGuidePopup(self)
+        self.guide_popup = PromptGuidePopup(self)
         self._sections = (False, False)
         self._geometry_dirty = True
-        self._viewport_size = None
+        self._available_area = None
         self.hide()
 
     def invalidate_geometry(self):
@@ -50,18 +52,16 @@ class CommandlinePopupHost(QFrame):
     def update_geometry(self):
         """Allocate bounded heights to two independently scrollable sections."""
         viewport = self.parentWidget()
-        viewport_size = viewport.size()
-        if not self._geometry_dirty and viewport_size == self._viewport_size:
+        area = popup_area(viewport)
+        if not self._geometry_dirty and area == self._available_area:
             return
-        self._viewport_size = viewport_size
+        self._available_area = area
         self._geometry_dirty = False
         candidates, guide = self._sections
         if not (candidates or guide):
             return
-        width, height = viewport.width(), viewport.height()
-        margin = min(8, max(0, (min(width, height) - 1) // 2))
-        available_width = max(1, width - 2 * margin)
-        available_height = max(1, height - 2 * margin)
+        available_width = area.width()
+        available_height = area.height()
         spacing = (
             min(self.SPACING, max(0, available_height - 2))
             if candidates and guide
@@ -94,7 +94,7 @@ class CommandlinePopupHost(QFrame):
             guide_height = max(1, content_height - panel_height)
         popup_height = min(available_height, panel_height + spacing + guide_height)
         self.setGeometry(
-            margin, height - margin - popup_height, popup_width, popup_height
+            area.left(), area.bottom() - popup_height + 1, popup_width, popup_height
         )
         if candidates:
             self.popup.setGeometry(0, 0, popup_width, panel_height)

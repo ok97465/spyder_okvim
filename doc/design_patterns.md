@@ -23,8 +23,8 @@ than one class each.
 
 `VimStatus` coordinates modes and exposes the feature owners. Its legacy accessors
 delegate to those owners rather than maintain duplicate register or insertion
-state. `VimWidget` supplies command services through the session's
-`create_command_services()` assembly point. Each executor receives its own
+state. `VimStatus.create_command_services()` is the single assembly point for
+command services. Each executor receives its own
 `CursorMotions` and `EditingActions(status, motions)` as `motions` and `edits`;
 stateful Leap/search continuations are never global singletons.
 
@@ -251,6 +251,10 @@ directly, without a second job object.
 Command-line popups own their content and appearance caches. Their setters
 report changes so the controller can invalidate `CommandlinePopupHost` geometry.
 The host alone positions both sections; the sections only measure their content.
+`PromptGuidePopup` in `spyder/prompt_guide.py` renders search and substitution
+help through one content update path, without separate popup subclasses.
+The status-bar layout uses stable message/input proportions while focus and
+prompt text change. Its width follows host resizing and font changes.
 `SubstituteOverlay` paints its passive viewport child through its existing event
 filter.
 
@@ -273,12 +277,13 @@ its non-BMP display behavior is a separate fix.
 ## Compatibility and verification
 
 New code imports each feature from its owning module. Historical mode class
-names and `executor/executor_sub.py` remain import aliases.
-`utils/motion_helpers.py` and `utils/action_helpers.py` retain small compatibility
-wrappers for their former helpers and text-object/action names. `VimLineEdit`
-and macro worker imports from `spyder/vim_widgets.py` still resolve through its
-assembly imports. These are forwarding surfaces, not duplicate implementations;
-internal code uses `DeferredAction`, `ExecutorTransition`, `count` and
+names remain import aliases; the unused `executor/executor_sub.py` re-export
+module has been removed.
+The unused `utils/motion_helpers.py` and `utils/action_helpers.py` compatibility
+wrappers have been removed; callers use `CursorMotions` and `EditingActions`
+from their owning modules. `VimLineEdit` and macro worker imports from
+`spyder/vim_widgets.py` still resolve through its assembly imports.
+Internal code uses `DeferredAction`, `ExecutorTransition`, `count` and
 `count_text`. Legacy imports do not guarantee every former internal NamedTuple
 keyword constructor.
 

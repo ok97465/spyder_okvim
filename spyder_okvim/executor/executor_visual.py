@@ -148,8 +148,9 @@ class VisualModeExecutor(SelectionMixin, MovementMixin, ExecutorBase):
         self.vim_status.set_message("")
         executor_sub = self.add_surround
 
-        executor_sub.pos_start = self.get_pos_start_in_selection()
-        executor_sub.pos_end = self.get_pos_end_in_selection()
+        executor_sub.begin_range(
+            self.get_pos_start_in_selection(), self.get_pos_end_in_selection()
+        )
 
         return ExecutorTransition(executor_sub, True)
 

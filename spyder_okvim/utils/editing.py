@@ -6,6 +6,8 @@ selection, text changes and their register/dot side effects; host-specific
 indentation and comment operations retain their existing editor semantics.
 """
 
+from __future__ import annotations
+
 # Standard Libraries
 import re
 
@@ -215,6 +217,20 @@ class EditingActions:
             text_sub = text_sub.strip()
         return text_sub
 
+    def surrounding_range(self, ch: str) -> MotionInfo:
+        """Locate a surrounding pair without editing or moving the cursor.
+
+        Preview and execution use the same range calculation so the displayed
+        delimiters are the ones that a delete/change operation will replace.
+        """
+        if ch in "'\"":
+            motion_info = self.text_objects.inner_quote(ch)
+            if motion_info.sel_start is not None and motion_info.sel_end is not None:
+                motion_info.sel_start -= 1
+                motion_info.sel_end += 1
+            return motion_info
+        return self.text_objects.around_bracket(1, ch)
+
     def delete_surrounding(self, ch: str) -> MotionInfo:
         """Remove surrounding characters around the current selection.
 
@@ -226,13 +242,7 @@ class EditingActions:
         """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
-        if ch in "'\"":
-            motion_info = self.text_objects.inner_quote(ch)
-            if motion_info.sel_start and motion_info.sel_end:
-                motion_info.sel_start -= 1
-                motion_info.sel_end += 1
-        else:
-            motion_info = self.text_objects.around_bracket(1, ch)
+        motion_info = self.surrounding_range(ch)
 
         if motion_info.sel_start is None:
             return motion_info
@@ -261,13 +271,7 @@ class EditingActions:
         """
         self.vim_status.update_dot_cmd(connect_editor=False)
 
-        if ch_delete in "'\"":
-            motion_info = self.text_objects.inner_quote(ch_delete)
-            if motion_info.sel_start and motion_info.sel_end:
-                motion_info.sel_start -= 1
-                motion_info.sel_end += 1
-        else:
-            motion_info = self.text_objects.around_bracket(1, ch_delete)
+        motion_info = self.surrounding_range(ch_delete)
 
         if motion_info.sel_start is None:
             return motion_info

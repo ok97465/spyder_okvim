@@ -17,9 +17,9 @@ import weakref
 
 # Third Party Libraries
 import qtawesome as qta
-from qtpy.QtCore import QCoreApplication, QEvent, Qt, Signal
+from qtpy.QtCore import QCoreApplication, QEvent, QSize, Qt, Signal
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut
+from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut, QSizePolicy
 from spyder.api.plugin_registration.decorators import (
     on_plugin_available,
     on_plugin_teardown,
@@ -56,33 +56,79 @@ class StatusBarVimWidget(StatusBarWidget):
         self.msg_label = msg_label
         self.status_label = status_label
         self.cmd_line = cmd_line
+        self._preferred_width = 0
+        self._observed_parent = None
+        self._parent_observer_ready = False
         super().__init__(parent, show_icon=False, show_label=False)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.cmd_line.setAccessibleName("Vim command input")
+        self.cmd_line.setAccessibleDescription("Enter Vim commands, searches or keys")
+        self.cmd_line.installEventFilter(self)
+        self._parent_observer_ready = True
+        self._observe_parent()
+        self._update_space()
 
     # ---- Private API -------------------------------------------------
     def _set_layout(self):
         """Create the internal layout of the status bar widget."""
-        spacing_post = 12
-        spacing = 5
-
-        self.msg_label.setMinimumWidth(90)
-        self.cmd_line.setMinimumWidth(80)
-        width_msg = self.msg_label.sizeHint().width()
-        width_status = self.status_label.sizeHint().width()
-        width_cmd = self.cmd_line.sizeHint().width()
-
-        width_total = width_msg + width_status + width_cmd
-
         layout = QHBoxLayout(self)
-        layout.setSpacing(spacing)
-        layout.addWidget(self.msg_label, int(width_msg / width_total * 100))
-        layout.addWidget(self.status_label, int(width_status / width_total * 100))
-        layout.addWidget(self.cmd_line, int(width_cmd / width_total * 100))
-        layout.addSpacing(spacing_post)
+        layout.setSpacing(5)
+        self.msg_label.setMinimumWidth(0)
+        self.cmd_line.setMinimumWidth(0)
+        self.cmd_line.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        layout.addWidget(self.msg_label, 3)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.cmd_line, 2)
         layout.setContentsMargins(0, 0, 0, 0)
-
-        width_total += 2 * spacing + spacing_post
-        self.setFixedWidth(width_total)
         self.setLayout(layout)
+
+    def _update_space(self):
+        """Fit the status bar to its host without resizing it during input."""
+        if widget_is_deleted(self.cmd_line):
+            return
+        parent = self.parentWidget()
+        available = parent.width() if parent is not None else self.window().width()
+        # Leave room for the host's other status widgets. Font metrics keep
+        # these preferred widths proportional to the current display scale.
+        character_width = self.cmd_line.fontMetrics().horizontalAdvance("M")
+        desired = character_width * 48
+        limit = max(1, round(available * 0.65))
+        self._preferred_width = min(desired, limit)
+        self.setMaximumWidth(limit)
+        self.updateGeometry()
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        return QSize(self._preferred_width or hint.width(), hint.height())
+
+    def _observe_parent(self):
+        """Follow the actual status bar, including Spyder's first insertion."""
+        parent = self.parentWidget()
+        previous = live_widget(self._observed_parent)
+        if previous is parent:
+            return
+        if previous is not None:
+            previous.removeEventFilter(self)
+        self._observed_parent = weakref.ref(parent) if parent is not None else None
+        if parent is not None:
+            parent.installEventFilter(self)
+
+    def event(self, event):
+        result = super().event(event)
+        if event.type() == QEvent.ParentChange and self._parent_observer_ready:
+            self._observe_parent()
+            self._update_space()
+        return result
+
+    def eventFilter(self, watched, event):
+        if event.type() in (
+            QEvent.Resize,
+            QEvent.FontChange,
+            QEvent.ParentChange,
+            QEvent.Show,
+        ):
+            self._update_space()
+        return super().eventFilter(watched, event)
 
 
 class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
@@ -296,6 +342,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if widget.parentWidget() is not statusbar:
             widget.parentWidget().removeWidget(widget)
             statusbar.insertPermanentWidget(0, widget)
+            widget._update_space()
             widget.show()
 
     def _sync_statusbar(self):

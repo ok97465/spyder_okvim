@@ -2,15 +2,17 @@
 """Utilities for searching within the editor."""
 
 # Standard Libraries
+from bisect import bisect_right
 from dataclasses import dataclass
 
 # Third Party Libraries
-from qtpy.QtCore import QObject, QRegularExpression, QTimer, Signal
-from qtpy.QtGui import QBrush, QColor, QTextCursor
+from qtpy.QtCore import QEvent, QObject, QRegularExpression, QTimer, Signal
+from qtpy.QtGui import QBrush, QColor, QFont, QPalette, QTextCharFormat, QTextCursor
 from qtpy.QtWidgets import QTextEdit
 
 # Project Libraries
 from spyder_okvim.spyder.config import PluginSettings
+from spyder_okvim.utils.qtcompat import python_cursor_position
 from spyder_okvim.utils.search_helpers import compile_pattern, iter_block_matches
 
 
@@ -41,6 +43,8 @@ class SearchInfo(QObject):
         self.color_bg = QBrush(QColor("#30652F"))
         self.txt_searched = ""
         self.selection_list = []
+        self._match_starts = []
+        self._positions = []
         self.vim_cursor = vim_cursor
         self.ignorecase = True
         self.forward = True
@@ -123,6 +127,68 @@ class SearchInfo(QObject):
         if self._editor is not None:
             selections = self.selection_list if self._highlight_enabled else []
             self._editor.set_extra_selections("vim_search", selections)
+            self._display_current_match()
+
+    def _display_current_match(self):
+        """Distinguish the match at the cursor using color, weight and underline."""
+        if self._editor is None:
+            return
+        selections = []
+        if (
+            self._highlight_enabled
+            and self.selection_list
+            and self._revision == self._editor.document().revision()
+        ):
+            position = self._editor.textCursor().position()
+            index = bisect_right(self._match_starts, position) - 1
+            if index >= 0:
+                match = self.selection_list[index]
+                start = match.cursor.selectionStart()
+                end = match.cursor.selectionEnd()
+                if start == position or start < position < end:
+                    current = QTextEdit.ExtraSelection()
+                    current.cursor = QTextCursor(match.cursor)
+                    palette = self._editor.palette()
+                    current.format.setBackground(palette.brush(QPalette.Highlight))
+                    current.format.setForeground(
+                        palette.brush(QPalette.HighlightedText)
+                    )
+                    current.format.setFontWeight(QFont.Bold)
+                    current.format.setUnderlineStyle(QTextCharFormat.SingleUnderline)
+                    selections.append(current)
+        self._editor.set_extra_selections("vim_search_current", selections)
+
+    def result_message(self, index=None, *, forward=None, wrapped=False):
+        """Describe a motion's result, keeping invalid patterns distinct from misses."""
+        if not self.txt_searched:
+            return "No previous search"
+        forward = self.forward if forward is None else forward
+        pattern_text = ("/" if forward else "?") + self.txt_searched
+        if not self._pattern.isValid():
+            offset = (
+                python_cursor_position(
+                    self.txt_searched, self._pattern.patternErrorOffset()
+                )
+                + 1
+            )
+            return f"Regex error at {offset}: {self._pattern.errorString()} · {pattern_text}"
+        total = len(self._positions)
+        if not total:
+            return f"No results · {pattern_text}"
+        position = "–" if index is None else str(index + 1)
+        message = f"{position}/{total}"
+        if wrapped:
+            message += " · Wrapped to top" if forward else " · Wrapped to bottom"
+        return f"{message} · {pattern_text}"
+
+    def eventFilter(self, watched, event):
+        """Refresh the current target's palette without recompiling the pattern."""
+        if watched is self._editor and event.type() in (
+            QEvent.PaletteChange,
+            QEvent.StyleChange,
+        ):
+            self._display_current_match()
+        return super().eventFilter(watched, event)
 
     def _disconnect_document(self):
         """Release the old document and remove its highlights."""
@@ -134,13 +200,20 @@ class SearchInfo(QObject):
         if self._editor is not None:
             try:
                 self._editor.destroyed.disconnect(self._editor_destroyed)
+                self._editor.cursorPositionChanged.disconnect(
+                    self._display_current_match
+                )
+                self._editor.removeEventFilter(self)
                 self._editor.clear_extra_selections("vim_search")
+                self._editor.clear_extra_selections("vim_search_current")
             except (TypeError, RuntimeError):
                 pass
         self._document = None
         self._editor = None
         self._revision = None
         self.selection_list = []
+        self._match_starts = []
+        self._positions = []
 
     def _editor_destroyed(self, *args):
         """Cancel pending work before a closed editor can be accessed."""
@@ -169,6 +242,8 @@ class SearchInfo(QObject):
             if editor is not None:
                 document.contentsChanged.connect(self._document_changed)
                 editor.destroyed.connect(self._editor_destroyed)
+                editor.cursorPositionChanged.connect(self._display_current_match)
+                editor.installEventFilter(self)
         if document is None or self._revision == document.revision():
             return
 
@@ -193,6 +268,8 @@ class SearchInfo(QObject):
                 block = block.next()
 
         self.selection_list = selections
+        self._match_starts = [sel.cursor.selectionStart() for sel in selections]
+        self._positions = list(dict.fromkeys(self._match_starts))
         self._revision = document.revision()
         self._display_selections()
 
@@ -202,9 +279,7 @@ class SearchInfo(QObject):
         if not self._highlight_enabled:
             self._highlight_enabled = True
             self._display_selections()
-        return list(
-            dict.fromkeys(sel.cursor.selectionStart() for sel in self.selection_list)
-        )
+        return self._positions.copy()
 
     def clear_highlights(self):
         """Hide highlights until the next explicit search or search motion."""

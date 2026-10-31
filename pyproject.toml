@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spyder-okvim"
-version = "0.10.6"
+version = "0.11.0"
 description = "Spyder Vim plugin"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -40,6 +40,9 @@ line_length = 88
 import_heading_stdlib = "Standard Libraries"
 import_heading_thirdparty = "Third Party Libraries"
 import_heading_firstparty = "Project Libraries"
+
+[tool.setuptools]
+include-package-data = false
 
 [tool.setuptools.packages.find]
 include = ["spyder_okvim*"]

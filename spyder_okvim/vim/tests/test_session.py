@@ -3,6 +3,9 @@
 # Standard Libraries
 from unittest.mock import Mock
 
+# Third Party Libraries
+import pytest
+
 # Project Libraries
 from tests.qt_support import reset_vim_state
 
@@ -37,3 +40,31 @@ def test_cancelled_definition_callbacks_leave_jump_history_unchanged(vim_bot):
 
     assert status.jump_list.jumps == expected
     assert status.timer_go_to_definition is None
+
+
+@pytest.mark.parametrize("destination_position", [0, 10])
+def test_completed_definition_tracking_cannot_remove_destination(
+    vim_bot, monkeypatch, destination_position
+):
+    """Returning to the origin must not trigger a completed request's fallback."""
+    _, _, _, vim, _ = vim_bot
+    status = vim.vim_cmd.vim_status
+    reset_vim_state(status)
+    origin = ("source.py", 20)
+    destination = ("target.py", destination_position)
+    location = [origin]
+    monkeypatch.setattr(status, "get_current_location", lambda: location[0])
+    status.push_jump()
+    status.start_definition_tracking(origin)
+
+    location[0] = destination
+    status._definition_watch.timeout.emit()
+
+    expected = [(jump.file, jump.pos) for jump in status.jump_list.jumps]
+    assert expected == [origin, destination]
+    assert status.timer_go_to_definition is None
+    assert not status._definition_deadline.isActive()
+
+    location[0] = origin
+    status._definition_deadline.timeout.emit()
+    assert [(jump.file, jump.pos) for jump in status.jump_list.jumps] == expected

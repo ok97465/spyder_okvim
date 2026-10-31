@@ -80,6 +80,7 @@ class MarkListDialog(PopupTableDialog):
         )
         self.rows = tuple(rows)
         self.selected_mark = ""
+        self.set_navigation_help("jump to mark")
         self._populate()
         if self.list_model.rowCount() > 0:
             self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
@@ -108,6 +109,7 @@ class MarkListDialog(PopupTableDialog):
             ]
             for column, item in enumerate(row):
                 item.setEditable(False)
+                item.setToolTip(item.text())
                 if column in (1, 2):
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.list_model.appendRow(row)

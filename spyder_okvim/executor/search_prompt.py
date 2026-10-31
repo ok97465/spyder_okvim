@@ -80,6 +80,11 @@ class SearchPromptExecutor(ExecutorSubBase):
             and self._editor.document() is self._start_cursor.document()
         )
 
+    @property
+    def previous_pattern(self):
+        """The confirmed pattern reused when an empty search is submitted."""
+        return self._snapshot.text if self._search is not None else ""
+
     def _finish(self):
         """Stop pending previews and release the current search session."""
         self._preview_timer.stop()

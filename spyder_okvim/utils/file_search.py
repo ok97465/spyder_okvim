@@ -5,13 +5,11 @@ from __future__ import annotations
 # Standard Libraries
 import os.path as osp
 import re
-import sys
 
 # Third Party Libraries
-from qtpy.QtCore import QDir, QDirIterator, Qt, Signal
-from qtpy.QtGui import QKeyEvent, QStandardItem
-from qtpy.QtWidgets import QApplication, QDialog, QLineEdit, QWidget
-from spyder.config.gui import get_font
+from qtpy.QtCore import QDir, QDirIterator, QModelIndex, Qt
+from qtpy.QtGui import QStandardItem
+from qtpy.QtWidgets import QLabel, QLineEdit, QWidget
 
 from .list_dialog import PopupTableDialog
 
@@ -36,69 +34,11 @@ def fuzzyfinder(query: str, collection: list[str]) -> list[str]:
     regex = re.compile(pat, re.IGNORECASE)
 
     for txt in collection:
-        r = list(regex.finditer(txt))
-        if r:
-            best = min(r, key=lambda x: len(x.group(1)))  # find shortest match
+        best = min(regex.finditer(txt), key=lambda x: len(x.group(1)), default=None)
+        if best is not None:
             suggestions.append((len(best.group(1)), txt))
 
     return [z[-1] for z in sorted(suggestions)]
-
-
-class FileSearchLineEdit(QLineEdit):
-    """Line editor used by :class:`FileSearchDialog`."""
-
-    sig_up_key_pressed = Signal()
-    sig_pg_up_key_pressed = Signal()
-    sig_pg_half_up_key_pressed = Signal()
-    sig_down_key_pressed = Signal()
-    sig_pg_down_key_pressed = Signal()
-    sig_pg_half_down_key_pressed = Signal()
-    sig_enter_key_pressed = Signal()
-    sig_esc_key_pressed = Signal()
-
-    def __init__(self, parent: QDialog | None, textChanged) -> None:
-        """Initialize the line edit.
-
-        Args:
-            parent: Owning dialog.
-            textChanged: Slot to invoke when text changes.
-        """
-        super().__init__(parent, textChanged=textChanged)
-        self.dispatcher_nomodifier = {
-            Qt.Key_Up: self.sig_up_key_pressed.emit,
-            Qt.Key_Down: self.sig_down_key_pressed.emit,
-            Qt.Key_Enter: self.sig_enter_key_pressed.emit,
-            Qt.Key_Return: self.sig_enter_key_pressed.emit,
-            Qt.Key_Escape: self.sig_esc_key_pressed.emit,
-            Qt.Key_PageUp: self.sig_pg_up_key_pressed.emit,
-            Qt.Key_PageDown: self.sig_pg_down_key_pressed.emit,
-        }
-
-        self.dispatcher_ctrl = {
-            Qt.Key_P: self.sig_up_key_pressed.emit,
-            Qt.Key_B: self.sig_pg_up_key_pressed.emit,
-            Qt.Key_U: self.sig_pg_half_up_key_pressed.emit,
-            Qt.Key_N: self.sig_down_key_pressed.emit,
-            Qt.Key_F: self.sig_pg_down_key_pressed.emit,
-            Qt.Key_D: self.sig_pg_half_down_key_pressed.emit,
-        }
-
-    def keyPressEvent(self, e: QKeyEvent) -> None:
-        """Override Qt method."""
-        key = e.key()
-        modifier = e.modifiers()
-        pressed_ctrl = modifier == Qt.ControlModifier
-        pressed_nomodifier = modifier == Qt.NoModifier
-
-        if pressed_nomodifier and key in self.dispatcher_nomodifier.keys():
-            self.dispatcher_nomodifier[key]()
-            return
-
-        if pressed_ctrl and key in self.dispatcher_ctrl.keys():
-            self.dispatcher_ctrl[key]()
-            return
-
-        super().keyPressEvent(e)
 
 
 class FileSearchDialog(PopupTableDialog):
@@ -121,30 +61,24 @@ class FileSearchDialog(PopupTableDialog):
             min_width=self._MIN_WIDTH,
             max_height=self._MAX_HEIGHT,
         )
-        font = get_font(font_size_delta=2)
-
         self.folder = folder
         self.path_selected = ""
         self.path_list = []
         self.results_old = {}
-        self.list_viewer.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.list_viewer.setFocusPolicy(Qt.NoFocus)
 
         # Set edit
-        self.edit = FileSearchLineEdit(self, textChanged=self.update_list)
-        self.edit.setFont(font)
-        self.edit.sig_esc_key_pressed.connect(self.close)
-        self.edit.sig_enter_key_pressed.connect(self.enter)
-
-        self.edit.sig_up_key_pressed.connect(lambda: self.prev_row(1))
-        self.edit.sig_pg_up_key_pressed.connect(self.pg_up)
-        self.edit.sig_pg_half_up_key_pressed.connect(self.pg_half_up)
-
-        self.edit.sig_down_key_pressed.connect(lambda: self.next_row(1))
-        self.edit.sig_pg_down_key_pressed.connect(self.pg_down)
-        self.edit.sig_pg_half_down_key_pressed.connect(self.pg_half_down)
+        self.edit = QLineEdit(self, textChanged=self.update_list)
+        self.edit.setFont(self.font())
+        self.edit.setAccessibleName("Path Finder search")
+        self.edit.setAccessibleDescription("Fuzzy search files in the current project")
+        self.set_input_widget(self.edit)
+        self.set_navigation_help("open file")
+        self.status_label = QLabel(self)
+        self.status_label.setWordWrap(True)
+        self.status_label.setAccessibleName("Path Finder search status")
 
         self.layout_.insertWidget(0, self.edit)
+        self.layout_.insertWidget(1, self.status_label)
 
         self.collect_paths()
         self.update_list()
@@ -157,9 +91,13 @@ class FileSearchDialog(PopupTableDialog):
 
     def collect_paths(self) -> None:
         """Populate the list of discoverable file paths."""
-        if self.folder is None or not osp.isdir(self.folder):
-            self.edit.setPlaceholderText("The project is not valid.")
+        self.path_list.clear()
+        self.results_old.clear()
+        self._valid_project = bool(self.folder and osp.isdir(self.folder))
+        if not self._valid_project:
+            self.edit.setPlaceholderText("Open a project to find files")
         else:
+            self.edit.setPlaceholderText("Search project files")
             dir_ = QDir(self.folder)
             it = QDirIterator(
                 self.folder,
@@ -174,6 +112,10 @@ class FileSearchDialog(PopupTableDialog):
 
     def update_list(self) -> None:
         """Update listview."""
+        self.path_selected = ""
+        self.list_viewer.clearSelection()
+        self.list_viewer.setCurrentIndex(QModelIndex())
+        self.list_model.setRowCount(0)
         query = self.edit.text()
         query = query.replace(" ", "")
         paths = self.results_old.get(query, None)
@@ -181,9 +123,9 @@ class FileSearchDialog(PopupTableDialog):
         if paths is None:
             collections = self.results_old.get(query[:-1], self.path_list)
             paths = fuzzyfinder(query, collections)
+            self.results_old[query] = paths
 
         if paths:
-            self.list_model.setRowCount(0)
             for path in paths:
                 basename = osp.basename(path)
                 dirname = osp.dirname(path)
@@ -192,16 +134,34 @@ class FileSearchDialog(PopupTableDialog):
                 row = [item, QStandardItem(dirname)]
                 for it in row:
                     it.setEditable(False)
+                    it.setToolTip(osp.join(self.folder, path))
                 self.list_model.appendRow(row)
             self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
             self.list_viewer.selectRow(0)
+            message = f"{len(paths)} results"
+        elif not self._valid_project:
+            message = (
+                "No project is open."
+                if self.folder is None
+                else "Project folder is unavailable."
+            )
+        elif not self.path_list:
+            message = "No files in this project."
+        else:
+            message = f"No results for “{self.edit.text()}”"
+        self.status_label.setText(message)
+        self.status_label.setAccessibleDescription(message)
 
-    def enter(self) -> None:
-        """Select next row in list viewer."""
+    def accept(self) -> None:
+        """Open only a valid row from the current result set."""
         idx = self.list_viewer.currentIndex()
-        item = self.list_model.item(idx.row(), 0)
+        item = self.list_model.item(idx.row(), 0) if idx.isValid() else None
         rel_path = item.data(Qt.UserRole) if item else None
         if rel_path and isinstance(self.folder, str):
             path = osp.join(self.folder, rel_path)
             self.path_selected = path
-        self.close()
+            super().accept()
+
+    def reject(self) -> None:
+        self.path_selected = ""
+        super().reject()

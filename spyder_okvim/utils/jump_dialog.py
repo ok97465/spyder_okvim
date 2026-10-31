@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, Qt
+from qtpy.QtCore import Qt
 from qtpy.QtGui import QStandardItem
 
 from .jump_list import JumpList
@@ -94,6 +94,7 @@ class JumpListDialog(PopupTableDialog):
         *,
         on_back: Callable[[], JumpSnapshot] | None = None,
         on_forward: Callable[[], JumpSnapshot] | None = None,
+        on_select: Callable[[int], None] | None = None,
         on_finished: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(
@@ -105,8 +106,13 @@ class JumpListDialog(PopupTableDialog):
         )
         self._on_back = on_back
         self._on_forward = on_forward
+        self._on_select = on_select
+        self.selected_index = None
+        self.set_navigation_help(
+            "jump to selected location",
+            "Ctrl+O / Ctrl+I: move through history immediately",
+        )
         self.set_snapshot(snapshot)
-        self.list_viewer.installEventFilter(self)
         if on_finished is not None:
             self.finished.connect(lambda *_: on_finished())
 
@@ -129,6 +135,7 @@ class JumpListDialog(PopupTableDialog):
             ]
             for column, item in enumerate(row):
                 item.setEditable(False)
+                item.setToolTip(item.text())
                 if column in (1, 2):
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.list_model.appendRow(row)
@@ -141,27 +148,37 @@ class JumpListDialog(PopupTableDialog):
             self.list_viewer.selectRow(row)
 
     def keyPressEvent(self, event) -> None:
-        """Request jump history navigation while reserving Ctrl+N/P."""
+        """Keep immediate history movement separate from row selection."""
         modifiers = event.modifiers()
         key = event.key()
         if modifiers == Qt.ControlModifier and key == Qt.Key_O:
+            event.accept()
             if self._on_back is not None:
                 self.set_snapshot(self._on_back())
             return
         if modifiers == Qt.ControlModifier and key == Qt.Key_I:
+            event.accept()
             if self._on_forward is not None:
                 self.set_snapshot(self._on_forward())
             return
-        if modifiers == Qt.ControlModifier and key in (Qt.Key_N, Qt.Key_P):
-            return
         super().keyPressEvent(event)
 
-    def eventFilter(self, obj, event):
-        """Forward list-view shortcuts through the same navigation contract."""
-        if obj is self.list_viewer and event.type() in (
-            QEvent.ShortcutOverride,
-            QEvent.KeyPress,
-        ):
-            self.keyPressEvent(event)
-            return True
-        return super().eventFilter(obj, event)
+    @staticmethod
+    def _handles_key(event):
+        return PopupTableDialog._handles_key(event) or (
+            event.modifiers() == Qt.ControlModifier
+            and event.key() in (Qt.Key_O, Qt.Key_I)
+        )
+
+    def accept(self):
+        """Apply the selected location once, independently of history shortcuts."""
+        row = self.list_viewer.currentIndex().row()
+        if 0 <= row < len(self.snapshot.rows):
+            self.selected_index = self.snapshot.rows[row].number
+            if self._on_select is not None:
+                self._on_select(self.selected_index)
+        super().accept()
+
+    def reject(self):
+        self.selected_index = None
+        super().reject()

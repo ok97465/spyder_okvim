@@ -478,6 +478,7 @@ class OperatorMotionExecutor(ExecutorSubBase):
         use_leap = self.vim_status.settings.use_leap
         if use_leap:
             executor_sub = self.leap_input
+            executor_sub.begin()
 
             self.set_parent_info_to_submode(executor_sub, count, count_text)
             executor_sub.set_func_list_deferred(
@@ -512,6 +513,7 @@ class DeleteOperatorExecutor(OperatorMotionExecutor):
     def s(self, count=1, count_text=""):
         """Delete surroundings."""
         executor_sub = self.delete_surround
+        executor_sub.begin()
         self.set_parent_info_to_submode(executor_sub, count, count_text)
         return ExecutorTransition(executor_sub, True)
 
@@ -541,6 +543,7 @@ class ChangeOperatorExecutor(OperatorMotionExecutor):
     def s(self, count=1, count_text=""):
         """Change surroundings."""
         executor_sub = self.change_surround
+        executor_sub.begin()
         self.set_parent_info_to_submode(executor_sub, count, count_text)
         return ExecutorTransition(executor_sub, True)
 

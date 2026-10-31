@@ -18,7 +18,7 @@ from spyder_okvim.utils.qtcompat import text_width
 
 from .cursor import VimCursor
 from .insert_repeat import InsertRepeatSession
-from .label import ANNOTATION_STYLE, InlineLabel
+from .label import ANNOTATION_STYLE, InlineLabel, place_annotation
 from .macro import MacroManager
 from .registers import Registers
 from .search import SearchInfo
@@ -44,8 +44,6 @@ class VimStatus(QObject):
         editor_widget: QWidget,
         main: QWidget,
         msg_label: QLabel,
-        *,
-        command_services_factory=None,
     ) -> None:
         """Initialize the status object.
 
@@ -58,7 +56,6 @@ class VimStatus(QObject):
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL
         self.editor_widget = editor_widget
-        self._command_services_factory = command_services_factory
         self.settings = read_settings()
         register_selection_layers()
         self.cursor: VimCursor = VimCursor(editor_widget, self.settings)
@@ -152,6 +149,7 @@ class VimStatus(QObject):
             InlineLabel(self.editor_widget.get_widget())
             for _ in range(self.n_annotate_max)
         ]
+        self._annotation_layout = {}
         self.hide_annotate_on_txt()
 
     @property
@@ -304,10 +302,9 @@ class VimStatus(QObject):
     def start_definition_tracking(self, previous):
         """Watch for a gd destination with the existing two-second origin fallback.
 
-        Arrival stops the watch; the deadline retains the existing origin
-        bookkeeping policy. One watch/deadline pair belongs to this session.
-        Replacing or cancelling
-        the request disconnects prior callbacks, so no closed view is revisited.
+        Arrival stops both timers and invalidates queued callbacks. If no
+        destination arrives, the deadline removes the unused origin entry.
+        Replacing or cancelling a request disconnects its prior callbacks.
         """
         self._definition_generation += 1
         generation = self._definition_generation
@@ -320,6 +317,8 @@ class VimStatus(QObject):
 
         def stop():
             timer.stop()
+            self._definition_deadline.stop()
+            self._definition_generation += 1
             self.timer_go_to_definition = None
 
         def check():
@@ -327,9 +326,6 @@ class VimStatus(QObject):
                 return
             current = self.get_current_location()
             if previous is not None and current and current != previous:
-                if current[1] < 1:
-                    # Spyder can briefly report zero before a destination exists.
-                    return
                 self.push_jump()
                 stop()
 
@@ -352,17 +348,20 @@ class VimStatus(QObject):
 
     def jump_backward(self) -> None:
         """Jump to the previous location in the jump list."""
-        jump = self.jump_list.back()
-        if not jump:
-            return
-        if self.get_editorstack().is_file_opened(jump.file) is None:
-            self.host.open_file(jump.file)
-        self.get_editorstack().set_current_filename(jump.file)
-        self.cursor.set_cursor_pos(jump.pos)
+        self._apply_jump(self.jump_list.back())
 
     def jump_forward(self) -> None:
         """Jump to the next location in the jump list."""
-        jump = self.jump_list.forward()
+        self._apply_jump(self.jump_list.forward())
+
+    def jump_to_index(self, index: int) -> None:
+        """Open one selected history entry without visiting intermediate files."""
+        if 1 <= index <= len(self.jump_list.jumps):
+            self.jump_list.index = index
+            self._apply_jump(self.jump_list.jumps[index - 1])
+
+    def _apply_jump(self, jump) -> None:
+        """Apply a stored location while keeping history movement separate."""
         if not jump:
             return
         if self.get_editorstack().is_file_opened(jump.file) is None:
@@ -410,21 +409,17 @@ class VimStatus(QObject):
         """
         if not positions:
             return
-        self.remove_marker_of_easymotion()
-        editor = self.get_editor()
         self.manager_marker_easymotion.set_positions(positions, motion_type)
-        self.painter_easymotion.editor = editor
-        self.painter_easymotion.positions = positions
-        self.painter_easymotion.names = self.manager_marker_easymotion.name_list
-        self.editor_connected_easymotion = editor
-        editor.viewport().installEventFilter(self.painter_easymotion)
-        editor.viewport().update()
+        self.manager_marker_easymotion.fit_to_editor(self.get_editor())
+        self.update_marker_for_easymotion()
 
     def update_marker_for_easymotion(self):
         """Update marker of easymotion."""
         self.remove_marker_of_easymotion()
         editor = self.get_editor()
         self.painter_easymotion.editor = editor
+        self.painter_easymotion.settings = self.settings
+        self.painter_easymotion.label_rects = self.manager_marker_easymotion.label_rects
         self.painter_easymotion.positions = self.manager_marker_easymotion.position_list
         self.painter_easymotion.names = self.manager_marker_easymotion.name_list
         self.editor_connected_easymotion = editor
@@ -444,8 +439,9 @@ class VimStatus(QObject):
         """Hide Labels for annotate on txt."""
         for idx in range(self.n_annotate_max):
             self.labels_for_annotate[idx].hide()
+        self._annotation_layout = {}
 
-    def annotate_on_txt(self, info: dict[int, str]):
+    def annotate_on_txt(self, info: dict[int, str], *, preserve_positions=False):
         """Annotate the editor with temporary inline labels.
 
         Args:
@@ -453,6 +449,8 @@ class VimStatus(QObject):
             timeout: Milliseconds before labels are cleared.
         """
         editor = self.get_editor()
+        saved_layout = self._annotation_layout if preserve_positions else {}
+        self.hide_annotate_on_txt()
         tc = editor.textCursor()
         font = editor.viewport().font()
         fm = editor.fontMetrics()
@@ -465,13 +463,15 @@ class VimStatus(QObject):
         padding_v = (
             ANNOTATION_STYLE["padding_v"] * 2 + ANNOTATION_STYLE["border_width"] * 2
         )
+        occupied = []
+        displayed = set()
 
         for idx, (pos, data) in enumerate(info.items()):
             if idx >= self.n_annotate_max:
                 break
 
             label = self.labels_for_annotate[idx]
-            label.set_style(font.family(), font.pointSize())
+            label.set_style(font.family(), font.pointSize(), editor, self.settings)
             text_width_px = max(text_width(fm, data), ch_width)
             label_width = text_width_px + padding_h
             label_height = ch_height + padding_v
@@ -480,12 +480,28 @@ class VimStatus(QObject):
 
             tc.setPosition(pos)
             rect_in_local = editor.cursorRect(tc)
+            viewport = editor.viewport().rect()
+            if rect_in_local.bottom() < 0 or rect_in_local.top() > viewport.bottom():
+                continue
+            label_rect = saved_layout.get(pos)
+            if label_rect is None:
+                label_rect = place_annotation(
+                    rect_in_local, label_width, label_height, viewport, occupied
+                )
+            if label_rect is None:
+                continue
+            occupied.append(label_rect)
+            displayed.add(pos)
+            self._annotation_layout[pos] = label_rect
             pos_in_parent = editor.viewport().mapTo(
-                label.parent(), rect_in_local.topLeft()
+                label.parent(), label_rect.topLeft()
             )
             label.move(pos_in_parent)
             label.raise_()
             label.show()
+        if preserve_positions:
+            self._annotation_layout.update(saved_layout)
+        return displayed
 
     def refresh_settings(self):
         """Read applied options at the plugin boundary and return the snapshot."""
@@ -605,9 +621,6 @@ class VimStatus(QObject):
         Stateful Leap input must not leak between modes or pending operators.
         All executors use this one assembly point and receive explicit state.
         """
-        if self._command_services_factory is not None:
-            return self._command_services_factory(self)
-        # Compatibility for integrations constructing VimStatus directly.
         # Project Libraries
         from spyder_okvim.utils.editing import EditingActions
         from spyder_okvim.utils.motions import CursorMotions

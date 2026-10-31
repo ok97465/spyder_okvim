@@ -345,3 +345,31 @@ def test_close_cancels_pending_search_and_disconnects_editor_changes(
         assert updates == []
     finally:
         stack.set_current_filename(filename)
+
+
+def test_current_match_follows_cursor_and_respects_clear_highlights(search_editor):
+    _, editor, status, _, _ = search_editor
+    editor.set_text("foo gap foo")
+    status.search.search("foo")
+
+    def current_ranges():
+        return [
+            (selection.cursor.selectionStart(), selection.cursor.selectionEnd())
+            for selection in editor.get_extra_selections("vim_search_current")
+        ]
+
+    status.cursor.set_cursor_pos(0)
+    assert current_ranges() == [(0, 3)]
+    current = editor.get_extra_selections("vim_search_current")[0]
+    regular = editor.get_extra_selections("vim_search")[0]
+    assert current.format.fontUnderline()
+    assert current.format != regular.format
+    status.cursor.set_cursor_pos(8)
+    assert current_ranges() == [(8, 11)]
+    status.search.clear_highlights()
+    status.cursor.set_cursor_pos(0)
+    assert current_ranges() == []
+    status.search.get_sel_start_list()
+    assert current_ranges() == [(0, 3)]
+    status.search.close()
+    assert current_ranges() == []

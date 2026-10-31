@@ -7,6 +7,7 @@ from unittest.mock import Mock
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QDialog
 
 # Project Libraries
 from tests.qt_support import reset_vim_state
@@ -298,3 +299,41 @@ def test_colon_jumps_dialog_navigation(vim_bot, monkeypatch):
 
     # Restore state for other tests
     stack.set_current_filename(orig_file)
+
+
+def test_colon_jumps_selected_row_opens_only_its_location(vim_bot, monkeypatch):
+    """Changing the row is a preview; Enter applies exactly one stored target."""
+    _, stack, _, vim, qtbot = vim_bot
+    status = vim.vim_cmd.vim_status
+    original = stack.get_current_filename()
+    reset_vim_state(status)
+    filenames = stack.get_filenames()
+    for filename in filenames:
+        status.jump_list.push(filename, 0)
+    stack.set_current_filename(filenames[-1])
+    visited = []
+    set_current_filename = stack.set_current_filename
+
+    def record_visit(filename):
+        visited.append(filename)
+        return set_current_filename(filename)
+
+    monkeypatch.setattr(stack, "set_current_filename", record_visit)
+
+    def select_first(dialog):
+        dialog.prev_row(100)
+        assert visited == []
+        dialog.accept()
+        return QDialog.Accepted
+
+    monkeypatch.setattr(
+        "spyder_okvim.executor.executor_colon.exec_dialog", select_first
+    )
+    try:
+        qtbot.keyClicks(vim.vim_cmd.commandline, ":jumps")
+        qtbot.keyClick(vim.vim_cmd.commandline, Qt.Key_Return)
+        assert visited == [filenames[0]]
+        assert status.jump_list.index == 1
+        assert stack.get_current_filename() == filenames[0]
+    finally:
+        set_current_filename(original)

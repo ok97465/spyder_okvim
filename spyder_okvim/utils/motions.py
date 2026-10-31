@@ -6,6 +6,8 @@ remain owned by their existing collaborators. Computed positions use Qt UTF-16
 coordinates and are applied by the command's mode-specific cursor policy.
 """
 
+from __future__ import annotations
+
 # Standard Libraries
 import re
 from bisect import bisect_left, bisect_right
@@ -50,7 +52,7 @@ class CursorMotions:
         self.set_cursor_pos = vim_status.cursor.set_cursor_pos
 
         self.text_objects = TextObjects(self.get_cursor)
-        self.leap_helper = LeapHelper(vim_status, MotionInfo)
+        self.leap_helper = LeapHelper(vim_status)
 
         self.find_cmd_map = {
             "f": self.find_ch,
@@ -736,18 +738,21 @@ class CursorMotions:
 
     def _repeat_search(self, count: int, forward: bool) -> MotionInfo:
         """Find a counted match while preserving the saved search direction."""
-        positions = self.vim_status.search.get_sel_start_list()
+        search = self.vim_status.search
+        positions = search.get_sel_start_list()
         if not positions:
+            self.vim_status.set_message(search.result_message(forward=forward))
             return MotionInfo(None)
-        text = self.vim_status.search.txt_searched
-        prefix = "/" if forward else "?"
-        self.vim_status.set_message(f"{prefix}{text}")
         cursor_pos = self.get_cursor().position()
         if forward:
             idx = bisect_right(positions, cursor_pos) + count - 1
         else:
             idx = bisect_left(positions, cursor_pos) - count
+        wrapped = idx < 0 or idx >= len(positions)
         idx %= len(positions)
+        self.vim_status.set_message(
+            search.result_message(idx, forward=forward, wrapped=wrapped)
+        )
         return MotionInfo(positions[idx], motion_type=MotionType.CharWise)
 
     def asterisk(self, count: int = 1, count_text: str = "") -> MotionInfo:
