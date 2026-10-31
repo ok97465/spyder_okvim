@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """Utilities for searching within the editor."""
 
+# Standard Libraries
 from dataclasses import dataclass
 
+# Third Party Libraries
 from qtpy.QtCore import QObject, QRegularExpression, QTimer, Signal
 from qtpy.QtGui import QBrush, QColor, QTextCursor
 from qtpy.QtWidgets import QTextEdit
 
-from spyder.config.manager import CONF
-
-from spyder_okvim.spyder.config import CONF_SECTION
+# Project Libraries
+from spyder_okvim.spyder.config import PluginSettings
 from spyder_okvim.utils.search_helpers import compile_pattern, iter_block_matches
 
 
@@ -28,7 +29,7 @@ class SearchInfo(QObject):
 
     closed = Signal()
 
-    def __init__(self, vim_cursor, parent=None):
+    def __init__(self, vim_cursor, parent=None, *, settings=None):
         """Initialize the search state.
 
         Args:
@@ -55,7 +56,7 @@ class SearchInfo(QObject):
         self._refresh_timer.setInterval(150)
         self._refresh_timer.timeout.connect(self.refresh)
 
-        self.set_color()
+        self.apply_settings(settings or PluginSettings())
         source = vim_cursor.editor_widget.get_widget()
         if not hasattr(source, "sig_codeeditor_changed"):
             source = vim_cursor.get_editorstack()
@@ -65,15 +66,21 @@ class SearchInfo(QObject):
                 signal.connect(self.refresh)
                 self._editor_signals.append(signal)
 
-    def set_color(self):
-        """Refresh highlight colors from configuration."""
-        self.color_fg = QBrush(QColor(CONF.get(CONF_SECTION, "search_fg_color")))
-        self.color_bg = QBrush(QColor(CONF.get(CONF_SECTION, "search_bg_color")))
-
-        for sel in self.selection_list:
-            sel.format.setForeground(self.color_fg)
-            sel.format.setBackground(self.color_bg)
+    def apply_settings(self, settings):
+        """Apply explicit colors to cached matches without recompiling a search."""
+        self.color_fg = QBrush(QColor(settings.search_fg_color))
+        self.color_bg = QBrush(QColor(settings.search_bg_color))
+        for selection in self.selection_list:
+            selection.format.setForeground(self.color_fg)
+            selection.format.setBackground(self.color_bg)
         self._display_selections()
+
+    def set_color(self):
+        """Compatibility refresh; plugin code passes an explicit snapshot."""
+        # Project Libraries
+        from spyder_okvim.spyder.config import read_settings
+
+        self.apply_settings(read_settings())
 
     def search(self, text, ignorecase=True, forward=True, pattern=None):
         """Start a search using one compiled expression for all matches."""

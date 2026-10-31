@@ -1,19 +1,23 @@
 """Qt integration tests for Ex completion and command-line key handling."""
 
+# Standard Libraries
 import os
 import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtGui import QInputMethodEvent
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.utils.ex_parser import is_substitute
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -28,7 +32,7 @@ def completion_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     original_text = editor.toPlainText()
     editor.set_text("foo x foo")
@@ -42,7 +46,7 @@ def completion_bot(vim_bot):
         QCoreApplication.processEvents()
         commandline.esc_pressed()
         status.disconnect_from_editor()
-        status.reset_for_test()
+        reset_vim_state(status)
         editor.set_text(original_text)
         for history in commandline.histories.values():
             history.clear()
@@ -79,6 +83,7 @@ def press_tab(commandline, qtbot, key=Qt.Key_Tab, modifiers=Qt.NoModifier):
 @pytest.fixture
 def blocked_path_lookup(completion_bot, monkeypatch):
     """Hold real worker I/O while the GUI keeps accepting prompt input."""
+    # Project Libraries
     from spyder_okvim.spyder import commandline_path_lookup as lookup
 
     _, _, commandline, qtbot, _ = completion_bot
@@ -177,7 +182,7 @@ def test_search_tab_does_not_complete_or_move_focus(
         pytest.fail("Search input must not request Ex completion")
 
     monkeypatch.setattr(
-        "spyder_okvim.spyder.vim_widgets.completion_items", unexpected_completion
+        "spyder_okvim.spyder.commandline_input.completion_items", unexpected_completion
     )
     qtbot.keyClicks(commandline, prefix + "w")
     original = commandline.text()
@@ -417,6 +422,7 @@ def test_path_lookup_runs_on_tab_and_reuses_cycle_candidates(
     (tmp_path / "alpha.py").touch()
     (tmp_path / "alpine.py").touch()
     monkeypatch.chdir(tmp_path)
+    # Project Libraries
     from spyder_okvim.utils import commandline as helpers
 
     scandir = helpers.os.scandir

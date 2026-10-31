@@ -2,22 +2,23 @@
 
 # ruff: noqa: F811 - imported pytest fixtures are injected by parameter name
 
+# Standard Libraries
 import json
 import os
 import platform
 from time import perf_counter
 
+# Third Party Libraries
 from qtpy import API_NAME
-from qtpy.QtCore import QTimer, Qt, qVersion
+from qtpy.QtCore import Qt, QTimer, qVersion
 
-from spyder_okvim.spyder.tests.test_commandline_history_popup import (
-    history_popup as history_popup,
-)
-from spyder_okvim.spyder.tests.test_substitute_preview import (
-    enter_command,
-    preview as preview,
-)
+# Project Libraries
 from spyder_okvim.utils.substitute_preview import SubstitutePreview
+from tests.commandline_support import (
+    enter_command,
+)
+from tests.commandline_support import history_popup as history_popup
+from tests.commandline_support import preview as preview
 
 
 def test_measure_preview(preview, monkeypatch, request):

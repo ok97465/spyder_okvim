@@ -17,8 +17,8 @@ from spyder_okvim.utils.ex_parser import (
     resolve_substitute,
     scan_header,
 )
-from spyder_okvim.utils.jump_dialog import JumpListDialog
-from spyder_okvim.utils.mark_dialog import MarkListDialog
+from spyder_okvim.utils.jump_dialog import JumpListDialog, build_jump_snapshot
+from spyder_okvim.utils.mark_dialog import MarkListDialog, build_mark_rows
 from spyder_okvim.utils.qtcompat import exec_dialog
 from spyder_okvim.utils.search_helpers import resolve_ignorecase
 from spyder_okvim.utils.substitute import (
@@ -117,9 +117,8 @@ class ExecutorColon(ExecutorSubBase):
             elif header.explicit_range:
                 raise ExError("Specify a command after the range")
         except ValueError as error:
-            widget = self.vim_status.cmd_line.vim_widget
-            if widget.is_playing_macro:
-                widget.cancel_macro()
+            if self.vim_status.is_playing_macro():
+                self.vim_status.cancel_macro()
             self.vim_status.set_message(str(error))
         finally:
             self.origin_line = None
@@ -130,7 +129,7 @@ class ExecutorColon(ExecutorSubBase):
 
     def substitute(self, header):
         """Validate and calculate all replacements before editing the document."""
-        vs = self.vim_status
+        status = self.vim_status
         editor = self.get_editor()
         if editor is None:
             raise ExError("No active editor")
@@ -140,27 +139,24 @@ class ExecutorColon(ExecutorSubBase):
         current_line = cursor.blockNumber()
         address_line = current_line if self.origin_line is None else self.origin_line
         address_line = min(address_line, document.blockCount() - 1)
-        spec = resolve_substitute(header, vs.last_substitute, vs.search.txt_searched)
-        prepared = prepare_substitution(
-            header, spec, address_line, document.blockCount()
+        spec = resolve_substitute(
+            header, status.last_substitute, status.search.txt_searched
         )
-        text = spec.pattern
+        prepared = prepare_substitution(
+            header,
+            spec,
+            address_line,
+            document.blockCount(),
+            ignorecase=status.settings.ignorecase,
+            smartcase=status.settings.smartcase,
+        )
         pattern = prepared.pattern
         count_only, confirm = prepared.count_only, prepared.confirm
-        if confirm and vs.cmd_line.vim_widget.is_playing_macro:
+        if confirm and status.is_playing_macro():
             raise ExError("Confirmation substitutions are not supported in macros")
         if editor.isReadOnly() and not count_only:
             raise ExError("Document is read-only")
-        plan = build_substitution_plan(
-            document,
-            prepared.first_line,
-            prepared.last_line,
-            pattern,
-            prepared.tokens,
-            global_matches=prepared.global_matches,
-            count_only=count_only,
-            confirm=confirm,
-        )
+        plan = build_substitution_plan(document, prepared)
         # Planning and applying run synchronously without processing UI events.
         if plan.edits and not confirm:
             self._apply_substitution(editor, plan.edits)
@@ -169,66 +165,80 @@ class ExecutorColon(ExecutorSubBase):
             block = document.findBlockByNumber(target_line)
             line = block.text()
             position = block.position() + len(line) - len(line.lstrip(" \t"))
-            vs.cursor.set_cursor_pos_without_end(position)
+            status.cursor.set_cursor_pos_without_end(position)
             self._record_substitute_jump(origin_block, origin_column)
 
-        # i/I affect this substitution only; n/N use the normal search options.
-        search_ignorecase = resolve_ignorecase(text)
-        ignorecase = bool(
-            pattern.patternOptions() & QRegularExpression.CaseInsensitiveOption
-        )
-        vs.search.search(
-            text,
-            ignorecase=search_ignorecase,
-            forward=vs.search.forward,
-            pattern=pattern if search_ignorecase == ignorecase else None,
-        )
-        vs.last_substitute = spec
+        self._update_substitute_search(spec, pattern)
         if confirm and plan.match_count:
             session = SubstituteConfirm(
-                vs,
+                status,
                 editor,
                 plan.edits,
                 lambda session: self._finish_confirmation(
                     session, origin_block, origin_column
                 ),
             )
-            vs.substitute_confirm = vs.sub_mode = session
+            status.substitute_confirm = status.sub_mode = session
             session.start()
             return
+        self._report_substitution(plan, spec, count_only=count_only)
+
+    def _update_substitute_search(self, spec, pattern):
+        """Publish the pattern using normal search options, independent of i/I."""
+        status = self.vim_status
+        ignorecase = resolve_ignorecase(
+            spec.pattern,
+            ignorecase=status.settings.ignorecase,
+            smartcase=status.settings.smartcase,
+        )
+        prepared_ignorecase = bool(
+            pattern.patternOptions() & QRegularExpression.CaseInsensitiveOption
+        )
+        status.search.search(
+            spec.pattern,
+            ignorecase=ignorecase,
+            forward=status.search.forward,
+            pattern=pattern if ignorecase == prepared_ignorecase else None,
+        )
+        status.last_substitute = spec
+
+    def _report_substitution(self, plan, spec, *, count_only):
+        """Report execution totals without changing dot history or document state."""
+        status = self.vim_status
+        text = spec.pattern
         if not plan.match_count:
             if "e" not in spec.flags:
                 raise ExError(f"Pattern not found: {text}")
-            vs.set_message("")
+            status.set_message("")
         elif count_only:
-            vs.set_message(
+            status.set_message(
                 f"{plan.match_count} matches on {plan.line_count} lines (count only)"
             )
         else:
             suffix = "" if plan.edits else " (no changes)"
-            vs.set_message(
+            status.set_message(
                 f"{plan.match_count} substitutions on {plan.line_count} lines{suffix}"
             )
 
     def _record_substitute_jump(self, origin_block, origin_column):
         """Keep the origin's line and column as substitutions change offsets."""
-        vs = self.vim_status
-        location = vs.get_current_location()
+        status = self.vim_status
+        location = status.get_current_location()
         if location is not None:
             column = min(origin_column, max(0, origin_block.length() - 2))
             layout = origin_block.layout()
             if column and not layout.isValidCursorPosition(column):
                 column = layout.previousCursorPosition(column)
-            vs.jump_list.push(location[0], origin_block.position() + column)
-            vs.push_jump()
+            status.jump_list.push(location[0], origin_block.position() + column)
+            status.push_jump()
 
     def _finish_confirmation(self, session, origin_block, origin_column):
         """Report approved targets after the session releases its input hooks."""
-        vs = self.vim_status
+        status = self.vim_status
         if session.valid():
             self._record_substitute_jump(origin_block, origin_column)
-            vs.search.refresh()
-        vs.set_message(
+            status.search.refresh()
+        status.set_message(
             f"{session.replacement_count} substitutions on {session.line_count} lines"
         )
 
@@ -253,23 +263,23 @@ class ExecutorColon(ExecutorSubBase):
 
     def e(self, arg=""):
         """Open an existing path relative to the current working directory."""
-        vs = self.vim_status
+        status = self.vim_status
         path = arg
         if len(path) >= 2 and path[0] in "\"'" and path[-1] == path[0]:
             path = path[1:-1]
         if not path:
-            vs.set_message("Specify a file path")
+            status.set_message("Specify a file path")
             return
         path = osp.abspath(osp.expanduser(path))
         if not osp.isfile(path):
-            vs.set_message(f"Not a file: {path}")
+            status.set_message(f"Not a file: {path}")
             return
-        vs.to_normal()
-        vs.push_jump()
-        vs.editor_widget.load(path)
-        vs.push_jump()
-        vs.set_focus_to_vim()
-        vs.cursor.draw_vim_cursor()
+        status.to_normal()
+        status.push_jump()
+        status.host.load_file(path)
+        status.push_jump()
+        status.set_focus_to_vim()
+        status.cursor.draw_vim_cursor()
 
     def w(self, arg=""):
         """Save current file."""
@@ -308,10 +318,10 @@ class ExecutorColon(ExecutorSubBase):
 
     def marks(self, arg=""):
         """Show bookmarks and jump to the selected one."""
-        vs = self.vim_status
-        marks = vs.bookmark_manager.list_bookmarks()
+        status = self.vim_status
+        marks = status.bookmark_manager.list_bookmarks()
 
-        dlg = MarkListDialog(marks, vs.get_editor().window())
+        dlg = MarkListDialog(build_mark_rows(marks), status.get_editor().window())
         result = exec_dialog(dlg)
         # Tests patch ``exec_`` to return ``None``; ``exec_dialog`` keeps that
         # behaviour so only an explicit ``QDialog.Rejected`` (0) cancels.
@@ -321,42 +331,55 @@ class ExecutorColon(ExecutorSubBase):
             else None
         )
         if mark:
-            vs.push_jump()
-            vs.bookmark_manager.jump_to_bookmark(mark)
-            vs.push_jump()
+            status.push_jump()
+            status.bookmark_manager.jump_to_bookmark(mark)
+            status.push_jump()
 
-        vs.set_focus_to_vim()
+        status.set_focus_to_vim()
 
     def jumps(self, arg=""):
         """Display the jumplist in a popup dialog."""
-        vs = self.vim_status
+        status = self.vim_status
 
-        dlg = JumpListDialog(vs, vs.get_editor().window())
+        def navigate(backward):
+            if backward:
+                status.jump_backward()
+            else:
+                status.jump_forward()
+            return build_jump_snapshot(status.jump_list)
+
+        dlg = JumpListDialog(
+            build_jump_snapshot(status.jump_list),
+            status.get_editor().window(),
+            on_back=lambda: navigate(True),
+            on_forward=lambda: navigate(False),
+            on_finished=status.set_focus_to_vim,
+        )
         exec_dialog(dlg)
 
-        vs.set_focus_to_vim()
+        status.set_focus_to_vim()
 
-    def goto_line(self, num):
+    def goto_line(self, count):
         """Move cursor according to :number command."""
-        vs = self.vim_status
-        vs.push_jump()
+        status = self.vim_status
+        status.push_jump()
 
-        if vs.vim_state == VimState.NORMAL:
-            motion_info = self.helper_motion.G(num, True)
-            vs.cursor.apply_motion_info_in_normal(motion_info)
-        elif vs.vim_state in (VimState.VISUAL, VimState.VLINE):
-            motion_info = self.helper_motion.j(num)
-            if vs.vim_state == VimState.VISUAL:
-                vs.cursor.apply_motion_info_in_visual(motion_info)
+        if status.vim_state == VimState.NORMAL:
+            motion_info = self.motions.G(count, True)
+            status.cursor.apply_motion_info_in_normal(motion_info)
+        elif status.vim_state in (VimState.VISUAL, VimState.VLINE):
+            motion_info = self.motions.j(count)
+            if status.vim_state == VimState.VISUAL:
+                status.cursor.apply_motion_info_in_visual(motion_info)
             else:
-                vs.cursor.apply_motion_info_in_vline(motion_info)
-            vs.to_normal()
-        vs.push_jump()
+                status.cursor.apply_motion_info_in_vline(motion_info)
+            status.to_normal()
+        status.push_jump()
 
     def YankyRingHistory(self, arg=""):
         """Show the yank-history picker."""
-        self.vim_status.cmd_line.vim_widget.show_yank_history()
+        self.vim_status.show_yank_history()
 
     def YankyClearHistory(self, arg=""):
         """Clear history, including an active put cycle or picker."""
-        self.vim_status.cmd_line.vim_widget.clear_yank_history()
+        self.vim_status.clear_yank_history()

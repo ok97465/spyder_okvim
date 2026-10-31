@@ -15,9 +15,10 @@ from qtpy.QtGui import QFocusEvent, QKeyEvent
 from spyder.config.manager import CONF
 
 # Project Libraries
-from spyder_okvim.executor import executor_sub
+from spyder_okvim.executor import prefixes
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
+from tests.qt_support import reset_vim_state
 
 
 @pytest.mark.parametrize("direction", list("hjkl"))
@@ -32,11 +33,11 @@ def test_ctrl_w_direction_and_count(
     commandline.esc_pressed()
     editor = stack.get_current_editor()
     editor.set_text("abc\n")
-    status.reset_for_test()
+    reset_vim_state(status)
     status.cursor.set_cursor_pos(1)
     commandline.setFocus()
     move = Mock(return_value=True)
-    monkeypatch.setattr(executor_sub, "focus_neighbor", move)
+    monkeypatch.setattr(prefixes, "focus_neighbor", move)
 
     qtbot.keyClicks(commandline, before)
     qtbot.keyPress(commandline, Qt.Key_W, Qt.ControlModifier)
@@ -64,7 +65,7 @@ def test_ctrl_w_cancel_does_not_edit(vim_bot, cancel_key):
     commandline.esc_pressed()
     editor = stack.get_current_editor()
     editor.set_text("abc\n")
-    status.reset_for_test()
+    reset_vim_state(status)
     status.cursor.set_cursor_pos(0)
     commandline.setFocus()
 
@@ -235,7 +236,7 @@ def test_apply_config(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("foo Foo foo Foo")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     # test refresh the color of search result.
     cmd_line = vim.vim_cmd.commandline
@@ -250,7 +251,7 @@ def test_ctrl_u_b(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "j")
@@ -275,7 +276,7 @@ def test_ctrl_d_f(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
 
@@ -299,7 +300,7 @@ def test_message(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\nd\ne")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "y2j")
@@ -378,7 +379,7 @@ def test_message(vim_bot):
     # TODO: Spyder에서는 정상동작하지만 Pytest만 Fail
     # editor.set_text("aaaaaa")
     # vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    # vim.vim_cmd.vim_status.reset_for_test()
+    # reset_vim_state(vim.vim_cmd.vim_status)
     # qtbot.keyClicks(cmd_line, "/a")
     # qtbot.keyPress(cmd_line, Qt.Key_Enter)
     # assert vim.vim_cmd.msg_label.text() == "/a"
@@ -396,7 +397,7 @@ def test_ctrl_o_i(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("alpha\nbravo\ncharlie\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "G")
@@ -416,7 +417,7 @@ def test_jumplist_search(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("alpha\nsearch\nsearch\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "/search")
@@ -437,7 +438,7 @@ def test_jumplist_n_command(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("foo foo foo foo")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "/foo")
@@ -461,7 +462,7 @@ def test_jumplist_mark_jump(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("alpha\nbravo\ncharlie\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -491,7 +492,7 @@ def test_jumplist_colon_number(vim_bot, line_num):
         "juliet kilo lima\n"
     )
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, f":{line_num}")
@@ -514,7 +515,7 @@ def test_jumplist_go_to_definition(vim_bot, monkeypatch):
     vs = vim.vim_cmd.vim_status
     stack.set_current_filename(stack.get_filenames()[0])
     vs.cursor.set_cursor_pos(0)
-    vs.reset_for_test()
+    reset_vim_state(vs)
 
     other = next(p for p in stack.get_filenames() if p != stack.get_current_filename())
 
@@ -556,7 +557,7 @@ def test_gd_no_change_pop(vim_bot, monkeypatch):
     vs = vim.vim_cmd.vim_status
     stack.set_current_filename(stack.get_filenames()[0])
     vs.cursor.set_cursor_pos(0)
-    vs.reset_for_test()
+    reset_vim_state(vs)
 
     # Third Party Libraries
     from spyder.plugins.editor.widgets.codeeditor import CodeEditor

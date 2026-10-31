@@ -5,8 +5,6 @@ from dataclasses import FrozenInstanceError
 
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import QCoreApplication
-from qtpy.QtWidgets import QApplication
 
 # Project Libraries
 from spyder_okvim.vim.state import VimState
@@ -20,7 +18,7 @@ def test_history_deduplicates_only_consecutive_text_and_kind():
     history.record("B", "charwise")
     newest = history.record("A", "charwise")
     assert [entry.text for entry in history.snapshot()] == ["A", "B", "A"]
-    assert newest.id != first.id
+    assert newest is not first
     history.record("A", "linewise")
     assert [entry.kind for entry in history.snapshot()[:2]] == ["linewise", "charwise"]
 
@@ -82,6 +80,14 @@ def test_history_rejects_invalid_length(length):
 
 @pytest.fixture
 def history_bot(vim_bot):
+    """Load Qt support only for the operator integration tests in this module."""
+    # Third Party Libraries
+    from qtpy.QtCore import QCoreApplication
+    from qtpy.QtWidgets import QApplication
+
+    # Project Libraries
+    from tests.qt_support import reset_vim_state
+
     _, stack, _, vim, qtbot = vim_bot
     status = vim.vim_cmd.vim_status
     commandline = vim.vim_cmd.commandline
@@ -92,7 +98,7 @@ def history_bot(vim_bot):
     QCoreApplication.processEvents()
     commandline.esc_pressed()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     status.yanky_enabled = True
     commandline.clear()
     editor = stack.get_current_editor()
@@ -103,7 +109,7 @@ def history_bot(vim_bot):
     finally:
         commandline.setFocus()
         commandline.esc_pressed()
-        status.reset_for_test()
+        reset_vim_state(status)
         status.yanky_enabled = old_enabled
         QApplication.clipboard().setText(old_clipboard)
         stack.set_stack_index(old_index)
@@ -168,19 +174,19 @@ def test_black_hole_direct_writes_and_disabled_collection(history_bot):
 def test_oversized_history_value_keeps_register_and_reports_skip(history_bot):
     _, status, _, _ = history_bot
     original = status.yank_history
-    status.yank_history = YankHistory(max_entry_bytes=2)
+    status.registers.history = YankHistory(max_entry_bytes=2)
     try:
         status.update_registers('"', "abc", VimState.NORMAL, is_yank=True)
         assert status.register_dict['"'].content == "abc"
         assert len(status.yank_history) == 0
         assert "memory limit" in status.msg_label.text()
     finally:
-        status.yank_history = original
+        status.registers.history = original
 
 
 def test_multiline_yank_preserves_history_limit_warning(history_bot, monkeypatch):
     _, status, commandline, qtbot = history_bot
-    monkeypatch.setattr(status, "yank_history", YankHistory(max_entry_bytes=2))
+    monkeypatch.setattr(status.registers, "history", YankHistory(max_entry_bytes=2))
 
     qtbot.keyClicks(commandline, "y2j")
 
@@ -190,7 +196,7 @@ def test_multiline_yank_preserves_history_limit_warning(history_bot, monkeypatch
 
 def test_black_hole_yank_reports_count_after_history_limit(history_bot, monkeypatch):
     _, status, commandline, qtbot = history_bot
-    monkeypatch.setattr(status, "yank_history", YankHistory(max_entry_bytes=2))
+    monkeypatch.setattr(status.registers, "history", YankHistory(max_entry_bytes=2))
     qtbot.keyClicks(commandline, "yy")
     assert "memory limit" in status.msg_label.text()
 

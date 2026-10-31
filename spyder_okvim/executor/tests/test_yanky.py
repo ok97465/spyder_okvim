@@ -1,14 +1,18 @@
 """History puts preserve register state, the surrounding text, and Qt undo."""
 
+# Standard Libraries
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication
 from qtpy.QtGui import QTextCursor
 
+# Project Libraries
+from spyder_okvim.utils import put as put_module
 from spyder_okvim.vim.state import VimState
 from spyder_okvim.vim.yank_history import YankEntry
-from spyder_okvim.utils import put as put_module
+from tests.qt_support import reset_vim_state
 
 
 def prepare(vim_bot, text="abcd"):
@@ -17,7 +21,7 @@ def prepare(vim_bot, text="abcd"):
     line.esc_pressed()
     status = vim.vim_cmd.vim_status
     status.disconnect_from_editor()
-    status.reset_for_test()
+    reset_vim_state(status)
     editor.set_text(text)
     status.cursor.set_cursor_pos(0)
     line.clear()
@@ -226,7 +230,7 @@ def test_non_cycling_put_skips_reversible_text_copies(vim_bot, monkeypatch, reas
     elif reason == "oversize":
         monkeypatch.setattr(put_module, "SESSION_BYTE_LIMIT", 1)
     copy_text = Mock(side_effect=AssertionError("unneeded reversible text copy"))
-    monkeypatch.setattr(put_module, "_text", copy_text)
+    monkeypatch.setattr(put_module, "_range_text", copy_text)
     bot.keyClicks(line, "vlp")
     assert editor.toPlainText() == ("cd" if reason == "empty" else "Xcd")
     assert not controller.can_cycle()

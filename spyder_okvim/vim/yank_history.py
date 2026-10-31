@@ -3,24 +3,21 @@
 # Standard Libraries
 from collections import deque
 from dataclasses import dataclass, field
-from itertools import count
 
 
 MAX_ENTRY_BYTES = 1024 * 1024
 MAX_HISTORY_BYTES = 10 * 1024 * 1024
-_entry_ids = count(1)
 _KINDS = ("charwise", "linewise")
 _SOURCES = ("yank", "delete", "clipboard")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class YankEntry:
     """One value, independent of mutable Vim registers and Qt editors."""
 
     text: str
     kind: str = "charwise"
     source: str = "yank"
-    id: int = field(default_factory=lambda: next(_entry_ids))
     byte_size: int = field(init=False)
     line_count: int = field(init=False)
 

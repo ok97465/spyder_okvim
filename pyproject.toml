@@ -40,3 +40,7 @@ line_length = 88
 import_heading_stdlib = "Standard Libraries"
 import_heading_thirdparty = "Third Party Libraries"
 import_heading_firstparty = "Project Libraries"
+
+[tool.setuptools.packages.find]
+include = ["spyder_okvim*"]
+exclude = ["spyder_okvim.*.tests*", "tests*"]

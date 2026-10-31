@@ -8,6 +8,7 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.vim import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.mark.parametrize(
@@ -58,7 +59,7 @@ def test_V_cmd(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -93,7 +94,7 @@ def test_zero_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -119,7 +120,7 @@ def test_caret_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -142,7 +143,7 @@ def test_dollar_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -175,7 +176,7 @@ def test_o_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -204,7 +205,7 @@ def test_J_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -227,7 +228,7 @@ def test_w_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -256,7 +257,7 @@ def test_W_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -281,7 +282,7 @@ def test_b_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -306,7 +307,7 @@ def test_B_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -332,7 +333,7 @@ def test_e_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -360,7 +361,7 @@ def test_G_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -387,7 +388,7 @@ def test_gg_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -424,7 +425,7 @@ def test_colon_num_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -460,7 +461,7 @@ def test_tilde_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -486,7 +487,7 @@ def test_percent_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -515,7 +516,7 @@ def test_f_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -544,7 +545,7 @@ def test_F_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -582,7 +583,7 @@ def test_leap_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -622,7 +623,7 @@ def test_t_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -652,7 +653,7 @@ def test_T_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -683,7 +684,7 @@ def test_r_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -712,7 +713,7 @@ def test_u_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -738,7 +739,7 @@ def test_gu_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -764,7 +765,7 @@ def test_U_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -790,7 +791,7 @@ def test_gU_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -816,7 +817,7 @@ def test_gtilde_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -842,7 +843,7 @@ def test_greater_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -868,7 +869,7 @@ def test_less_cmd_in_vline(vim_bot, text, cmd_list, text_expected, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -895,7 +896,7 @@ def test_y_cmd_in_vline(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -939,7 +940,7 @@ def test_p_P_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, text_expected):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -969,7 +970,7 @@ def test_d_cmd_in_vline(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1001,7 +1002,7 @@ def test_x_cmd_in_vline(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1033,7 +1034,7 @@ def test_c_cmd_in_vline(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1066,7 +1067,7 @@ def test_s_cmd_in_vline(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1110,7 +1111,7 @@ def test_search_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1147,7 +1148,7 @@ def test_asterisk_sharp_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_po
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1185,7 +1186,7 @@ def test_space_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
 
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1219,7 +1220,7 @@ def test_backspace_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1253,7 +1254,7 @@ def test_enter_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1281,7 +1282,7 @@ def test_jump_mark_in_vline(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -1313,7 +1314,7 @@ def test_next_python_definition_in_vline(vim_bot, start_line, cmd_list, expected
 
     block = editor.document().findBlockByNumber(start_line)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1345,7 +1346,7 @@ def test_prev_python_definition_in_vline(vim_bot, start_line, cmd_list, expected
 
     block = editor.document().findBlockByNumber(start_line)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1384,7 +1385,7 @@ def test_next_python_block_in_vline(vim_bot, start_line, cmd_list, expected):
 
     block = editor.document().findBlockByNumber(start_line)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -1423,7 +1424,7 @@ def test_prev_python_block_in_vline(vim_bot, start_line, cmd_list, expected):
 
     block = editor.document().findBlockByNumber(start_line)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(block.position())
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:

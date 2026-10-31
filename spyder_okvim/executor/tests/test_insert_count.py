@@ -5,6 +5,9 @@ import pytest
 from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtWidgets import QApplication
 
+# Project Libraries
+from tests.qt_support import reset_vim_state
+
 
 @pytest.fixture
 def insert_bot(vim_bot):
@@ -18,7 +21,7 @@ def insert_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     commandline.clear()
     commandline.setFocus()

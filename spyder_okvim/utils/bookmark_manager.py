@@ -1,4 +1,9 @@
-"""Manage persistent and local bookmarks for OkVim."""
+"""Store local/global Vim marks and navigate through supplied editor actions.
+
+JSON I/O remains a small pair of functions in this feature module. The manager
+accepts replacements so mark rules can be exercised with an in-memory store
+without creating another repository or navigation layer.
+"""
 
 from __future__ import annotations
 
@@ -8,10 +13,47 @@ import os
 import os.path as osp
 from collections import defaultdict
 from collections.abc import Callable
+from typing import TypedDict
+
+
+class BookmarkLocation(TypedDict):
+    """Persisted mark coordinates: a path, zero-based block and UTF-16 column."""
+
+    file: str
+    line: int
+    col: int
+
+
+def load_bookmarks(path: str) -> dict[str, BookmarkLocation]:
+    """Read existing global marks, returning an empty store on load failure.
+
+    Keep the existing JSON format and permissive failure behavior. Schema
+    validation and recovery policy are separate from this structural change.
+    """
+    if not osp.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as stream:
+            return json.load(stream)
+    except Exception:
+        return {}
+
+
+def save_bookmarks(path: str, bookmarks: dict[str, BookmarkLocation]) -> None:
+    """Write global marks using the existing format; propagate write failures."""
+    os.makedirs(osp.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as stream:
+        json.dump(bookmarks, stream)
 
 
 class BookmarkManager:
-    """Handle loading, saving and retrieving bookmarks."""
+    """Own mark rules while delegating persistence and host navigation.
+
+    Lowercase marks belong to a file and stay in memory; uppercase marks are
+    global and persisted. Host callbacks resolve the active editor on demand.
+    ``load``/``persist`` receive the configured path, so tests can substitute an
+    in-memory store without changing mark lookup or cross-file jump behavior.
+    """
 
     def __init__(
         self,
@@ -20,37 +62,23 @@ class BookmarkManager:
         get_editorstack_func: Callable[[], object],
         get_editor_func: Callable[[], object],
         set_cursor_pos_func: Callable[[int], None],
+        *,
+        load: Callable[[str], dict[str, BookmarkLocation]] = load_bookmarks,
+        persist: Callable[[str, dict[str, BookmarkLocation]], None] = save_bookmarks,
     ) -> None:
         self.bookmarks_file = bookmarks_file
         self.open_file = open_file_func
         self.get_editorstack = get_editorstack_func
         self.get_editor = get_editor_func
         self.set_cursor_pos = set_cursor_pos_func
+        self._persist = persist
 
-        self.bookmarks: dict[str, dict[str, dict[str, int]]] = defaultdict(dict)
-        self.bookmarks_global: dict[str, dict[str, int]] = {}
-        self._load_persistent_bookmarks()
-
-    # ------------------------------------------------------------------
-    # Persistence helpers
-    # ------------------------------------------------------------------
-    def _load_persistent_bookmarks(self) -> None:
-        """Load persistent bookmarks from disk if present."""
-        if osp.isfile(self.bookmarks_file):
-            try:
-                with open(self.bookmarks_file, "r", encoding="utf-8") as fh:
-                    self.bookmarks_global = json.load(fh)
-            except Exception:
-                self.bookmarks_global = {}
-        else:
-            self.bookmarks_global = {}
+        self.bookmarks: dict[str, dict[str, BookmarkLocation]] = defaultdict(dict)
+        self.bookmarks_global = load(bookmarks_file)
 
     def save(self) -> None:
         """Save persistent bookmarks to disk."""
-        folder = osp.dirname(self.bookmarks_file)
-        os.makedirs(folder, exist_ok=True)
-        with open(self.bookmarks_file, "w", encoding="utf-8") as fh:
-            json.dump(self.bookmarks_global, fh)
+        self._persist(self.bookmarks_file, self.bookmarks_global)
 
     # ------------------------------------------------------------------
     # Public API
@@ -62,20 +90,20 @@ class BookmarkManager:
         self.save()
 
     def set_bookmark(self, name: str) -> None:
-        """Set bookmark at the current cursor position."""
+        """Capture the current block/UTF-16 column; persist uppercase marks."""
         editor = self.get_editor()
         cursor = editor.textCursor()
         line = cursor.blockNumber()
         col = cursor.position() - cursor.block().position()
         path = self.get_editorstack().get_current_filename()
-        info = {"file": path, "line": line, "col": col}
+        info: BookmarkLocation = {"file": path, "line": line, "col": col}
         if name.isupper():
             self.bookmarks_global[name] = info
             self.save()
         else:
             self.bookmarks[path][name] = info
 
-    def get_bookmark(self, name: str):
+    def get_bookmark(self, name: str) -> BookmarkLocation | None:
         """Return bookmark information for *name* or None."""
         if name.isupper():
             return self.bookmarks_global.get(name)
@@ -83,7 +111,11 @@ class BookmarkManager:
         return self.bookmarks.get(current, {}).get(name)
 
     def jump_to_bookmark(self, name: str) -> None:
-        """Move cursor to bookmark *name* if it exists."""
+        """Open global targets and move to a live mark, dropping missing blocks.
+
+        Stored columns are Qt UTF-16 offsets within a zero-based block. Clamp
+        the destination to the current block's end after edits.
+        """
         info = self.get_bookmark(name)
         if not info:
             return
@@ -106,7 +138,7 @@ class BookmarkManager:
         pos = block.position() + min(info["col"], block.length() - 1)
         self.set_cursor_pos(pos)
 
-    def list_bookmarks(self) -> list[tuple[str, dict]]:
+    def list_bookmarks(self) -> list[tuple[str, BookmarkLocation]]:
         """Return a combined list of local and global bookmarks."""
         current = self.get_editorstack().get_current_filename()
         marks = []

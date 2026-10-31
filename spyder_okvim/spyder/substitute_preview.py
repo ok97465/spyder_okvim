@@ -6,11 +6,10 @@ from dataclasses import dataclass, replace
 from math import ceil
 
 # Third Party Libraries
-from qtpy.QtCore import QObject, QPoint, QTimer
+from qtpy.QtCore import QObject, QPoint, QTimer, Signal
 from qtpy.QtGui import QColor, QTextCursor, QTextFormat
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
-from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
@@ -49,6 +48,8 @@ class SubstitutePreviewController(QObject):
     Suspending keeps that origin and its document watch; cancelling releases
     them, so an external edit cannot silently start another preview session.
     """
+
+    sig_result_ready = Signal()
 
     DEBOUNCE_MS = 150
     TICK_MS = 8
@@ -181,10 +182,14 @@ class SubstitutePreviewController(QObject):
             self.sync()
 
     def apply_settings(self):
+        vim = live_widget(self._vim)
+        if vim is None:
+            return
+        search_settings = vim.vim_status.settings
         settings = (
             bool(CONF.get(CONF_SECTION, "substitute_preview_enabled", True)),
-            bool(CONF.get(CONF_SECTION, "ignorecase", True)),
-            bool(CONF.get(CONF_SECTION, "smartcase", True)),
+            search_settings.ignorecase,
+            search_settings.smartcase,
         )
         if settings == self._settings:
             return
@@ -278,12 +283,14 @@ class SubstitutePreviewController(QObject):
             self.cancel()
             return None
         line = vim.commandline
+        snapshot = line.snapshot()
         if (
-            not self.enabled
+            snapshot is None
+            or not self.enabled
             or self._suspended
             or vim.is_processing_input
-            or line._updating_commandline
-            or line.is_composing
+            or snapshot.is_replacing
+            or snapshot.is_composing
             or not line.hasFocus()
             or not line.isActiveWindow()
             or not editor.viewport().isVisible()
@@ -295,9 +302,9 @@ class SubstitutePreviewController(QObject):
         ):
             return None
         return PreviewKey(
-            line.text(),
-            CONF.get(CONF_SECTION, "ignorecase", True),
-            CONF.get(CONF_SECTION, "smartcase", True),
+            snapshot.text,
+            status.settings.ignorecase,
+            status.settings.smartcase,
             editor.isReadOnly(),
             self.limits,
             self._preview_lines,
@@ -388,6 +395,8 @@ class SubstitutePreviewController(QObject):
                 self._origin_line,
                 document.blockCount(),
                 prepare_replacement=context.pattern_closed,
+                ignorecase=vim.vim_status.settings.ignorecase,
+                smartcase=vim.vim_status.settings.smartcase,
             )
             self._job = SubstitutePreview(
                 document,
@@ -439,11 +448,10 @@ class SubstitutePreviewController(QObject):
             if not cursor.hasSelection():
                 selection.format.setProperty(QTextFormat.FullWidthSelection, True)
             selections.append(selection)
-        DRAW_ORDERS["vim_substitute_preview"] = 7
         editor.set_extra_selections("vim_substitute_preview", selections)
         self.result = result
         self.overlay.set_result(result)
-        live_widget(self._vim).commandline_popup.sync()
+        self.sig_result_ready.emit()
 
     def cleanup(self):
         if self._closed:

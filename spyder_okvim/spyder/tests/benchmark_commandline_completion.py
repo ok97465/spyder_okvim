@@ -8,6 +8,7 @@ measurements; they do not predict network or cold-cache filesystem latency.
 
 # ruff: noqa: F811 - imported pytest fixtures are injected by parameter name
 
+# Standard Libraries
 import json
 import os
 import platform
@@ -15,15 +16,14 @@ from contextlib import nullcontext
 from statistics import median
 from time import perf_counter
 
+# Third Party Libraries
 from qtpy import API_NAME
 from qtpy.QtCore import QCoreApplication, qVersion
 
+# Project Libraries
 from spyder_okvim.spyder import commandline_path_lookup
-from spyder_okvim.spyder.tests.test_commandline_history_popup import (
-    history_popup as history_popup,
-)
 from spyder_okvim.utils import commandline
-
+from tests.commandline_support import history_popup as history_popup
 
 REPETITIONS = 7
 

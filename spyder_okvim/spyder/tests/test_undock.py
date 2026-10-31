@@ -6,7 +6,7 @@ import weakref
 
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import QCoreApplication, QEvent, QTimer, Qt
+from qtpy.QtCore import QCoreApplication, QEvent, Qt, QTimer
 from qtpy.QtWidgets import QApplication, QMainWindow, QShortcut
 from spyder.config.manager import CONF
 
@@ -14,6 +14,7 @@ from spyder.config.manager import CONF
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.plugin import StatusBarVimWidget
 from spyder_okvim.utils.qtcompat import widget_is_deleted
+from tests.qt_support import reset_vim_state
 
 
 def _process_events():
@@ -32,7 +33,7 @@ def undock_bot(vim_bot):
     original_text = editor.toPlainText()
     commandline = vim.vim_cmd.commandline
     status = vim.vim_cmd.vim_status
-    status.reset_for_test()
+    reset_vim_state(status)
     _process_events()
     status_widget = commandline.parentWidget()
     assert isinstance(status_widget, StatusBarVimWidget)
@@ -259,11 +260,7 @@ def test_which_key_cancels_when_docking_host_changes(
 
     def visible():
         popup = controller.popup
-        return (
-            popup is not None
-            and not widget_is_deleted(popup)
-            and popup.isVisible()
-        )
+        return popup is not None and not widget_is_deleted(popup) and popup.isVisible()
 
     def focus_and_start(window):
         window.show()

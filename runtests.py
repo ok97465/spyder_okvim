@@ -5,6 +5,7 @@
 #
 """File for running tests programmatically."""
 
+# Third Party Libraries
 # Third party imports
 import pytest
 
@@ -15,6 +16,7 @@ def main():
         [
             "-x",
             "spyder_okvim",
+            "tests",
             "-v",
             "-rw",
             "--durations=30",

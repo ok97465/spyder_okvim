@@ -20,7 +20,7 @@ class ExecutorAddSurround(ExecutorSubBase):
         self.pos_end = 0
 
     def set_motion_info(self, motion_info: MotionInfo):
-        """Set motion_info."""
+        """Capture a UTF-16 range; linewise motions include complete blocks."""
         if motion_info.motion_type == MotionType.BlockWise:
             sel_start = motion_info.sel_start
             sel_end = motion_info.sel_end
@@ -50,7 +50,7 @@ class ExecutorAddSurround(ExecutorSubBase):
 
         if ch in SURROUNDINGS:
             self.update_input_cmd_info(None, None, ch)
-            self.helper_action.add_surrounding(self.pos_start, self.pos_end, ch)
+            self.edits.add_surrounding(self.pos_start, self.pos_end, ch)
 
         self.vim_status.to_normal()
         self.vim_status.cursor.set_cursor_pos(self.pos_start)
@@ -76,7 +76,7 @@ class ExecutorDeleteSurround(ExecutorSubBase):
 
         if ch in SURROUNDINGS:
             self.update_input_cmd_info(None, None, ch)
-            motion_info = self.helper_action.delete_surrounding(ch)
+            motion_info = self.edits.delete_surrounding(ch)
             if isinstance(motion_info.sel_start, int):
                 self.vim_status.to_normal()
                 self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)
@@ -85,7 +85,7 @@ class ExecutorDeleteSurround(ExecutorSubBase):
 
 
 class ExecutorChangeSurround(ExecutorSubBase):
-    """Executor for chaging surrounding."""
+    """Accept old and new delimiters for a change-surround command."""
 
     def __init__(self, vim_status):
         """Initialize submode for changing surroundings."""
@@ -105,7 +105,7 @@ class ExecutorChangeSurround(ExecutorSubBase):
 
         if txt[0] in SURROUNDINGS and txt[1] in SURROUNDINGS:
             self.update_input_cmd_info(None, None, txt)
-            motion_info = self.helper_action.change_surrounding(txt[0], txt[1])
+            motion_info = self.edits.change_surrounding(txt[0], txt[1])
             if isinstance(motion_info.sel_start, int):
                 self.vim_status.to_normal()
                 self.vim_status.cursor.set_cursor_pos(motion_info.sel_start)

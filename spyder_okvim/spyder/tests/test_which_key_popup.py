@@ -4,7 +4,7 @@
 import pytest
 from qtpy.QtCore import QCoreApplication, QPoint, QRect, Qt
 from qtpy.QtGui import QFont
-from qtpy.QtWidgets import QAbstractScrollArea, QScrollArea, QWidget
+from qtpy.QtWidgets import QScrollArea, QWidget
 
 # Project Libraries
 from spyder_okvim.spyder.which_key_popup import WhichKeyPopup
@@ -58,15 +58,16 @@ def test_overflow_scrolls_to_the_last_wrapped_candidate(popup):
     assert label.height() >= label.heightForWidth(label.width())
 
 
-def test_small_menu_releases_the_overflow_surface(popup):
+def test_small_menu_hides_the_scrollbar(popup):
     viewport, panel = popup
     _show_many_candidates(panel)
     panel.set_candidates("g", [("g", "Go to line"), ("d", "Go to definition")])
     panel.update_geometry()
     QCoreApplication.processEvents()
 
-    assert not panel.findChildren(QAbstractScrollArea)
-    assert panel.body.parentWidget() is panel
+    scroll = panel.findChild(QScrollArea)
+    assert not scroll.verticalScrollBar().isVisible()
+    assert scroll.verticalScrollBar().maximum() == 0
     assert viewport.rect().contains(panel.geometry())
     for labels in panel.candidate_labels:
         for label in labels:
@@ -89,7 +90,8 @@ def test_resizing_restores_scrollable_and_compact_layouts(popup):
         assert viewport.rect().contains(panel.geometry())
         scroll = panel.findChild(QScrollArea)
         if height == 600:
-            assert scroll is None
+            assert not scroll.verticalScrollBar().isVisible()
+            assert scroll.verticalScrollBar().maximum() == 0
             continue
         assert scroll is not None
         scrollbar = scroll.verticalScrollBar()

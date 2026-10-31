@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+# Standard Libraries
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
 
+# Third Party Libraries
 from qtpy.QtCore import QPoint
 from qtpy.QtGui import QTextDocument
 
+# Project Libraries
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
@@ -258,7 +261,7 @@ class LeapHelper:
     def leap(
         self,
         chars: str,
-        num: int = 1,
+        count: int = 1,
         by_repeat_cmd: bool = False,
         *,
         full_view: bool = False,
@@ -271,7 +274,7 @@ class LeapHelper:
         positions = self.search_in_view(chars, full_view=full_view)
         pos = None
         if positions:
-            pos = positions[(num - 1) % len(positions)]
+            pos = positions[(count - 1) % len(positions)]
         return self._set_motion_info(pos, motion_type=MotionType.CharWise)
 
     def display_additional_leap_targets(self) -> None:
@@ -289,7 +292,7 @@ class LeapHelper:
     def reverse_leap(
         self,
         chars: str,
-        num: int = 1,
+        count: int = 1,
         by_repeat_cmd: bool = False,
         *,
         full_view: bool = False,
@@ -302,7 +305,7 @@ class LeapHelper:
         positions = self.search_in_view(chars, reverse=True, full_view=full_view)
         pos = None
         if positions:
-            pos = positions[(num - 1) % len(positions)]
+            pos = positions[(count - 1) % len(positions)]
         return self._set_motion_info(pos, motion_type=MotionType.CharWise)
 
     def display_additional_reverse_leap_targets(self) -> None:

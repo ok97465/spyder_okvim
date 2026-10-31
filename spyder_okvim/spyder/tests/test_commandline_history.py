@@ -1,17 +1,21 @@
 """Regression tests for separate Ex and search command-line histories."""
 
+# Standard Libraries
 import json
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtGui import QInputMethodEvent
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.spyder.vim_widgets import VimWidget
 from spyder_okvim.utils.commandline_history import load_history, save_history
 from spyder_okvim.vim import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -30,7 +34,7 @@ def history_bot(vim_bot, tmp_path, monkeypatch):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     original_text = editor.toPlainText()
     editor.set_text("foo x foo x foo")
@@ -44,7 +48,7 @@ def history_bot(vim_bot, tmp_path, monkeypatch):
         QCoreApplication.processEvents()
         commandline.esc_pressed()
         status.disconnect_from_editor()
-        status.reset_for_test()
+        reset_vim_state(status)
         editor.set_text(original_text)
         for history in commandline.histories.values():
             history.clear()
@@ -235,7 +239,7 @@ def test_saved_duplicate_does_not_write_again(history_bot, monkeypatch, text, me
     """Repeated confirmed input does not rewrite an unchanged history file."""
     _, _, commandline, qtbot = history_bot
     save = Mock(wraps=save_history)
-    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+    monkeypatch.setattr("spyder_okvim.spyder.commandline_input.save_history", save)
     if method is not None:
         monkeypatch.setattr(ExecutorColon, method, Mock())
 
@@ -294,7 +298,7 @@ def test_one_character_ex_inputs_do_not_change_or_save_history(
     save = Mock(
         side_effect=AssertionError("one-character command attempted a history save")
     )
-    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+    monkeypatch.setattr("spyder_okvim.spyder.commandline_input.save_history", save)
     qtbot.keyClicks(commandline, ":")
 
     commandline.remember_command(":" + body)
@@ -323,7 +327,7 @@ def test_one_character_ex_commands_still_execute_without_creating_history(
     save = Mock(
         side_effect=AssertionError("one-character command attempted a history save")
     )
-    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+    monkeypatch.setattr("spyder_okvim.spyder.commandline_input.save_history", save)
 
     submit(commandline, qtbot, command)
 
@@ -374,7 +378,7 @@ def test_duplicate_filter_compares_the_exact_previous_input(history_bot, monkeyp
     _, _, commandline, qtbot = history_bot
     qtbot.keyClicks(commandline, ":")
     save = Mock(wraps=save_history)
-    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.save_history", save)
+    monkeypatch.setattr("spyder_okvim.spyder.commandline_input.save_history", save)
 
     for body in ("marks", " marks", " marks"):
         commandline.remember_command(":" + body)

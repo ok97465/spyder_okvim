@@ -8,6 +8,9 @@ from unittest.mock import Mock
 import pytest
 from qtpy.QtCore import Qt
 
+# Project Libraries
+from tests.qt_support import reset_vim_state
+
 
 @pytest.mark.parametrize(
     "text, cmd_list, cmd_line_expected",
@@ -21,7 +24,7 @@ def test_colon_cmd(vim_bot, text, cmd_list, cmd_line_expected):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -45,7 +48,7 @@ def test_colon_corner_case_cmd(vim_bot, text, cmd_list):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -193,7 +196,7 @@ def test_colon_marks_command(vim_bot, monkeypatch):
     editor.set_text("a\nb\nc\n")
     vs = vim.vim_cmd.vim_status
     vs.cursor.set_cursor_pos(2)
-    vs.reset_for_test()
+    reset_vim_state(vs)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -253,7 +256,7 @@ def test_colon_jumps_dialog_navigation(vim_bot, monkeypatch):
     orig_file = stack.get_current_filename()
     stack.set_current_filename(stack.get_filenames()[0])
     vs.cursor.set_cursor_pos(0)
-    vs.reset_for_test()
+    reset_vim_state(vs)
 
     # Create jumps across multiple files
     vs.push_jump()

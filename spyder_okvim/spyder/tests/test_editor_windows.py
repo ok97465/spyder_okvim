@@ -3,9 +3,9 @@
 # Standard Libraries
 import gc
 import os
+import weakref
 from types import SimpleNamespace
 from unittest.mock import Mock
-import weakref
 
 # Third Party Libraries
 import pytest
@@ -21,7 +21,7 @@ from spyder.plugins.outlineexplorer.plugin import OutlineExplorer
 from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION
 from spyder_okvim.spyder.plugin import OkVim, StatusBarVimWidget
 from spyder_okvim.utils.qtcompat import widget_is_deleted
-
+from tests.qt_support import reset_vim_state
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("SPYDER_OKVIM_WINDOW_INTEGRATION") != "1",
@@ -244,6 +244,7 @@ def test_substitute_overlay_is_released_when_editor_window_changes(editor_window
 @pytest.mark.parametrize("host", ["main", "undocked", "window"])
 def test_yanky_shared_history_and_view_lifetime(editor_windows, host):
     """Cycle and picker state belong to one view, including detached hosts."""
+    # Project Libraries
     from spyder_okvim.vim.state import VimState
 
     state = editor_windows
@@ -260,7 +261,7 @@ def test_yanky_shared_history_and_view_lifetime(editor_windows, host):
     code = _focus_stack(state, stack)
     widget = state.vim.vim_cmd
     status = widget.vim_status
-    status.reset_for_test()
+    reset_vim_state(status)
     code.set_text("xy")
     status.cursor.set_cursor_pos(0)
     entry = status.yank_history.record("A", "charwise")
@@ -634,9 +635,11 @@ def test_commandline_popup_follows_active_view(commandline_popup_windows, target
     assert code is not source
     _start_commandline_popup(state)
     popup = _commandline_panel(state)
-    assert popup.parentWidget() is code.viewport()
+    assert popup.parentWidget() is controller.host
+    assert controller.host.parentWidget() is code.viewport()
     assert popup.window() is code.window()
-    assert code.viewport().rect().contains(popup.geometry())
+    assert controller.host.rect().contains(popup.geometry())
+    assert code.viewport().rect().contains(controller.host.geometry())
     assert QApplication.focusWidget() is state.commandline
 
 
@@ -662,7 +665,8 @@ def test_commandline_popup_releases_closed_editor(commandline_popup_windows):
     assert controller.selected_index is None
     replacement = _focus_stack(state, stack)
     _start_commandline_popup(state)
-    assert _commandline_panel(state).parentWidget() is replacement.viewport()
+    assert _commandline_panel(state).parentWidget() is controller.host
+    assert controller.host.parentWidget() is replacement.viewport()
 
 
 def test_commandline_popup_releases_closed_window(commandline_popup_windows):
@@ -684,7 +688,8 @@ def test_commandline_popup_releases_closed_window(commandline_popup_windows):
     assert controller.selected_index is None
     code = _focus_stack(state, state.widget.editorstacks[0])
     _start_commandline_popup(state)
-    assert _commandline_panel(state).parentWidget() is code.viewport()
+    assert _commandline_panel(state).parentWidget() is controller.host
+    assert controller.host.parentWidget() is code.viewport()
 
 
 def test_commandline_popup_cleanup_disconnects_callbacks(commandline_popup_windows):

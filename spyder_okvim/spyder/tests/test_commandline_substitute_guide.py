@@ -1,26 +1,24 @@
 """Substitution guidance shares history's stable input and editor lifetime."""
 
+# Standard Libraries
 import gc
 import weakref
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
 from qtpy.QtGui import QKeyEvent, QWheelEvent
 from qtpy.QtWidgets import QApplication, QWidget
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.spyder.tests.test_commandline_history_popup import (
-    history_popup as history_popup,
-    select_next,
-    send_ime,
-    show,
-    shown,
-)
 from spyder_okvim.utils.ex_parser import SubstituteSpec, scan_substitute_guide
 from spyder_okvim.utils.qtcompat import widget_is_deleted
+from tests.commandline_support import history_popup as history_popup
+from tests.commandline_support import select_next, send_ime, show, shown
 
 
 @pytest.fixture
@@ -201,7 +199,9 @@ def test_guide_is_read_only_and_does_not_search(guide, monkeypatch):
     histories = {kind: items[:] for kind, items in state.line.histories.items()}
     forbidden = Mock(side_effect=AssertionError("guide attempted execution"))
     monkeypatch.setattr("spyder_okvim.utils.ex_parser.resolve_range", forbidden)
-    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.completion_items", forbidden)
+    monkeypatch.setattr(
+        "spyder_okvim.spyder.commandline_input.completion_items", forbidden
+    )
     state.qtbot.keyClicks(state.line, ":%s/[invalid/long/&g")
     text, cursor = state.line.text(), state.line.cursorPosition()
     for _ in range(3):
@@ -369,7 +369,7 @@ def test_macro_and_dot_hide_guide(guide, suppression):
     if suppression == "recording":
         state.status.manager_macro.start_record("a")
     elif suppression == "playback":
-        state.widget._macro_generation = 1
+        state.widget.macro_playback.generation = 1
     else:
         state.status.running_dot_cmd = True
     state.qtbot.keyClicks(state.line, ":s/alpha/new/")

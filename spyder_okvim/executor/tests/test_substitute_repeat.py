@@ -1,12 +1,12 @@
 """Repeated Ex substitutions share values across modes and editor files."""
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 
-from spyder_okvim.executor.tests import test_substitute
-
-substitute_bot = test_substitute.substitute_bot
-submit = test_substitute.submit
+# Project Libraries
+from tests.qt_support import reset_vim_state
+from tests.qt_support import submit_substitution as submit
 
 
 @pytest.mark.parametrize(
@@ -150,5 +150,5 @@ def test_reset_clears_previous_substitute(substitute_bot):
     _, status, _, _ = substitute_bot
     submit(substitute_bot, "s/foo/x/g")
     assert status.last_substitute is not None
-    status.reset_for_test()
+    reset_vim_state(status)
     assert status.last_substitute is None

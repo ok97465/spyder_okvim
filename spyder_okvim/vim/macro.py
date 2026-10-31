@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """Macro recording and playback utilities."""
 
+# Standard Libraries
 from collections import defaultdict
 
+# Third Party Libraries
 from qtpy.QtCore import QObject
 from qtpy.QtGui import QKeyEvent
 
-from .state import KeyInfo
+from .state import InputSource, KeyInfo
 
 
 class MacroManager:
@@ -71,13 +73,18 @@ class MacroManager:
         """Record a key event coming from the Vim command line."""
         if self.is_recording:
             self.registers[self.reg_name_for_record].append(
-                KeyInfo(event.key(), event.text(), event.modifiers(), 0)
+                KeyInfo(
+                    event.key(),
+                    event.text(),
+                    event.modifiers(),
+                    InputSource.COMMAND_LINE,
+                )
             )
 
     def add_editor_keyevent(self, event: QKeyEvent):
         """Record a key event originating in the editor."""
         self.registers[self.reg_name_for_record].append(
-            KeyInfo(event.key(), event.text(), event.modifiers(), 1)
+            KeyInfo(event.key(), event.text(), event.modifiers(), InputSource.EDITOR)
         )
 
     def connect_to_editor(self, editor: QObject, slot):
@@ -100,7 +107,3 @@ class MacroManager:
                 # Already disconnected or editor deleted
                 pass
         self.editor_connected = None
-
-
-
-

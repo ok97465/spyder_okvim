@@ -1,11 +1,13 @@
 """A short-lived submode for approving precomputed substitutions."""
 
+# Standard Libraries
 import weakref
 
+# Third Party Libraries
 from qtpy.QtGui import QColor, QTextCursor, QTextFormat
 from qtpy.QtWidgets import QTextEdit
-from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
+# Project Libraries
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
 
 
@@ -24,8 +26,7 @@ class SubstituteConfirm:
         self.targets = tuple(targets)
         self.on_finish = on_finish
         self.active = True
-        self.cancelled = False
-        self.changed = 0
+        self._edited = False
         self.replacement_count = 0
         self.last_line = None
         self._lines = set()
@@ -58,12 +59,12 @@ class SubstituteConfirm:
         """Observe cancellation and show the first target after installing submode."""
         if not self.valid():
             self.cancel()
-            return self
+            return
         for signal, callback in (
             (self.document.contentsChanged, self._document_changed),
             (self.document.destroyed, self._destroyed),
             (self.editor.destroyed, self._destroyed),
-            (self.status.cmd_line.vim_widget.sig_command_cancelled, self.cancel),
+            (self.status.input_cancelled, self.cancel),
         ):
             signal.connect(callback)
             self._connections.append((signal, callback))
@@ -71,7 +72,6 @@ class SubstituteConfirm:
             self._finish()
         else:
             self._show_target()
-        return self
 
     def __call__(self, text):
         """Consume confirmation input without changing Normal command records."""
@@ -121,7 +121,6 @@ class SubstituteConfirm:
         selection.format.setForeground(QColor("#ffffff"))
         if not cursor.hasSelection():
             selection.format.setProperty(QTextFormat.FullWidthSelection, True)
-        DRAW_ORDERS["vim_substitute"] = 10
         self.editor.set_extra_selections("vim_substitute", [selection])
         self.status.cursor.set_cursor_pos_without_end(start + self._delta)
         self.status.set_message("replace? (y/n/a/l/q)")
@@ -143,7 +142,7 @@ class SubstituteConfirm:
         editor.skip_rstrip = True
         self._editing = True
         try:
-            if self.changed:
+            if self._edited:
                 cursor.joinPreviousEditBlock()
             else:
                 cursor.beginEditBlock()
@@ -151,7 +150,7 @@ class SubstituteConfirm:
                 cursor.insertText(replacement)
             finally:
                 cursor.endEditBlock()
-            self.changed += 1
+            self._edited = True
             self._delta += len(replacement.encode("utf-16-le")) // 2 - (end - start)
             self._revision = self.document.revision()
             editor.document_did_change()
@@ -173,13 +172,12 @@ class SubstituteConfirm:
 
     def cancel(self):
         """Keep approved edits and disconnect the pending confirmation session."""
-        self._finish(cancelled=True)
+        self._finish()
 
-    def _finish(self, cancelled=False):
+    def _finish(self):
         if not self.active:
             return
         self.active = False
-        self.cancelled = cancelled
         for signal, callback in self._connections:
             try:
                 signal.disconnect(callback)

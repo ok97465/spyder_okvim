@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Core data structures for Vim status handling."""
+"""Vim modes, command snapshots and register/key values without Qt imports.
+
+Document positions and Visual columns are Qt UTF-16 offsets; block numbers
+are zero-based. Live document edits belong to insert_repeat.py.
+"""
 
 # Standard Libraries
-from contextlib import contextmanager
-
-# Third Party Libraries
-from qtpy.QtCore import QEvent
-from qtpy.QtGui import QKeyEvent, QTextCursor
+from enum import IntEnum
 
 
 class VimState:
@@ -40,19 +40,20 @@ class FindInfo:
 class InputCmdInfo:
     """Container for the command currently being typed."""
 
-    def __init__(self, num_str: str, cmd: str):
+    def __init__(self, count_text: str = "", cmd: str = "", *, num_str=None):
         """Create a new instance.
 
         Args:
-            num_str: Number prefix for the command.
+            count_text: Original count spelling, empty when no prefix was typed.
             cmd: Command string.
+            num_str: Historical keyword alias for count_text.
         """
-        self.num_str: str = num_str
+        self.count_text: str = count_text if num_str is None else num_str
         self.cmd: str = cmd
 
     def clear(self):
         """Reset both number and command strings."""
-        self.num_str = ""
+        self.count_text = ""
         self.cmd = ""
 
     def set(self, input_cmd_info):
@@ -61,12 +62,26 @@ class InputCmdInfo:
         Args:
             input_cmd_info: Source command info to copy from.
         """
-        self.num_str = input_cmd_info.num_str
+        self.count_text = input_cmd_info.count_text
         self.cmd = input_cmd_info.cmd
+
+    @property
+    def num_str(self):
+        """Historical alias for the original, possibly empty count text."""
+        return self.count_text
+
+    @num_str.setter
+    def num_str(self, value):
+        self.count_text = value
 
 
 class DotCmdInfo:
-    """Information about the last ``.`` command."""
+    """Snapshot of a change for dot replay, including its Visual shape.
+
+    ``count_text`` preserves an implicit count versus explicit digits. Visual
+    blocks are zero-based and columns are Qt UTF-16 offsets with the saved
+    selection endpoint excluded. Live editor recording is owned by the session.
+    """
 
     def __init__(self):
         self.vim_state = None
@@ -74,7 +89,7 @@ class DotCmdInfo:
         self.sel_block_no_end = None
         self.sel_col_start = None
         self.sel_col_end = None
-        self.num_str: str = ""
+        self.count_text: str = ""
         self.cmd: str = ""
         self.cmd_list_insertmode = None
         self.register_name = None
@@ -107,12 +122,12 @@ class DotCmdInfo:
             return cmd_str
         return ""
 
-    def to_cmd_string(self, num, num_str):
+    def to_cmd_string(self, count, count_text):
         """Return the textual representation of this dot command.
 
         Args:
-            num: Numeric prefix used for the command.
-            num_str: Original numeric string typed by the user.
+            count: Numeric prefix used for the command.
+            count_text: Original numeric string typed by the user.
         """
         register_prefix = f'"{self.register_name}' if self.register_name else ""
         selection = self.selection_to_cmd_string()
@@ -120,64 +135,84 @@ class DotCmdInfo:
             # Select the register after reconstructing the Visual selection.
             return selection + register_prefix + self.cmd
 
-        if num_str:
-            return register_prefix + str(num) + self.cmd
+        if count_text:
+            return register_prefix + str(count) + self.cmd
         else:
-            return register_prefix + self.num_str + self.cmd
+            return register_prefix + self.count_text + self.cmd
+
+    @property
+    def num_str(self):
+        """Historical alias for the original, possibly empty count text."""
+        return self.count_text
+
+    @num_str.setter
+    def num_str(self, value):
+        self.count_text = value
 
 
-class InsertCmdInfo:
-    """One insertion, including its count and shared undo block."""
+class InputSource(IntEnum):
+    """Destination of a recorded key, preserving historical numeric values."""
 
-    def __init__(self, editor, command: str, count: int):
-        self.editor = editor
-        self.command = command
-        self.count = count
-        self.edit_cursor = editor.textCursor()
-        self.has_edit = False
-        self.initial_revision = self.edit_cursor.document().revision()
-        self.start_cursor = QTextCursor(self.edit_cursor)
-        self.start_cursor.setKeepPositionOnInsert(True)
-        self.end_cursor = QTextCursor(self.edit_cursor)
-
-    @contextmanager
-    def edit_block(self):
-        """Join edits while delivering document signals after every event."""
-        document = self.edit_cursor.document()
-        revision = document.revision()
-        if self.has_edit or revision != self.initial_revision:
-            self.edit_cursor.joinPreviousEditBlock()
-        else:
-            self.edit_cursor.beginEditBlock()
-        try:
-            yield
-        finally:
-            self.edit_cursor.endEditBlock()
-            self.has_edit = self.has_edit or document.revision() != revision
+    COMMAND_LINE = 0
+    EDITOR = 1
 
 
 class KeyInfo:
-    """Serializable representation of a :class:`QKeyEvent`."""
+    """Recorded key values and their command-line/editor input destination.
 
-    def __init__(self, key_code: int, text: str, modifiers: int, identifier: int = 1):
+    Native Qt key/modifier identities are retained without importing Qt here.
+    Event construction happens on demand through the Qt key boundary.
+    """
+
+    def __init__(
+        self,
+        key_code: int,
+        text: str,
+        modifiers: int,
+        source: InputSource = InputSource.EDITOR,
+        *,
+        identifier=None,
+    ):
         self.key_code = key_code
         self.text = text
         self.modifiers = modifiers
-        #: 0 if coming from the Vim command line, 1 if from the editor
-        self.identifier = identifier
+        self.source = InputSource(source if identifier is None else identifier)
+
+    @property
+    def identifier(self):
+        """Historical integer alias; new code uses ``source``."""
+        return int(self.source)
+
+    @identifier.setter
+    def identifier(self, value):
+        self.source = InputSource(value)
 
     def to_event(self):
-        """Return a :class:`QKeyEvent` created from this info."""
-        event = QKeyEvent(QEvent.KeyPress, self.key_code, self.modifiers, self.text)
-        event.ignore()
-        return event
+        """Create an ignored Qt KeyPress event on the GUI thread."""
+        # Project Libraries
+        from spyder_okvim.utils.key_helpers import key_event_from_info
+
+        return key_event_from_info(self)
 
 
 class RegisterInfo:
-    """Simple register structure used by macros and yank/put."""
+    """One register's name, text and Vim character/line selection kind.
+
+    Values are copied when rotating automatic registers, so mutation cannot
+    alias another register or a previously recorded immutable yank entry.
+    """
 
     def __init__(self):
         """Initialize an empty register."""
         self.name = ""
         self.content = ""
         self.type = VimState.NORMAL
+
+
+def __getattr__(name):
+    """Keep the old InsertCmdInfo import without loading Qt for pure values."""
+    if name == "InsertCmdInfo":
+        from .insert_repeat import InsertEdit
+
+        return InsertEdit
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

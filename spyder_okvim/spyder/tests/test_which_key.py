@@ -2,8 +2,8 @@
 
 # Standard Libraries
 import os.path as osp
-from types import SimpleNamespace
 import weakref
+from types import SimpleNamespace
 
 # Third Party Libraries
 import pytest
@@ -15,6 +15,7 @@ from spyder.config.manager import CONF
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.which_key_popup import display_key
 from spyder_okvim.vim import KeyInfo, VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -40,7 +41,7 @@ def which_key(vim_bot, qtbot):
     previous_text = editor.toPlainText()
     widget.cancel_macro()
     commandline.esc_pressed()
-    widget.vim_status.reset_for_test()
+    reset_vim_state(widget.vim_status)
     editor.set_text("alpha beta\nsecond line\nthird alpha\n")
     widget.vim_status.cursor.set_cursor_pos(0)
     CONF.set(CONF_SECTION, "which_key_enabled", True)
@@ -203,7 +204,7 @@ def test_prefix_hints_preserve_execution(which_key, prefix, completion):
     results = []
     for enabled in (False, True):
         state.commandline.esc_pressed()
-        state.status.reset_for_test()
+        reset_vim_state(state.status)
         state.editor.set_text("alpha beta\nsecond line\nthird alpha\n")
         _seed_prefix_hints(state)
         state.status.cursor.set_cursor_pos(12)
@@ -263,8 +264,16 @@ def test_bookmark_hints_include_current_local_and_global_marks_only(which_key):
     _seed_prefix_hints(state)
     filename = state.stack.get_current_filename()
     other = next(path for path in state.stack.get_filenames() if path != filename)
-    state.status.bookmark_manager.bookmarks[other]["b"] = {"file": other, "line": 0, "col": 0}
-    state.status.bookmark_manager.bookmarks_global["A"] = {"file": other, "line": 2, "col": 0}
+    state.status.bookmark_manager.bookmarks[other]["b"] = {
+        "file": other,
+        "line": 0,
+        "col": 0,
+    }
+    state.status.bookmark_manager.bookmarks_global["A"] = {
+        "file": other,
+        "line": 2,
+        "col": 0,
+    }
     popup = _show(state, "'")
     candidates = _candidate_texts(popup)
     assert set(candidates) == {"a", "A"}
@@ -582,21 +591,21 @@ def test_macro_suppression_lasts_through_final_gui_key(which_key, monkeypatch):
 def test_cancelled_or_old_macro_completion_cannot_release_current_playback(which_key):
     state = which_key
     widget = state.widget
-    widget._macro_generation = 12
-    widget._macro_editor = weakref.ref(state.editor)
+    widget.macro_playback.generation = 12
+    widget.macro_playback.editor_ref = weakref.ref(state.editor)
     with widget.input_processing():
-        widget._finish_macro(11)
+        widget.macro_playback.finish(11)
         assert widget.is_playing_macro
-        widget._finish_macro(12)
-        assert widget._macro_completion == 12
+        widget.macro_playback.finish(12)
+        assert widget.macro_playback.completion_generation == 12
         widget.cancel_macro()
-        assert widget._macro_completion is None
-        widget._macro_generation = 13
-        widget._macro_editor = weakref.ref(state.editor)
-        widget._finish_macro(12)
+        assert widget.macro_playback.completion_generation is None
+        widget.macro_playback.generation = 13
+        widget.macro_playback.editor_ref = weakref.ref(state.editor)
+        widget.macro_playback.finish(12)
     assert widget.is_playing_macro
-    assert widget._macro_generation == 13
-    widget._finish_macro(13)
+    assert widget.macro_playback.generation == 13
+    widget.macro_playback.finish(13)
     assert not widget.is_playing_macro
 
 
@@ -626,7 +635,9 @@ def test_compact_popup_shows_every_candidate_without_scrolling(which_key, size):
         assert viewport.size() == QSize(*size)
         assert viewport.rect().contains(popup.geometry())
         assert popup.column_count >= 2
-        assert not popup.findChildren(QAbstractScrollArea)
+        scroll = popup.findChild(QAbstractScrollArea)
+        assert not scroll.verticalScrollBar().isVisible()
+        assert scroll.verticalScrollBar().maximum() == 0
         assert popup.font().pointSizeF() < state.commandline.font().pointSizeF()
         assert len(popup.candidate_labels) == len(
             state.widget.executor_leader_key.get_hint_candidates()

@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+# Project Libraries
+from tests.qt_support import reset_vim_state
+
+
 def _set_editor_text(editor, qtbot, text: str) -> None:
     """Set editor text and wait until the document reflects it."""
     editor.set_text(text)
@@ -21,13 +25,17 @@ def test_search_in_view_covers_full_viewport(vim_bot):
 
     try:
         _set_editor_text(editor, qtbot, new_text)
-        vim_status.reset_for_test()
+        reset_vim_state(vim_status)
 
         block = editor.document().findBlockByNumber(1)
         vim_status.cursor.set_cursor_pos(block.position())
 
-        positions_forward = helper_motion.leap_helper.search_in_view("fo", full_view=True)
-        positions_reverse = helper_motion.leap_helper.search_in_view("fo", reverse=True, full_view=True)
+        positions_forward = helper_motion.leap_helper.search_in_view(
+            "fo", full_view=True
+        )
+        positions_reverse = helper_motion.leap_helper.search_in_view(
+            "fo", reverse=True, full_view=True
+        )
 
         expected_positions = []
         index = new_text.find("fo")
@@ -59,4 +67,4 @@ def test_search_in_view_covers_full_viewport(vim_bot):
         assert motion_reverse.cursor_pos == expected_reverse
     finally:
         _set_editor_text(editor, qtbot, original_text)
-        vim_status.reset_for_test()
+        reset_vim_state(vim_status)

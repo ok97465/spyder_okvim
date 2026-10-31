@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+# Standard Libraries
 from dataclasses import dataclass
 from itertools import chain
 from time import monotonic
 
+# Project Libraries
 from spyder_okvim.utils import substitute
 
 
@@ -62,11 +64,11 @@ class PreviewResult:
 def safe_highlight_span(source, start, end):
     """Widen UTF-16-unit matches to displayable character boundaries."""
     try:
-        substitute._check_boundary(source, start)
+        substitute.validate_utf16_boundary(source, start)
     except ValueError:
         start -= 1
     try:
-        substitute._check_boundary(source, end)
+        substitute.validate_utf16_boundary(source, end)
     except ValueError:
         end += 1
     return start, end
@@ -245,7 +247,7 @@ class SubstitutePreview:
                 edits = None
                 output_reason = "replacement expansion limit"
             found = False
-            for match in substitute._iter_matches(
+            for match in substitute.iter_substitution_matches(
                 prepared.pattern, original, prepared.global_matches
             ):
                 if self._match_count >= limits.max_matches:

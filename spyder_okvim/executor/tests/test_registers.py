@@ -7,6 +7,7 @@ from qtpy.QtWidgets import QApplication
 
 # Project Libraries
 from spyder_okvim.vim.state import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ def register_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     commandline.clear()
     commandline.setFocus()

@@ -1,14 +1,18 @@
 """Confirmation responses stay inside their input and document context."""
 
+# Standard Libraries
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
 from qtpy.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent
 
+# Project Libraries
 from spyder_okvim.spyder.vim_widgets import VimWidget
 from spyder_okvim.vim import KeyInfo
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -24,7 +28,7 @@ def confirming(vim_bot):
     status.disconnect_from_editor()
     stack.set_stack_index(0)
     vim._use_stack(stack)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     original = editor.toPlainText()
     editor.set_text("foo foo\n  foo foo")
@@ -54,7 +58,7 @@ def confirming(vim_bot):
         status.disconnect_from_editor()
         stack.set_stack_index(0)
         vim._use_stack(stack)
-        status.reset_for_test()
+        reset_vim_state(status)
         editor.set_text(original)
         line.histories["ex"].clear()
         stack.set_stack_index(previous_index)
@@ -185,7 +189,7 @@ def test_file_switch_cancels_before_responses_cross_documents(confirming):
 def test_test_reset_cancels_confirmation(confirming):
     state = confirming
     session = start_confirmation(state)
-    state.status.reset_for_test()
+    reset_vim_state(state.status)
     assert state.status.substitute_confirm is None
     assert not session.active
     assert not state.editor.get_extra_selections("vim_substitute")

@@ -1,20 +1,22 @@
 """Confirmation choices, document ownership and undo grouping."""
 
+# Standard Libraries
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, QObject, Signal
 from qtpy.QtGui import QTextCursor, QTextDocument
 from qtpy.QtWidgets import QPlainTextDocumentLayout, QPlainTextEdit
 
-from spyder_okvim.executor.tests.test_substitute import substitute_bot as substitute_bot
+# Project Libraries
 from spyder_okvim.utils.substitute_confirm import SubstituteConfirm
 
 
 @pytest.fixture
-def confirmation_bot(request):
-    bot = request.getfixturevalue("substitute_bot")
+def confirmation_bot(substitute_bot):
+    bot = substitute_bot
     editor, status, _, _ = bot
     editor.set_text("foo foo\n  foo")
     yield bot
@@ -54,7 +56,6 @@ def test_confirmation_choices_and_one_undo(
         assert session(key) is True
     assert editor.toPlainText() == expected
     assert not session.active
-    assert not session.cancelled
     assert session.replacement_count == count
     assert session.line_count == lines
     assert status.sub_mode is None
@@ -83,7 +84,6 @@ def test_partial_cancel_keeps_one_undo(confirmation_bot, cancel):
     session.cancel()
     assert editor.toPlainText() == "longer foo\n  foo"
     assert not session.active
-    assert session.cancelled
     assert status.sub_mode is None
     assert not editor.get_extra_selections("vim_substitute")
     callback.assert_called_once_with(session)
@@ -121,7 +121,6 @@ def test_external_edit_cancels_and_remains_separate_undo(confirmation_bot):
     cursor.insertText("external ")
     cursor.endEditBlock()
     assert not session.active
-    assert session.cancelled
     assert not session.valid()
     callback.assert_called_once_with(session)
     session("a")
@@ -137,7 +136,6 @@ def test_unchanged_approvals_do_not_add_undo(confirmation_bot):
     session, _ = start_session(confirmation_bot, ((0, 3, "foo"), (4, 7, "foo")))
     session("a")
     assert session.replacement_count == 2
-    assert session.changed == 0
     assert not editor.document().isUndoAvailable()
 
 
@@ -166,7 +164,7 @@ def test_readonly_change_cancels_before_next_approval(confirmation_bot):
     session, _ = start_session(confirmation_bot)
     editor.setReadOnly(True)
     session("y")
-    assert session.cancelled
+    assert not session.active
     assert editor.toPlainText() == "foo foo\n  foo"
 
 
@@ -222,6 +220,7 @@ def test_destroyed_context_disconnects_confirmation(qtbot, destroy):
         get_editor=lambda: editor,
         cursor=Mock(),
         set_message=Mock(),
+        input_cancelled=widget.sig_command_cancelled,
         cmd_line=SimpleNamespace(vim_widget=widget, sync_input_method=Mock()),
     )
     callback = Mock()
@@ -236,7 +235,6 @@ def test_destroyed_context_disconnects_confirmation(qtbot, destroy):
         document.setDocumentLayout(QPlainTextDocumentLayout(document))
         editor.setDocument(document)
     assert not session.active
-    assert session.cancelled
     assert not session.valid()
     assert status.sub_mode is None
     assert status.substitute_confirm is None

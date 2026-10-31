@@ -1,56 +1,17 @@
 """Substitute commands through the real Ex input and editor undo stack."""
 
+# Standard Libraries
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
-from qtpy.QtCore import QCoreApplication, Qt
+from qtpy.QtCore import Qt
 from qtpy.QtGui import QTextCursor
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-
-
-@pytest.fixture
-def substitute_bot(vim_bot):
-    """Keep the active document, search settings, and input state isolated."""
-    _, stack, _, vim, qtbot = vim_bot
-    previous_index = stack.get_stack_index()
-    commandline = vim.vim_cmd.commandline
-    status = vim.vim_cmd.vim_status
-    commandline.setFocus()
-    QCoreApplication.processEvents()
-    commandline.esc_pressed()
-    status.disconnect_from_editor()
-    stack.set_stack_index(0)
-    status.reset_for_test()
-    editor = stack.get_current_editor()
-    original = editor.toPlainText()
-    options = {
-        name: CONF.get(CONF_SECTION, name) for name in ("ignorecase", "smartcase")
-    }
-    editor.set_text("foo foo\n  foo foo\nlast")
-    status.cursor.set_cursor_pos(0)
-    commandline.clear()
-    commandline.setFocus()
-    try:
-        yield editor, status, commandline, qtbot
-    finally:
-        editor.setReadOnly(False)
-        commandline.esc_pressed()
-        status.disconnect_from_editor()
-        status.reset_for_test()
-        editor.set_text(original)
-        for name, value in options.items():
-            CONF.set(CONF_SECTION, name, value)
-        stack.set_stack_index(previous_index)
-
-
-def submit(bot, body):
-    """Use setText for Unicode input, then the ordinary Return commit path."""
-    _, _, commandline, qtbot = bot
-    qtbot.keyClicks(commandline, ":")
-    commandline.setText(":" + body)
-    qtbot.keyPress(commandline, Qt.Key_Return)
+from tests.qt_support import submit_substitution as submit
 
 
 @pytest.mark.parametrize(

@@ -33,7 +33,7 @@ def test_history_picker_is_read_only_and_selects_first_entry(history_dialog):
         for col in range(dialog.list_model.columnCount()):
             item = dialog.list_model.item(row, col)
             assert not item.isEditable()
-            assert item.data(Qt.UserRole) == entries[row].id
+            assert item.data(Qt.UserRole) is entries[row]
     assert "\n" not in dialog.list_model.item(0, 2).text()
     assert "\t" not in dialog.list_model.item(0, 2).text()
 
@@ -66,7 +66,7 @@ def test_table_focus_keys_select_original_payload(history_dialog, qtbot):
     assert dialog.selected_entry.text == "한글\noriginal\t😀\n"
 
 
-def test_selected_entry_is_resolved_by_id_after_row_order_changes(history_dialog):
+def test_selected_entry_follows_its_row_after_order_changes(history_dialog):
     dialog, entries = history_dialog
     row = dialog.list_model.takeRow(1)
     dialog.list_model.insertRow(0, row)

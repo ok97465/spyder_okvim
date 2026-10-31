@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Executor for normal mode commands.
 
-This module implements :class:`ExecutorNormalCmd`, which interprets keystrokes
+This module implements :class:`NormalModeExecutor`, which interprets keystrokes
 when the editor is in *normal* mode.  Commands are dispatched to helper classes
 for motion and editing actions.  The executor can also switch into various
 submodes such as search or register selection.
@@ -13,43 +13,32 @@ import re
 # Third Party Libraries
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QTextCursor
-from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.executor.decorators import submode
 from spyder_okvim.executor.executor_base import (
-    FUNC_INFO,
-    RETURN_EXECUTOR_METHOD_INFO,
+    DeferredAction,
     ExecutorBase,
+    ExecutorTransition,
 )
 from spyder_okvim.executor.executor_colon import ExecutorColon
-from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
-from spyder_okvim.executor.executor_sub import (
-    ExecutorSearch,
-    ExecutorSubCmd_alnum,
-    ExecutorSubCmd_closesquarebracket,
-    ExecutorSubCmd_closebrace,
-    ExecutorSubCmd_f_t,
-    ExecutorSubCmd_g,
-    ExecutorSubCmd_opensquarebracket,
-    ExecutorSubCmd_openbrace,
-    ExecutorSubCmd_r,
-    ExecutorSubCmd_register,
-    ExecutorSubCmd_z,
-    ExecutorSubCmd_Z,
-    ExecutorSubCmdLeap,
-    ExecutorSubMotion,
-    ExecutorSubMotion_c,
-    ExecutorSubMotion_d,
-    ExecutorSubMotion_y,
-)
 from spyder_okvim.executor.mixins import MovementMixin
-from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.executor.operators import (
+    ChangeOperatorExecutor,
+    DeleteOperatorExecutor,
+    OperatorMotionExecutor,
+    YankOperatorExecutor,
+)
+from spyder_okvim.executor.prefixes import (
+    FileExitExecutor,
+    ModeSubmodes,
+    ViewportPrefixExecutor,
+)
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 
 
-class ExecutorNormalCmd(MovementMixin, ExecutorBase):
-    """Executor for normal mode."""
+class NormalModeExecutor(MovementMixin, ExecutorBase):
+    """Interpret normal-mode keys and delegate motions, edits and host actions."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -58,9 +47,7 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.move_cursor = self.vim_status.cursor.set_cursor_pos
         self.move_cursor_no_end = self.vim_status.cursor.set_cursor_pos_without_end
 
-        cmds = (
-            "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/?=<>{} \b\rq@\[\]*#"
-        )
+        cmds = "aAiIvVhHjpPyJkKlLMoOruwWbBegGsSxdcDCnN^$~:%fFtT\"`'m;,.zZ/?=<>{} \b\rq@[]*#"
         cmds = "".join(re.escape(c) for c in cmds)
         self.pattern_cmd = re.compile(r"(\d*)([{}])".format(cmds))
         self.apply_motion_info_in_normal = (
@@ -71,32 +58,17 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         )
         self.executor_colon = ExecutorColon(vim_status)
 
-        self.executor_sub_g = ExecutorSubCmd_g(vim_status)
-        self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
-        self.executor_sub_r = ExecutorSubCmd_r(vim_status)
-        self.executor_sub_z = ExecutorSubCmd_z(vim_status)
-        self.executor_sub_Z = ExecutorSubCmd_Z(vim_status)
-        self.executor_sub_motion = ExecutorSubMotion(vim_status)
-        self.executor_sub_motion_c = ExecutorSubMotion_c(vim_status)
-        self.executor_sub_motion_d = ExecutorSubMotion_d(vim_status)
-        self.executor_sub_motion_y = ExecutorSubMotion_y(vim_status)
-        self.executor_sub_register = ExecutorSubCmd_register(vim_status)
-        self.executor_sub_search = ExecutorSearch(vim_status)
-        self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
-        self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
-        self.executor_sub_leap = ExecutorSubCmdLeap(vim_status)
-        self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
-            vim_status
-        )
-        self.executor_sub_closesquarebracekt = ExecutorSubCmd_closesquarebracket(
-            vim_status
-        )
-        self.executor_sub_openbrace = ExecutorSubCmd_openbrace(vim_status)
-        self.executor_sub_closebrace = ExecutorSubCmd_closebrace(vim_status)
+        self.submodes = ModeSubmodes(vim_status)
+        self.viewport_prefix = ViewportPrefixExecutor(vim_status)
+        self.file_exit_prefix = FileExitExecutor(vim_status)
+        self.operator_motion = OperatorMotionExecutor(vim_status)
+        self.change_operator = ChangeOperatorExecutor(vim_status)
+        self.delete_operator = DeleteOperatorExecutor(vim_status)
+        self.yank_operator = YankOperatorExecutor(vim_status)
 
-    def a(self, num=1, num_str=""):
+    def a(self, count=1, count_text=""):
         """Append text after the cursor."""
-        self.vim_status.start_insert("a", num)
+        self.vim_status.start_insert("a", count)
         self.vim_status.update_dot_cmd(connect_editor=True)
 
         cursor = self.get_cursor()
@@ -106,9 +78,9 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.vim_status.set_insert_start()
         self.get_editor().setFocus()
 
-    def A(self, num=1, num_str=""):
+    def A(self, count=1, count_text=""):
         """Append text at the end of the line."""
-        self.vim_status.start_insert("A", num)
+        self.vim_status.start_insert("A", count)
         self.vim_status.update_dot_cmd(connect_editor=True)
 
         cursor = self.get_cursor()
@@ -117,17 +89,17 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.vim_status.set_insert_start()
         self.get_editor().setFocus()
 
-    def i(self, num=1, num_str=""):
+    def i(self, count=1, count_text=""):
         """Insert text before the cursor."""
-        self.vim_status.start_insert("i", num)
+        self.vim_status.start_insert("i", count)
         self.vim_status.update_dot_cmd(connect_editor=True)
         self.get_editor().setFocus()
 
-    def I(self, num=1, num_str=""):
+    def I(self, count=1, count_text=""):
         """Insert text before the first non-blank in the line."""
         self.vim_status.update_dot_cmd(connect_editor=True)
 
-        motion_info = self.helper_motion.caret(num=num)
+        motion_info = self.motions.caret(count=count)
 
         cursor = self.get_cursor()
         cursor.setPosition(motion_info.cursor_pos)
@@ -135,30 +107,30 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
 
         self.get_editor().setFocus()
 
-    def v(self, num=1, num_str=""):
+    def v(self, count=1, count_text=""):
         """Start visual mode per character."""
         self.vim_status.to_visual_char()
 
-    def V(self, num=1, num_str=""):
+    def V(self, count=1, count_text=""):
         """Start visual mode per line."""
         self.vim_status.to_visual_line()
 
-    def J(self, num=1, num_str=""):
+    def J(self, count=1, count_text=""):
         """Join lines, with a minimum of two lines."""
         cursor = self.get_cursor()
 
-        if num > 1:
-            num -= 1
+        if count > 1:
+            count -= 1
 
         block_no_start = cursor.blockNumber()
-        block_no_end = cursor.blockNumber() + num
+        block_no_end = cursor.blockNumber() + count
         cursor_pos_start = cursor.position()
 
-        self.helper_action.join_lines(cursor_pos_start, block_no_start, block_no_end)
+        self.edits.join_lines(cursor_pos_start, block_no_start, block_no_end)
 
-    def o(self, num=1, num_str=""):
+    def o(self, count=1, count_text=""):
         """Begin a new line below the cursor and insert text."""
-        self.vim_status.start_insert("o", num)
+        self.vim_status.start_insert("o", count)
         editor = self.get_editor()
         cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.EndOfLine)
@@ -172,9 +144,9 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.vim_status.set_insert_start()
         self.vim_status.update_dot_cmd(connect_editor=True)
 
-    def O(self, num=1, num_str=""):
+    def O(self, count=1, count_text=""):
         """Begin a new line above the cursor and insert text."""
-        self.vim_status.start_insert("O", num)
+        self.vim_status.start_insert("O", count)
         editor = self.get_editor()
         cursor = editor.textCursor()
         cursor.movePosition(QTextCursor.StartOfLine)
@@ -187,17 +159,17 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         self.vim_status.set_insert_start()
         self.vim_status.update_dot_cmd(connect_editor=True)
 
-    def K(self, num=1, num_str=""):
+    def K(self, count=1, count_text=""):
         """Show the help for the keyword under the cursor."""
         self.get_editorstack().inspect_current_object()
         # self.vim_status.set_focus_to_vim_after_delay(500)
 
-    def u(self, num=1, num_str=""):
+    def u(self, count=1, count_text=""):
         """Undo changes."""
         editor = self.get_editor()
         n_block_old = editor.blockCount()
 
-        for _ in range(num):
+        for _ in range(count):
             editor.undo()
         cursor = editor.textCursor()
         pos = cursor.position()
@@ -212,87 +184,87 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
             else:
                 self.vim_status.set_message(f"{n_block_old - n_block_new} fewer lines")
         else:
-            self.vim_status.set_message(f"{num} changes")
+            self.vim_status.set_message(f"{count} changes")
 
         self.set_cursor_pos(pos)
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def g(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def g(self, count=1, count_text=""):
         """Start g submode."""
-        return self.executor_sub_g
+        return self.submodes.g_prefix
 
-    def G(self, num=1, num_str=""):
+    def G(self, count=1, count_text=""):
         """Move to the line."""
         self.vim_status.push_jump()
-        motion_info = self.helper_motion.G(num=num, num_str=num_str)
+        motion_info = self.motions.G(count=count, count_text=count_text)
 
         self.set_cursor_pos(motion_info.cursor_pos)
         self.vim_status.push_jump()
 
-    def tilde(self, num=1, num_str=""):
+    def tilde(self, count=1, count_text=""):
         """Switch case of the character under the cursor.
 
         Move the cursor to the right.
         """
-        motion_info = self.helper_motion.l(num, num_str=num_str)
+        motion_info = self.motions.l(count, count_text=count_text)
 
-        self.helper_action.handle_case(motion_info, "swap")
+        self.edits.change_case(motion_info, "swap")
         self.set_cursor_pos(motion_info.cursor_pos)
 
         cursor = self.get_cursor()
         if cursor.atBlockEnd() and not cursor.atBlockStart():
             self.h(1)
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def f(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def f(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        return self.executor_sub_f_t
+        return self.submodes.find_character
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def F(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def F(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        return self.executor_sub_f_t
+        return self.submodes.find_character
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def t(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def t(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        return self.executor_sub_f_t
+        return self.submodes.find_character
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def T(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def T(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        return self.executor_sub_f_t
+        return self.submodes.find_character
 
-    def r(self, num=1, num_str=""):
+    def r(self, count=1, count_text=""):
         """Replace the ch under the cursor with input."""
         cursor = self.get_cursor()
         pos_start = cursor.position()
         cursor.movePosition(QTextCursor.EndOfBlock)
         pos_block_end = cursor.position()
-        if pos_block_end - pos_start < num:
+        if pos_block_end - pos_start < count:
             pos_end = pos_start
         else:
-            pos_end = pos_start + num
+            pos_end = pos_start + count
 
-        executor_sub = self.executor_sub_r
+        executor_sub = self.submodes.replace_character
         executor_sub.pos_start = pos_start
         executor_sub.pos_end = pos_end
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def dot(self, num=1, num_str=""):
+    def dot(self, count=1, count_text=""):
         """Run previous change."""
         controller = self.vim_status.put_controller
         if self.vim_status.dot_cmd.put_payload is not None:
             # Keep the literal dot in macros when replaying a snapshot directly.
-            controller.repeat(num, num_str)
+            controller.repeat(count, count_text)
             return
         controller.cancel()
         # avoid to execute . command twice.
         self.vim_status.manager_macro.remove_last_key(".")
-        cmd_str = self.vim_status.dot_cmd.to_cmd_string(num, num_str)
+        cmd_str = self.vim_status.dot_cmd.to_cmd_string(count, count_text)
 
         if not cmd_str:
             return
@@ -314,8 +286,8 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
                 self.vim_status.send_insert_event(editor, event)
 
             self.vim_status.finish_insert()
-            if num_str and self.vim_status.dot_cmd.cmd in ("i", "a", "A", "o", "O"):
-                self.vim_status.dot_cmd.num_str = num_str
+            if count_text and self.vim_status.dot_cmd.cmd in ("i", "a", "A", "o", "O"):
+                self.vim_status.dot_cmd.count_text = count_text
         finally:
             self.vim_status.finish_insert(apply_count=False)
             self.vim_status.running_dot_cmd = False
@@ -325,146 +297,138 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         cursor_pos = self.get_cursor().position()
         self.vim_status.cursor.set_cursor_pos_without_end(cursor_pos)
 
-    def z(self, num=1, num_str=""):
+    def z(self, count=1, count_text=""):
         """Start z submode."""
-        executor_sub = self.executor_sub_z
+        executor_sub = self.viewport_prefix
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred([])
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def Z(self, num=1, num_str=""):
+    def Z(self, count=1, count_text=""):
         """Start Z submode."""
-        executor_sub = self.executor_sub_Z
+        executor_sub = self.file_exit_prefix
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred([])
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def greater(self, num=1, num_str=""):
+    def greater(self, count=1, count_text=""):
         """Shift lines rightwards."""
-        executor_sub = self.executor_sub_motion
+        executor_sub = self.operator_motion
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.helper_action.indent, True)]
-        )
+        executor_sub.set_func_list_deferred([DeferredAction(self.edits.indent, True)])
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def equal(self, num=1, num_str=""):
+    def equal(self, count=1, count_text=""):
         """Reindent the lines covered by the following motion."""
-        executor_sub = self.executor_sub_motion
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.helper_action.reindent, True)]
-        )
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub = self.operator_motion
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
+        executor_sub.set_func_list_deferred([DeferredAction(self.edits.reindent, True)])
+        return ExecutorTransition(executor_sub, True)
 
-    def less(self, num=1, num_str=""):
+    def less(self, count=1, count_text=""):
         """Shift lines leftwards."""
-        executor_sub = self.executor_sub_motion
+        executor_sub = self.operator_motion
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
-        executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.helper_action.unindent, True)]
-        )
+        executor_sub.set_func_list_deferred([DeferredAction(self.edits.unindent, True)])
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def quote(self, num=1, num_str=""):
+    def quote(self, count=1, count_text=""):
         """Set the name of register."""
-        executor_sub = self.executor_sub_register
+        executor_sub = self.submodes.register_prefix
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred([])
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def p(self, num=1, num_str=""):
+    def p(self, count=1, count_text=""):
         """Put the text from register after the cursor."""
-        self.vim_status.put_controller.put(num, is_lower=True)
+        self.vim_status.put_controller.put(count, after_cursor=True)
 
-    def P(self, num=1, num_str=""):
+    def P(self, count=1, count_text=""):
         """Put the text from register before the cursor."""
-        self.vim_status.put_controller.put(num, is_lower=False)
+        self.vim_status.put_controller.put(count, after_cursor=False)
 
-    def y(self, num=1, num_str=""):
+    def y(self, count=1, count_text=""):
         """Yank {motion} text into register."""
-        executor_sub = self.executor_sub_motion_y
+        executor_sub = self.yank_operator
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
             [
-                FUNC_INFO(lambda x: self.helper_action.yank(x, is_explicit=True), True),
-                FUNC_INFO(self.apply_motion_info_in_yank, True),
+                DeferredAction(lambda x: self.edits.yank(x, is_explicit=True), True),
+                DeferredAction(self.apply_motion_info_in_yank, True),
             ]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def s(self, num=1, num_str=""):
+    def s(self, count=1, count_text=""):
         """Delete characters and start insert."""
-        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        use_leap = self.vim_status.settings.use_leap
         if use_leap:
-            executor_sub = self.executor_sub_leap
+            executor_sub = self.submodes.leap_input
 
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
+            self.set_parent_info_to_submode(executor_sub, count, count_text)
 
             executor_sub.set_func_list_deferred(
-                [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+                [DeferredAction(self.apply_motion_info_in_normal, True)]
             )
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
         else:
-            motion_info = self.helper_motion.l(num, num_str)
-            self.helper_action.yank(motion_info)
-            self.helper_action.delete(motion_info, is_insert=True)
+            motion_info = self.motions.l(count, count_text)
+            self.edits.yank(motion_info)
+            self.edits.delete(motion_info, is_insert=True)
             self.get_editor().setFocus()
 
-    def S(self, num=1, num_str=""):
+    def S(self, count=1, count_text=""):
         """Delete characters and start insert."""
-        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        use_leap = self.vim_status.settings.use_leap
         if use_leap:
-            executor_sub = self.executor_sub_leap
+            executor_sub = self.submodes.leap_input
 
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
+            self.set_parent_info_to_submode(executor_sub, count, count_text)
 
             executor_sub.set_func_list_deferred(
-                [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+                [DeferredAction(self.apply_motion_info_in_normal, True)]
             )
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
         else:
             cursor = self.get_cursor()
             block = cursor.block()
             txt = block.text()
             n_space = len(txt) - len(txt.lstrip())
 
-            motion_info = self.helper_motion.j(num - 1, num_str)
-            self.helper_action.yank(motion_info)
-            self.helper_action.delete(
-                motion_info, is_insert=True, replace_txt=" " * n_space
-            )
+            motion_info = self.motions.j(count - 1, count_text)
+            self.edits.yank(motion_info)
+            self.edits.delete(motion_info, is_insert=True, replace_txt=" " * n_space)
             self.get_editor().setFocus()
 
-    def x(self, num=1, num_str=""):
+    def x(self, count=1, count_text=""):
         """Delete characters and start insert."""
         cursor_pos = self.get_cursor().position()
 
-        motion_info = self.helper_motion.l(num, num_str)
-        self.helper_action.yank(motion_info)
-        self.helper_action.delete(motion_info, is_insert=False)
+        motion_info = self.motions.l(count, count_text)
+        self.edits.yank(motion_info)
+        self.edits.delete(motion_info, is_insert=False)
 
         self.vim_status.cursor.set_cursor_pos_without_end(cursor_pos)
 
-    def D(self, num=1, num_str=""):
+    def D(self, count=1, count_text=""):
         """Delete the characters under the cursor until the end of the line.
 
         If count is greater than 1, This command deletes [count]-1 more lines.
@@ -473,115 +437,113 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
         editor = self.get_editor()
         n_block = editor.blockCount()
         block_no_start = self.get_cursor().blockNumber()
-        block_no_end = min([n_block - 1, block_no_start + num - 1])
+        block_no_end = min([n_block - 1, block_no_start + count - 1])
         block = editor.document().findBlockByNumber(block_no_end)
 
         motion_info = MotionInfo()
         motion_info.cursor_pos = block.position() + block.length() - 1
         motion_info.motion_type = MotionType.CharWise
-        sel_start, sel_end = self.helper_action.yank(motion_info)
-        self.helper_action.delete(motion_info, is_insert=False)
+        sel_start, sel_end = self.edits.yank(motion_info)
+        self.edits.delete(motion_info, is_insert=False)
 
         self.vim_status.cursor.set_cursor_pos_without_end(sel_start)
 
-    def C(self, num=1, num_str=""):
+    def C(self, count=1, count_text=""):
         """Execute D command and start insert mode."""
         editor = self.get_editor()
         n_block = editor.blockCount()
         block_no_start = self.get_cursor().blockNumber()
-        block_no_end = min([n_block - 1, block_no_start + num - 1])
+        block_no_end = min([n_block - 1, block_no_start + count - 1])
         block = editor.document().findBlockByNumber(block_no_end)
 
         motion_info = MotionInfo()
         motion_info.cursor_pos = block.position() + block.length() - 1
         motion_info.motion_type = MotionType.CharWise
-        sel_start, sel_end = self.helper_action.yank(motion_info)
-        self.helper_action.delete(motion_info, is_insert=True)
+        sel_start, sel_end = self.edits.yank(motion_info)
+        self.edits.delete(motion_info, is_insert=True)
 
         self.vim_status.cursor.set_cursor_pos(sel_start)
         self.get_editor().setFocus()
 
-    def d(self, num=1, num_str=""):
+    def d(self, count=1, count_text=""):
         """Delete text."""
-        executor_sub = self.executor_sub_motion_d
+        executor_sub = self.delete_operator
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
             [
-                FUNC_INFO(self.helper_action.yank, True),
-                FUNC_INFO(
-                    lambda x: self.helper_action.delete(x, is_insert=False), True
-                ),
+                DeferredAction(self.edits.yank, True),
+                DeferredAction(lambda x: self.edits.delete(x, is_insert=False), True),
             ]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def c(self, num=1, num_str=""):
+    def c(self, count=1, count_text=""):
         """Delete text and start insert."""
-        executor_sub = self.executor_sub_motion_c
+        executor_sub = self.change_operator
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
             [
-                FUNC_INFO(self.helper_action.yank, True),
-                FUNC_INFO(lambda x: self.helper_action.delete(x, is_insert=True), True),
-                FUNC_INFO(self.get_editor().setFocus, False),
+                DeferredAction(self.edits.yank, True),
+                DeferredAction(lambda x: self.edits.delete(x, is_insert=True), True),
+                DeferredAction(self.get_editor().setFocus, False),
             ]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def slash(self, num=1, num_str="", forward=True):
+    def slash(self, count=1, count_text="", forward=True):
         """Go to the next searched text."""
         self.vim_status.set_message("")
-        executor_sub = self.executor_sub_search
+        executor_sub = self.submodes.search_prompt
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+            [DeferredAction(self.apply_motion_info_in_normal, True)]
         )
         if not executor_sub.begin(forward):
             return
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, False)
+        return ExecutorTransition(executor_sub, False)
 
-    def question(self, num=1, num_str=""):
+    def question(self, count=1, count_text=""):
         """Search backward from the current position."""
-        return self.slash(num, num_str, forward=False)
+        return self.slash(count, count_text, forward=False)
 
-    def n(self, num=1, num_str=""):
+    def n(self, count=1, count_text=""):
         """Go to the next searched text."""
         self.vim_status.push_jump()
-        motion_info = self.helper_motion.n(num=num, num_str=num_str)
+        motion_info = self.motions.n(count=count, count_text=count_text)
 
         self.set_cursor_pos(motion_info.cursor_pos)
         self.vim_status.push_jump()
 
-    def N(self, num=1, num_str=""):
+    def N(self, count=1, count_text=""):
         """Go to the previous searched text."""
         self.vim_status.push_jump()
-        motion_info = self.helper_motion.N(num=num, num_str=num_str)
+        motion_info = self.motions.N(count=count, count_text=count_text)
 
         self.set_cursor_pos(motion_info.cursor_pos)
         self.vim_status.push_jump()
 
-    def m(self, num=1, num_str=""):
+    def m(self, count=1, count_text=""):
         """Set bookmark with given name."""
-        executor_sub = self.executor_sub_alnum
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.mark_name
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.vim_status.bookmark_manager.set_bookmark, True)]
+            [DeferredAction(self.vim_status.bookmark_manager.set_bookmark, True)]
         )
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def apostrophe(self, num=1, num_str=""):
+    def apostrophe(self, count=1, count_text=""):
         """Jump to bookmark linewise."""
-        executor_sub = self.executor_sub_alnum
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.mark_name
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         def run(ch):
             self.vim_status.push_jump()
@@ -590,123 +552,113 @@ class ExecutorNormalCmd(MovementMixin, ExecutorBase):
                 cursor = self.get_cursor()
                 self.vim_status.cursor.set_cursor_pos(cursor.block().position())
             else:
-                info = self.helper_motion.apostrophe(ch)
+                info = self.motions.apostrophe(ch)
                 if info.cursor_pos is not None:
                     self.vim_status.cursor.set_cursor_pos(info.cursor_pos)
             self.vim_status.push_jump()
 
-        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub.set_func_list_deferred([DeferredAction(run, True)])
+        return ExecutorTransition(executor_sub, True)
 
-    def backtick(self, num=1, num_str=""):
+    def backtick(self, count=1, count_text=""):
         """Jump to bookmark charwise."""
-        executor_sub = self.executor_sub_alnum
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.mark_name
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         def run(ch):
             self.vim_status.push_jump()
             if ch.isupper():
                 self.vim_status.bookmark_manager.jump_to_bookmark(ch)
             else:
-                info = self.helper_motion.backtick(ch)
+                info = self.motions.backtick(ch)
                 if info.cursor_pos is not None:
                     self.vim_status.cursor.set_cursor_pos(info.cursor_pos)
             self.vim_status.push_jump()
 
-        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub.set_func_list_deferred([DeferredAction(run, True)])
+        return ExecutorTransition(executor_sub, True)
 
-    def q(self, num=1, num_str=""):
+    def q(self, count=1, count_text=""):
         """Record typed characters into register."""
         if self.vim_status.is_recording_macro():
             self.vim_status.stop_recording_macro()
             self.vim_status.set_message("")
         else:
-            executor_sub = self.executor_sub_alnum
+            executor_sub = self.submodes.mark_name
 
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
+            self.set_parent_info_to_submode(executor_sub, count, count_text)
 
             executor_sub.set_func_list_deferred(
                 [
-                    FUNC_INFO(self.vim_status.start_recording_macro, True),
-                    FUNC_INFO(lambda: self.vim_status.set_message(""), False),
+                    DeferredAction(self.vim_status.start_recording_macro, True),
+                    DeferredAction(lambda: self.vim_status.set_message(""), False),
                 ]
             )
 
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
 
-    def at(self, num=1, num_str=""):
+    def at(self, count=1, count_text=""):
         """Execute contents of register."""
         if self.vim_status.is_recording_macro():
             self.vim_status.manager_macro.remove_last_key("@")
             return
 
-        executor_sub = self.executor_sub_alnum
+        executor_sub = self.submodes.mark_name
 
         manager_macro = self.vim_status.manager_macro
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(lambda x: manager_macro.set_info_for_execute(x, num), True)]
+            [
+                DeferredAction(
+                    lambda x: manager_macro.set_info_for_execute(x, count), True
+                )
+            ]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def run_easymotion(self, num=1, num_str=""):
+    def run_easymotion(self, count=1, count_text=""):
         """Run easymotion."""
-        executor_sub = self.executor_sub_easymotion
+        executor_sub = self.submodes.easymotion
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_normal, True)]
+            [DeferredAction(self.apply_motion_info_in_normal, True)]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def opensquarebracket(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def opensquarebracket(self, count=1, count_text=""):
         """Start [ submode."""
-        executor_sub = self.executor_sub_opensquarebracekt
+        return self.submodes.previous_structure
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        return executor_sub
-
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def closesquarebracket(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def closesquarebracket(self, count=1, count_text=""):
         """Start ] submode."""
-        executor_sub = self.executor_sub_closesquarebracekt
+        return self.submodes.next_structure
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        return executor_sub
-
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def openbrace(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def openbrace(self, count=1, count_text=""):
         """Start { submode."""
-        executor_sub = self.executor_sub_openbrace
+        return self.submodes.previous_block
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        return executor_sub
-
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_normal, True)])
-    def closebrace(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_normal, True)])
+    def closebrace(self, count=1, count_text=""):
         """Start } submode."""
-        executor_sub = self.executor_sub_closebrace
+        return self.submodes.next_block
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-
-        return executor_sub
-
-    def asterisk(self, num=1, num_str=""):
+    def asterisk(self, count=1, count_text=""):
         """Search word under cursor forward."""
-        motion_info = self.helper_motion.asterisk(num)
+        motion_info = self.motions.asterisk(count)
         self.apply_motion_info_in_normal(motion_info)
 
-    def sharp(self, num=1, num_str=""):
+    def sharp(self, count=1, count_text=""):
         """Search word under cursor backward."""
-        motion_info = self.helper_motion.sharp(num)
+        motion_info = self.motions.sharp(count)
         self.apply_motion_info_in_normal(motion_info)
 
 
+# Preserve the historically exported class name for external plugin users.
+ExecutorNormalCmd = NormalModeExecutor

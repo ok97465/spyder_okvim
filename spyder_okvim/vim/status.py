@@ -1,47 +1,51 @@
-"""Main object storing global Vim state."""
+"""Coordinate Vim modes and the owners of editing, search and input sessions."""
 
 # Standard Libraries
-import os.path as osp
-from collections import defaultdict
 
 # Third Party Libraries
-from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt, QTimer, Signal, Slot
-from qtpy.QtGui import QKeyEvent, QKeySequence, QTextCursor
+from qtpy.QtCore import QObject, QTimer, Signal, Slot
+from qtpy.QtGui import QKeyEvent, QTextCursor
 from qtpy.QtWidgets import QApplication, QLabel, QWidget
-from spyder.api.plugins import Plugins
-from spyder.config.manager import CONF
 
 # Project Libraries
-from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.config import read_settings, register_selection_layers
+from spyder_okvim.spyder.editor import EditorCommands
 from spyder_okvim.utils.bookmark_manager import BookmarkManager
-from spyder_okvim.utils.cell_helpers import CellRegion, get_document_cells
+from spyder_okvim.utils.cell_helpers import CellRegion
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
 from spyder_okvim.utils.jump_list import JumpList
 from spyder_okvim.utils.qtcompat import text_width
 
 from .cursor import VimCursor
+from .insert_repeat import InsertRepeatSession
 from .label import ANNOTATION_STYLE, InlineLabel
 from .macro import MacroManager
+from .registers import Registers
 from .search import SearchInfo
 from .state import (
-    DotCmdInfo,
     FindInfo,
     InputCmdInfo,
-    InsertCmdInfo,
-    KeyInfo,
-    RegisterInfo,
     VimState,
 )
-from .yank_history import YankHistory
 
 
 class VimStatus(QObject):
-    """Track the global Vim emulation state."""
+    """Coordinate mode changes and services for one plugin instance.
+
+    Insert/repeat and register rules have their own owners. Public forwarding
+    methods preserve command integrations without duplicating their state.
+    """
 
     change_label = Signal(int)
+    input_cancelled = Signal()
 
     def __init__(
-        self, editor_widget: QWidget, main: QWidget, msg_label: QLabel
+        self,
+        editor_widget: QWidget,
+        main: QWidget,
+        msg_label: QLabel,
+        *,
+        command_services_factory=None,
     ) -> None:
         """Initialize the status object.
 
@@ -54,7 +58,10 @@ class VimStatus(QObject):
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL
         self.editor_widget = editor_widget
-        self.cursor: VimCursor = VimCursor(editor_widget)
+        self._command_services_factory = command_services_factory
+        self.settings = read_settings()
+        register_selection_layers()
+        self.cursor: VimCursor = VimCursor(editor_widget, self.settings)
         self.main = main
 
         # method mapping
@@ -70,6 +77,12 @@ class VimStatus(QObject):
         self.get_pos_end_in_selection = self.cursor.get_pos_end_in_selection
 
         self.cmd_line = None
+        # Input UI binds these public callbacks after constructing its owners.
+        self.cancel_pending_input = lambda: None
+        self.show_yank_history = lambda: None
+        self.clear_yank_history = lambda: None
+        self.cancel_macro = lambda: None
+        self.is_playing_macro = lambda: False
 
         self.sub_mode = None
 
@@ -77,20 +90,19 @@ class VimStatus(QObject):
         self.find_info = FindInfo()
         self.input_cmd = InputCmdInfo("", "")
         self.input_cmd_prev = InputCmdInfo("", "")
-        self.dot_cmd = DotCmdInfo()
-        self.running_dot_cmd = False
-        self.insert_cmd = None
-        self._forwarding_insert_event = False
+        self.insert_repeat = InsertRepeatSession(self)
 
         # register
-        self.register_dict = defaultdict(RegisterInfo)
-        self.yank_history = YankHistory()
-        self.yanky_enabled = True
+        self.registers = Registers(
+            lambda: QApplication.clipboard().text(),
+            lambda text: QApplication.clipboard().setText(text),
+            self.set_message,
+        )
         # VimWidget supplies the controller during initialization.
         self.put_controller = None
 
         # search
-        self.search = SearchInfo(self.cursor, self)
+        self.search = SearchInfo(self.cursor, self, settings=self.settings)
         self.last_substitute = None
         self.substitute_confirm = None
 
@@ -102,13 +114,16 @@ class VimStatus(QObject):
         self.manager_macro = MacroManager()
 
         # bookmarks
-        bookmarks_file = osp.join(
-            CONF.get_plugin_config_path(CONF_SECTION), "bookmarks.json"
+        self.host = EditorCommands(
+            editor_widget, self.cursor, main, self.set_focus_to_vim
         )
-        self._application_plugin = None
+        # Project Libraries
+        from spyder_okvim.spyder.config import bookmarks_path
+
+        bookmarks_file = bookmarks_path()
         self.bookmark_manager = BookmarkManager(
             bookmarks_file,
-            self._open_file_in_application,
+            self.host.open_file,
             self.get_editorstack,
             self.get_editor,
             self.cursor.set_cursor_pos,
@@ -117,6 +132,14 @@ class VimStatus(QObject):
         # jumplist
         self.jump_list = JumpList()
         self.timer_go_to_definition = None
+        self._definition_watch = QTimer(self)
+        self._definition_generation = 0
+        self._definition_connections = ()
+        self._focus_timer = QTimer(self)
+        self._focus_timer.setSingleShot(True)
+        self._focus_timer.timeout.connect(self._restore_input_focus)
+        self._definition_deadline = QTimer(self)
+        self._definition_deadline.setSingleShot(True)
 
         # easymotion
         self.painter_easymotion = EasyMotionPainter()
@@ -137,7 +160,7 @@ class VimStatus(QObject):
         return self.get_editor().indent_chars
 
     def clear_state(self):
-        """Clear."""
+        """Return to Normal state and remove active Visual/annotation display."""
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL
         editor = self.get_editor()
@@ -165,66 +188,7 @@ class VimStatus(QObject):
 
     def get_cells(self) -> list[CellRegion]:
         """Return the cell regions for the active editor."""
-        editor = self.get_editor()
-        return get_document_cells(editor)
-
-    def reset_for_test(self):
-        """Reset status for test."""
-        if self.cmd_line is not None:
-            self.cmd_line.vim_widget.substitute_preview.cancel()
-        if self.substitute_confirm is not None:
-            self.substitute_confirm.cancel()
-        self.finish_insert(apply_count=False)
-        if self.put_controller is not None:
-            self.put_controller.cancel()
-        if self.cmd_line is not None:
-            self.cmd_line.vim_widget.cancel_yank_picker()
-        self.cursor.clear_highlights()
-        # Remove any pending EasyMotion overlays before processing Qt events.
-        self.remove_marker_of_easymotion()
-        QCoreApplication.processEvents()
-        self.clear_state()
-
-        self.find_info = FindInfo()
-        self.input_cmd = InputCmdInfo("", "")
-        self.input_cmd_prev = InputCmdInfo("", "")
-        self.dot_cmd.clear_key_list()
-        self.dot_cmd.put_payload = None
-        self.running_dot_cmd = False
-
-        self.get_editor().clear_extra_selections("hl_yank")
-        self.get_editor().clear_extra_selections("hl_put")
-        self.yank_history.clear()
-
-        # register
-        self.register_dict = defaultdict(RegisterInfo)
-
-        # search
-        self.search.close()
-        self.search.deleteLater()
-        self.search = SearchInfo(self.cursor, self)
-        self.last_substitute = None
-
-        # Macro
-        self.manager_macro = MacroManager()
-
-        self.msg_label.setText("")
-
-        # bookmarks
-        self.bookmark_manager.clear()
-
-        # jumplist
-        self.jump_list = JumpList()
-
-        # Ensure EasyMotion overlays are removed between tests to avoid
-        # accessing deleted widgets when reusing the session-scoped editor.
-        self.remove_marker_of_easymotion()
-
-        if self.timer_go_to_definition is not None:
-            self.timer_go_to_definition.stop()
-            self.timer_go_to_definition = None
-
-        self.to_normal()
+        return self.host.get_cells()
 
     def to_insert(self):
         """Change vim state to insert mode."""
@@ -278,181 +242,34 @@ class VimStatus(QObject):
             self.cmd_line.setFocus()
 
     def set_focus_to_vim_after_delay(self, delay=300):
-        """Set focus to the Vim command line after ``delay`` milliseconds.
+        """Schedule input focus in milliseconds for the current editor only."""
+        # Standard Libraries
+        import weakref
 
-        Note: This is mainly used when the editor regains focus after external
-        actions.
+        # Project Libraries
+        from spyder_okvim.utils.qtcompat import widget_is_deleted
 
-        Args:
-            delay: Delay in milliseconds before focusing the command line.
-        """
+        editor = self.get_editor()
+        if (
+            self.cmd_line is None
+            or widget_is_deleted(self.cmd_line)
+            or editor is None
+            or widget_is_deleted(editor)
+        ):
+            self._focus_timer.stop()
+            return
+        self._focus_editor = weakref.ref(editor)
+        self._focus_timer.start(delay)
 
-        def focus():
+    def _restore_input_focus(self):
+        """Reject a delayed focus request after its editor has changed."""
+        # Project Libraries
+        from spyder_okvim.utils.qtcompat import live_widget
+
+        editor = live_widget(getattr(self, "_focus_editor", None))
+        if editor is not None and editor is self.get_editor():
             self.set_focus_to_vim()
             self.cursor.draw_vim_cursor()
-
-        if self.cmd_line:
-            QTimer.singleShot(delay, focus)
-
-    @Slot(QKeyEvent)
-    def rcv_key_from_editor(self, event):
-        """Add key event from editor to list."""
-        self.handle_insert_key(event)
-        if self.running_dot_cmd:
-            return
-        self.dot_cmd.key_list_from_editor.append(
-            KeyInfo(event.key(), event.text(), event.modifiers(), 1)
-        )
-
-    def disconnect_from_editor(self):
-        """Disconnect from the editor."""
-        # disconnect previous connection.
-        editor = self.dot_cmd.editor_connected
-        self.dot_cmd.editor_connected = None
-        if editor:
-            try:
-                editor.sig_key_pressed.disconnect(self.rcv_key_from_editor)
-            except (TypeError, RuntimeError):
-                # The editor may already have been disconnected or closed.
-                pass
-
-    def handle_insert_key(self, event):
-        """Cancel count expansion when Insert navigation interrupts typing."""
-        if self.insert_cmd is not None and event.key() in (
-            Qt.Key_Left,
-            Qt.Key_Right,
-            Qt.Key_Up,
-            Qt.Key_Down,
-            Qt.Key_Home,
-            Qt.Key_End,
-            Qt.Key_PageUp,
-            Qt.Key_PageDown,
-        ):
-            self.insert_cmd.count = 1
-
-    def start_insert(self, command: str, count: int):
-        """Begin an insertion before changing the document, including ``o/O``."""
-        self.finish_insert(apply_count=False)
-        self.disconnect_from_editor()
-        self.insert_cmd = InsertCmdInfo(self.get_editor(), command, count)
-        self.insert_cmd.editor.installEventFilter(self)
-
-    def eventFilter(self, watched, event):
-        """Group each Insert event without delaying editor updates until Esc."""
-        info = self.insert_cmd
-        if (
-            info is None
-            or watched is not info.editor
-            or self._forwarding_insert_event
-            or event.type() not in (QEvent.KeyPress, QEvent.InputMethod)
-        ):
-            return super().eventFilter(watched, event)
-        if event.type() == QEvent.KeyPress and (
-            event.matches(QKeySequence.Undo) or event.matches(QKeySequence.Redo)
-        ):
-            self.finish_insert(apply_count=False)
-            return False
-        self._forwarding_insert_event = True
-        try:
-            with info.edit_block():
-                # Forward through Qt so other editor filters still run.
-                QCoreApplication.sendEvent(watched, event)
-        finally:
-            self._forwarding_insert_event = False
-        return True
-
-    def send_insert_event(self, editor, event):
-        """Group programmatic input from dot and macro playback as well."""
-        info = self.insert_cmd
-        if info is not None and info.editor is editor:
-            with info.edit_block():
-                self.handle_insert_key(event)
-                editor.keyPressEvent(event)
-        else:
-            editor.keyPressEvent(event)
-
-    def set_insert_start(self):
-        """Track the inserted range after positioning or opening a line."""
-        info = self.insert_cmd
-        cursor = info.editor.textCursor()
-        if info.command in ("o", "O"):
-            cursor.movePosition(QTextCursor.StartOfBlock)
-        cursor.setKeepPositionOnInsert(True)
-        info.start_cursor = cursor
-        info.end_cursor = info.editor.textCursor()
-
-    def finish_insert(self, apply_count=True):
-        """Apply the insertion count once and close its undo block."""
-        info = self.insert_cmd
-        if info is None:
-            return
-        self.insert_cmd = None
-        self.disconnect_from_editor()
-        try:
-            info.editor.removeEventFilter(self)
-        except RuntimeError:
-            return  # The editor has already been closed.
-        editor = info.editor
-        if not apply_count or editor is not self.get_editor():
-            return
-        cursor = editor.textCursor()
-        start = info.start_cursor.position()
-        end = cursor.position()
-        if end != info.end_cursor.position():
-            # Also guard cursor changes made with the mouse or editor APIs.
-            info.count = 1
-        if info.count > 1 and end >= start:
-            inserted = QTextCursor(cursor)
-            inserted.setPosition(start)
-            inserted.setPosition(end, QTextCursor.KeepAnchor)
-            text = inserted.selectedText().replace("\u2029", "\n")
-            if info.command in ("o", "O"):
-                text = "\n" + text
-            if text:
-                with info.edit_block():
-                    cursor.insertText(text * (info.count - 1))
-                editor.document_did_change()
-        if info.count > 1 and not cursor.atBlockStart():
-            cursor.movePosition(QTextCursor.PreviousCharacter)
-        editor.setTextCursor(cursor)
-
-    def update_dot_cmd(
-        self, connect_editor, register_name=None, key_list_to_cmd_line=None
-    ):
-        """Update input command info to dot command info."""
-        if self.running_dot_cmd is True:
-            return
-        dot_cmd = self.dot_cmd
-        dot_cmd.put_payload = None
-        dot_cmd.vim_state = self.vim_state
-        dot_cmd.num_str = self.input_cmd.num_str
-        dot_cmd.cmd = self.input_cmd.cmd
-        dot_cmd.register_name = register_name
-        dot_cmd.clear_key_list()
-        if key_list_to_cmd_line:
-            dot_cmd.key_list_to_cmd_line = key_list_to_cmd_line
-        self.disconnect_from_editor()
-
-        # For receiving key event from codeeditor
-        if connect_editor:
-            editor = self.get_editor()
-            self.dot_cmd.editor_connected = editor
-            editor.sig_key_pressed.connect(self.rcv_key_from_editor)
-
-        # Get selection region.
-        if self.is_normal():
-            return
-
-        sel_start = self.get_pos_start_in_selection()
-        sel_end = self.get_pos_end_in_selection()
-
-        block_start, block_no_start = self.cursor.get_block(sel_start)
-        block_end, block_no_end = self.cursor.get_block(sel_end)
-
-        dot_cmd.sel_block_no_start = block_no_start
-        dot_cmd.sel_block_no_end = block_no_end
-        dot_cmd.sel_col_start = sel_start - block_start.position()
-        dot_cmd.sel_col_end = sel_end - block_end.position()
 
     def get_register_name(self):
         """Get register name from previous command."""
@@ -462,95 +279,6 @@ class VimStatus(QObject):
             return txt[1]
         else:
             return '"'  # default register name
-
-    def set_register(self, name, content, register_type):
-        """Write one register, appending uppercase names to their lowercase pair."""
-        if name == "_":
-            return None
-
-        if "A" <= name <= "Z":
-            name = name.lower()
-            previous = self.register_dict[name]
-            if previous.type == VimState.VLINE:
-                if register_type != VimState.VLINE:
-                    content += "\n"
-                register_type = VimState.VLINE
-            elif register_type == VimState.VLINE and previous.content:
-                content = "\n" + content
-            content = previous.content + content
-
-        # Use independent values so history rotation cannot mutate other registers.
-        info = RegisterInfo()
-        info.name = name
-        info.content = content
-        info.type = register_type
-        if name == "+":
-            QApplication.clipboard().setText(content)
-        else:
-            self.register_dict[name] = info
-        return info
-
-    def update_registers(
-        self, name, content, register_type, *, is_yank, force_numbered=False
-    ):
-        """Store a yank/delete and update the unnamed and automatic registers."""
-        if name == "_" or not content:
-            return
-
-        info = self.set_register(name, content, register_type)
-        if is_yank:
-            if name == '"':
-                self.set_register("0", content, register_type)
-        else:
-            is_small_delete = register_type != VimState.VLINE and "\n" not in content
-            if not is_small_delete or force_numbered:
-                for number in range(9, 1, -1):
-                    previous = self.register_dict[str(number - 1)]
-                    self.set_register(str(number), previous.content, previous.type)
-                self.set_register("1", content, register_type)
-            if is_small_delete and name == '"':
-                self.set_register("-", content, register_type)
-
-        # Appends expose the combined value; deletion history keeps only this delete.
-        self.set_register('"', info.content, info.type)
-        if self.yanky_enabled:
-            kind = "linewise" if register_type == VimState.VLINE else "charwise"
-            self.yank_history.record(content, kind, "yank" if is_yank else "delete")
-            if self.yank_history.last_skip_reason == "oversize":
-                self.set_message("Yank history: value exceeds the memory limit")
-
-    def get_register(self):
-        """Get content from register_dict."""
-        name = self.get_register_name()
-        if name in ("+", "_"):
-            info = RegisterInfo()
-            info.name = name
-            if name == "+":
-                info.content = QApplication.clipboard().text()
-            return info
-        else:
-            return self.register_dict[name.lower()]
-
-    # ---- Application helpers ----------------------------------------
-    def _get_application_plugin(self):
-        """Return and cache Spyder's application plugin."""
-        plugin = getattr(self, "_application_plugin", None)
-        if plugin is None:
-            try:
-                plugin = self.main.get_plugin(Plugins.Application)
-            except Exception:
-                return None
-            self._application_plugin = plugin
-        return plugin
-
-    def _open_file_in_application(self, file_path: str) -> None:
-        """Open *file_path* through the application plugin when available."""
-        if not file_path:
-            return
-        application = self._get_application_plugin()
-        open_file = getattr(application, "open_file_in_plugin", None)
-        if callable(open_file):
-            open_file(file_path)
 
     # ---- Jump list ---------------------------------------------------
     def get_current_location(self):
@@ -574,8 +302,20 @@ class VimStatus(QObject):
         self.jump_list.push(file_path, pos)
 
     def start_definition_tracking(self, previous):
-        """Monitor cursor movement after ``gd`` and update the jump list."""
-        timer = QTimer(self)
+        """Watch for a gd destination with the existing two-second origin fallback.
+
+        Arrival stops the watch; the deadline retains the existing origin
+        bookkeeping policy. One watch/deadline pair belongs to this session.
+        Replacing or cancelling
+        the request disconnects prior callbacks, so no closed view is revisited.
+        """
+        self._definition_generation += 1
+        generation = self._definition_generation
+        timer = self._definition_watch
+        timer.stop()
+        self._definition_deadline.stop()
+        for signal, callback in self._definition_connections:
+            signal.disconnect(callback)
         self.timer_go_to_definition = timer
 
         def stop():
@@ -583,26 +323,32 @@ class VimStatus(QObject):
             self.timer_go_to_definition = None
 
         def check():
+            if generation != self._definition_generation:
+                return
             current = self.get_current_location()
             if previous is not None and current and current != previous:
-                pos = current[1]
-
-                if pos < 1:
-                    # The cursor may be set to 0 before it is created and positioned,
-                    # but a definition never starts at cursor position 0.
+                if current[1] < 1:
+                    # Spyder can briefly report zero before a destination exists.
                     return
                 self.push_jump()
                 stop()
 
         def finalize():
+            if generation != self._definition_generation:
+                return
             stop()
             current = self.get_current_location()
             if previous is not None and current == previous:
                 self.jump_list.pop_last()
 
-        timer.timeout.connect(check)
+        self._definition_connections = (
+            (timer.timeout, check),
+            (self._definition_deadline.timeout, finalize),
+        )
+        for signal, callback in self._definition_connections:
+            signal.connect(callback)
         timer.start(100)
-        QTimer.singleShot(2000, finalize)
+        self._definition_deadline.start(2000)
 
     def jump_backward(self) -> None:
         """Jump to the previous location in the jump list."""
@@ -610,7 +356,7 @@ class VimStatus(QObject):
         if not jump:
             return
         if self.get_editorstack().is_file_opened(jump.file) is None:
-            self._open_file_in_application(jump.file)
+            self.host.open_file(jump.file)
         self.get_editorstack().set_current_filename(jump.file)
         self.cursor.set_cursor_pos(jump.pos)
 
@@ -620,7 +366,7 @@ class VimStatus(QObject):
         if not jump:
             return
         if self.get_editorstack().is_file_opened(jump.file) is None:
-            self._open_file_in_application(jump.file)
+            self.host.open_file(jump.file)
         self.get_editorstack().set_current_filename(jump.file)
         self.cursor.set_cursor_pos(jump.pos)
 
@@ -740,3 +486,131 @@ class VimStatus(QObject):
             label.move(pos_in_parent)
             label.raise_()
             label.show()
+
+    def refresh_settings(self):
+        """Read applied options at the plugin boundary and return the snapshot."""
+        self.settings = read_settings()
+        return self.settings
+
+    @property
+    def dot_cmd(self):
+        """Recorded change owned by the Insert/repeat session."""
+        return self.insert_repeat.dot_command
+
+    @dot_cmd.setter
+    def dot_cmd(self, value):
+        self.insert_repeat.dot_command = value
+
+    @property
+    def insert_cmd(self):
+        """Current insertion; retained for existing command integrations."""
+        return self.insert_repeat.insertion
+
+    @property
+    def running_dot_cmd(self):
+        """Whether dot input is replaying rather than recording a new change."""
+        return self.insert_repeat.is_replaying
+
+    @running_dot_cmd.setter
+    def running_dot_cmd(self, value):
+        self.insert_repeat.is_replaying = value
+
+    @property
+    def register_dict(self):
+        """Register values owned by the register service."""
+        return self.registers.values
+
+    @register_dict.setter
+    def register_dict(self, values):
+        self.registers.values = values
+
+    @property
+    def yank_history(self):
+        """Immutable-entry history owned by the register service."""
+        return self.registers.history
+
+    @property
+    def yanky_enabled(self):
+        """Whether logical edits should be added to yank history."""
+        return self.registers.enabled
+
+    @yanky_enabled.setter
+    def yanky_enabled(self, enabled):
+        self.registers.enabled = enabled
+
+    def set_register(self, name, content, register_type):
+        """Write one register without adding a logical history entry."""
+        return self.registers.set_register(name, content, register_type)
+
+    def update_registers(
+        self, name, content, register_type, *, is_yank, force_numbered=False
+    ):
+        """Apply one logical yank/delete and its automatic register updates."""
+        return self.registers.update_registers(
+            name, content, register_type, is_yank=is_yank, force_numbered=force_numbered
+        )
+
+    def get_register(self):
+        """Read the register selected by the preceding command prefix."""
+        return self.registers.get_register(self.get_register_name())
+
+    def start_insert(self, command, count):
+        """Begin one counted insertion before changing the document."""
+        self.insert_repeat.start_insert(command, count)
+
+    def finish_insert(self, apply_count=True):
+        """Finish the active insertion, optionally suppressing count expansion."""
+        self.insert_repeat.finish_insert(apply_count=apply_count)
+
+    def handle_insert_key(self, event):
+        """Notify the insertion owner about navigation that stops count expansion."""
+        self.insert_repeat.handle_insert_key(event)
+
+    def send_insert_event(self, editor, event):
+        """Deliver replay input through the active insertion's undo group."""
+        self.insert_repeat.send_insert_event(editor, event)
+
+    def set_insert_start(self):
+        """Anchor the insertion after a command has positioned its cursor."""
+        self.insert_repeat.set_insert_start()
+
+    def disconnect_from_editor(self):
+        """Release the editor connection used to record dot input."""
+        self.insert_repeat.disconnect_from_editor()
+
+    def update_dot_cmd(
+        self, connect_editor, register_name=None, key_list_to_cmd_line=None
+    ):
+        """Snapshot the next change through the Insert/repeat owner."""
+        self.insert_repeat.update_dot_cmd(
+            connect_editor, register_name, key_list_to_cmd_line
+        )
+
+    def cancel_pending_work(self):
+        """Release view-bound work before a switch or shutdown; safe to repeat."""
+        self.cancel_pending_input()
+        self.finish_insert(apply_count=False)
+        self.disconnect_from_editor()
+        self._focus_timer.stop()
+        self._definition_deadline.stop()
+        self._definition_generation += 1
+        self._definition_watch.stop()
+        self.timer_go_to_definition = None
+        self.cursor.clear_highlights()
+        self.remove_marker_of_easymotion()
+
+    def create_command_services(self):
+        """Compose independent motion/edit services for one executor lifetime.
+
+        Stateful Leap input must not leak between modes or pending operators.
+        All executors use this one assembly point and receive explicit state.
+        """
+        if self._command_services_factory is not None:
+            return self._command_services_factory(self)
+        # Compatibility for integrations constructing VimStatus directly.
+        # Project Libraries
+        from spyder_okvim.utils.editing import EditingActions
+        from spyder_okvim.utils.motions import CursorMotions
+
+        motions = CursorMotions(self)
+        return motions, EditingActions(self, motions)

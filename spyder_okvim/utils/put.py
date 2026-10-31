@@ -13,12 +13,12 @@ from spyder_okvim.utils.qtcompat import live_widget
 from spyder_okvim.vim.state import VimState
 from spyder_okvim.vim.yank_history import YankEntry
 
-
 SESSION_BYTE_LIMIT = 10 * 1024 * 1024
 CYCLE_BYTE_LIMIT = 10 * 1024 * 1024
 
 
-def _text(cursor, start, end):
+def _range_text(cursor, start, end):
+    """Read the half-open UTF-16 patch without moving the caller's cursor."""
     cursor = QTextCursor(cursor)
     cursor.setPosition(start)
     cursor.setPosition(end, QTextCursor.KeepAnchor)
@@ -27,6 +27,15 @@ def _text(cursor, start, end):
 
 @dataclass(frozen=True)
 class PutContext:
+    """Original mode, cursor and selection used for all candidates of one put.
+
+    Positions are Qt UTF-16 offsets. Selection is [selection_start,
+    selection_end), ``block_end`` excludes its paragraph separator and
+    ``block_number`` is zero-based. ``position_after_character`` advances by one
+    Qt character without crossing the original block's end; ``at_document_end``
+    distinguishes the special final-line newline insertion for linewise puts.
+    """
+
     mode: int
     position: int
     selection_start: int
@@ -34,12 +43,19 @@ class PutContext:
     block_start: int
     block_end: int
     block_number: int
-    at_end: bool
-    char_after: int
+    at_document_end: bool
+    position_after_character: int
 
 
 @dataclass(frozen=True)
 class PutPlan:
+    """Replace the original document range [start, end) with text.
+
+    Offsets are Qt UTF-16 positions. ``cursor_policy`` selects the start, last
+    inserted character or a zero-based target block after application; it does
+    not move the cursor during planning.
+    """
+
     start: int
     end: int
     text: str
@@ -49,6 +65,13 @@ class PutPlan:
 
 @dataclass(frozen=True)
 class PutResult:
+    """Applied patch plus original text for exact validation and recovery.
+
+    ``plan.end`` is in the original document; ``end`` is the exclusive UTF-16
+    end of inserted text after application. ``cursor_position`` is the final
+    Vim cursor position in that edited document.
+    """
+
     plan: PutPlan
     original: str
     end: int
@@ -57,13 +80,22 @@ class PutResult:
 
 @dataclass(frozen=True)
 class PutPayload:
+    """Immutable entry, Vim p/P placement and count retained for dot replay."""
+
     entry: YankEntry
-    is_lower: bool
+    after_cursor: bool
     count: int
 
 
 @dataclass
 class PutSession:
+    """One view's short-lived reversible put and immutable candidate snapshot.
+
+    The owner expires this session on foreign edits, cursor/view changes,
+    unavailable undo, or cleanup. ``generation`` counts text changes rather than
+    syntax-highlighter revisions; edit_bytes bounds cumulative cycling work.
+    """
+
     editor_ref: object
     document: object
     context: PutContext
@@ -71,13 +103,24 @@ class PutSession:
     index: int
     result: PutResult
     count: int
-    is_lower: bool
+    after_cursor: bool
     generation: int
     edit_bytes: int = 0
 
 
-def plan_put(context, entry, count, is_lower):
-    """Plan against the original context, without changing the document."""
+def plan_put(context, entry, count, after_cursor=True, *, is_lower=None):
+    """Return a replacement plan without changing the document or registers.
+
+    ``count`` is the effective positive repetition count. ``after_cursor`` is
+    Vim ``p`` when true, ``P`` when false: it selects the insertion side for a
+    Normal characterwise put or before/after the current line for a linewise
+    put. Visual puts replace the captured selection regardless of this flag.
+    All positions in the context and resulting half-open range are Qt UTF-16
+    offsets; ``block_number`` is zero-based. ``is_lower`` accepts the former
+    keyword spelling for callers using the historical API.
+    """
+    if is_lower is not None:
+        after_cursor = is_lower
     linewise = entry.kind == "linewise"
     content = entry.text
     if context.mode == VimState.VLINE:
@@ -99,9 +142,11 @@ def plan_put(context, entry, count, is_lower):
             context.block_number + 1,
         )
     if not linewise:
-        position = context.char_after if is_lower else context.position
+        position = (
+            context.position_after_character if after_cursor else context.position
+        )
         return PutPlan(position, position, content, "last")
-    if not is_lower:
+    if not after_cursor:
         return PutPlan(
             context.block_start,
             context.block_start,
@@ -110,7 +155,7 @@ def plan_put(context, entry, count, is_lower):
             context.block_number,
         )
     position = context.block_end
-    if context.at_end:
+    if context.at_document_end:
         content = "\n" + content[:-1]
     else:
         position += 1
@@ -118,7 +163,12 @@ def plan_put(context, entry, count, is_lower):
 
 
 class PutController:
-    """Own one view's observed document and the last reversible put."""
+    """Own a view's observed document and last reversible put on the GUI thread.
+
+    Planning, application and cycling share one feature module but separate
+    public contracts. bind_editor/cleanup own all signal connections; late or
+    reentrant edits must not restore or overwrite a patch owned by another edit.
+    """
 
     def __init__(self, vim_status):
         self.status = vim_status
@@ -212,13 +262,16 @@ class PutController:
         self._document = None
 
     def cancel(self):
+        """Expire cycling without editing text, registers or yank history."""
         self.session = None
 
     def cleanup(self):
+        """Disconnect the observed view and clear owned highlighting; repeat safely."""
         self.bind_editor(None)
         self.status.cursor.clear_highlights()
 
     def capture_context(self):
+        """Snapshot the original mode and UTF-16 selection, binding its view."""
         editor = self.status.get_editor()
         self.bind_editor(editor)
         cursor = editor.textCursor()
@@ -245,8 +298,8 @@ class PutController:
             block_start=block.position(),
             block_end=initial.position(),
             block_number=block.blockNumber(),
-            at_end=initial.atEnd(),
-            char_after=after.position(),
+            at_document_end=initial.atEnd(),
+            position_after_character=after.position(),
         )
 
     def _cursor_position(self, plan, end):
@@ -270,7 +323,7 @@ class PutController:
     def _apply(self, plan, original=None):
         cursor = self.editor.textCursor()
         if original is None:
-            original = _text(cursor, plan.start, plan.end)
+            original = _range_text(cursor, plan.start, plan.end)
         cursor.setPosition(plan.start)
         cursor.setPosition(plan.end, QTextCursor.KeepAnchor)
         cursor.insertText(plan.text)
@@ -286,15 +339,27 @@ class PutController:
         if self.status.yanky_enabled:
             self.status.cursor.highlight_put(result.plan.start, result.end)
 
-    def put(self, num=1, is_lower=True, entry=None):
-        """Put a register or explicit immutable entry; return the resulting patch."""
+    def put(self, count=1, after_cursor=True, entry=None, *, num=None, is_lower=None):
+        """Insert a register or immutable entry and retain its reversible patch.
+
+        ``after_cursor`` selects Vim p/P placement; Visual mode replaces the
+        selection. Update dot state once, group the edit for undo, then retain
+        a bounded candidate snapshot only while the exact patch remains valid.
+        This GUI-thread operation can receive synchronous document callbacks;
+        edits outside its owned range invalidate the cycling session. Legacy
+        ``num`` and ``is_lower`` keywords remain accepted for external callers.
+        """
+        if num is not None:
+            count = num
+        if is_lower is not None:
+            after_cursor = is_lower
         editor = self.status.get_editor()
         if editor is None or editor.isReadOnly():
             self.cancel()
             return None
         context = self.capture_context()
         self.cancel()
-        num = max(1, int(num))
+        count = max(1, int(count))
         explicit = entry is not None
         if entry is None:
             register = self.status.get_register()
@@ -303,10 +368,10 @@ class PutController:
             connect_editor=False, register_name=self.status.get_register_name()
         )
         if explicit and not self.status.running_dot_cmd:
-            self.status.dot_cmd.cmd = "p" if is_lower else "P"
-            self.status.dot_cmd.num_str = str(num) if num > 1 else ""
+            self.status.dot_cmd.cmd = "p" if after_cursor else "P"
+            self.status.dot_cmd.num_str = str(count) if count > 1 else ""
             self.status.dot_cmd.register_name = None
-        plan = plan_put(context, entry, num, is_lower)
+        plan = plan_put(context, entry, count, after_cursor)
         old_blocks = editor.blockCount()
         # At most three UTF-8 bytes per UTF-16 unit (non-BMP characters use two
         # units). Bound the original before copying a potentially huge selection.
@@ -321,7 +386,7 @@ class PutController:
             result = self._apply(plan, original=None if retain_original else "")
             self._finish(result)
         if explicit and not self.status.running_dot_cmd:
-            self.status.dot_cmd.put_payload = PutPayload(entry, is_lower, num)
+            self.status.dot_cmd.put_payload = PutPayload(entry, after_cursor, count)
         enabled = self.status.yanky_enabled
         expected_length = previous_length + result.end - plan.end
         valid_patch = (
@@ -329,7 +394,7 @@ class PutController:
             and editor.document().characterCount() == expected_length
             and (
                 not retain_original
-                or _text(editor.textCursor(), result.plan.start, result.end)
+                or _range_text(editor.textCursor(), result.plan.start, result.end)
                 == result.plan.text
             )
         )
@@ -347,8 +412,8 @@ class PutController:
                 (entry,) + snapshot,
                 0,
                 result,
-                num,
-                is_lower,
+                count,
+                after_cursor,
                 self.text_generation,
             )
         elif entry.text and enabled and valid_patch:
@@ -383,7 +448,7 @@ class PutController:
         result = session.result
         # Qt can defer contentsChange until an enclosing edit block ends.
         return (
-            _text(editor.textCursor(), result.plan.start, result.end)
+            _range_text(editor.textCursor(), result.plan.start, result.end)
             == result.plan.text
         )
 
@@ -413,9 +478,9 @@ class PutController:
             self.cancel()
             self.status.set_message("Yank cycling memory limit reached")
             return True
-        plan = plan_put(session.context, entry, session.count, session.is_lower)
+        plan = plan_put(session.context, entry, session.count, session.after_cursor)
         old = session.result
-        payload = PutPayload(entry, session.is_lower, session.count)
+        payload = PutPayload(entry, session.after_cursor, session.count)
         # Type and repeat meaning can change even when the produced patch and
         # final cursor are identical. Commit the candidate without editing Qt.
         same_range = (plan.start, plan.end) == (old.plan.start, old.plan.end)
@@ -477,7 +542,7 @@ class PutController:
                     and live_widget(session.editor_ref) is editor
                     and editor.document() is session.document
                     and patch is not None
-                    and _text(editor.textCursor(), patch.plan.start, patch.end)
+                    and _range_text(editor.textCursor(), patch.plan.start, patch.end)
                     == patch.plan.text
                 ):
                     cursor.setPosition(patch.plan.start)
@@ -503,7 +568,7 @@ class PutController:
         valid_patch = (
             not self._foreign_edit
             and editor.document().characterCount() == expected_length
-            and _text(editor.textCursor(), result.plan.start, result.end)
+            and _range_text(editor.textCursor(), result.plan.start, result.end)
             == result.plan.text
         )
         if not valid_patch:
@@ -519,7 +584,7 @@ class PutController:
         editor.document_did_change()
         return True
 
-    def repeat(self, num=1, num_str=""):
+    def repeat(self, count=1, count_text=""):
         """Replay only snapshot puts here; ordinary puts retain register lookup."""
         dot = self.status.dot_cmd
         payload = dot.put_payload
@@ -534,10 +599,10 @@ class PutController:
                 for ch in dot.selection_to_cmd_string():
                     line.setText(line.text() + ch)
             count = (
-                max(1, int(num))
-                if num_str and dot.vim_state == VimState.NORMAL
+                max(1, int(count))
+                if count_text and dot.vim_state == VimState.NORMAL
                 else payload.count
             )
-            self.put(count, payload.is_lower, payload.entry)
+            self.put(count, payload.after_cursor, payload.entry)
         finally:
             self.status.running_dot_cmd = False

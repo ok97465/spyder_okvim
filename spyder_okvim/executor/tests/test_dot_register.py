@@ -5,6 +5,7 @@ import pytest
 
 # Project Libraries
 from spyder_okvim.vim.state import VimState
+from tests.qt_support import reset_vim_state
 
 
 def prepare_editor(vim_bot, text):
@@ -14,7 +15,7 @@ def prepare_editor(vim_bot, text):
     cmd_line.esc_pressed()
     status = vim.vim_cmd.vim_status
     status.disconnect_from_editor()
-    status.reset_for_test()
+    reset_vim_state(status)
     editor.set_text(text)
     status.cursor.set_cursor_pos(0)
     cmd_line.clear()

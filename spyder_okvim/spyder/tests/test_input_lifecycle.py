@@ -1,6 +1,7 @@
 """Stable command observations survive recursive input and dispatch failures."""
 
 # Standard Libraries
+from dataclasses import FrozenInstanceError
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -12,6 +13,7 @@ from qtpy.QtWidgets import QApplication
 
 # Project Libraries
 from spyder_okvim.vim import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -27,7 +29,7 @@ def ex_input_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     original = editor.toPlainText()
     editor.set_text("aa\nbb\ncc\n")
@@ -42,10 +44,60 @@ def ex_input_bot(vim_bot):
         commandline.esc_pressed()
         status.disconnect_from_editor()
         stack.set_stack_index(0)
-        status.reset_for_test()
+        reset_vim_state(status)
         editor.set_text(original)
         commandline.histories["ex"].clear()
         stack.set_stack_index(previous_index)
+
+
+def test_prompt_snapshot_and_replacement_use_python_cursor_indexes(ex_input_bot):
+    """The public input boundary converts emoji once and exposes an immutable view."""
+    editor, status, commandline, qtbot, _, _ = ex_input_bot
+    original = editor.toPlainText()
+    assert commandline.snapshot() is None
+    qtbot.keyClicks(commandline, ":")
+
+    commandline.replace_input(":e 😀가.txt", cursor_position=5)
+    snapshot = commandline.snapshot()
+
+    assert snapshot.session is status.sub_mode
+    assert (snapshot.kind, snapshot.prompt) == ("ex", ":")
+    assert snapshot.text == ":e 😀가.txt"
+    assert snapshot.cursor == 5
+    assert commandline.cursorPosition() == 6
+    assert not snapshot.is_replacing
+    assert not snapshot.is_composing
+    assert editor.toPlainText() == original
+    with pytest.raises(FrozenInstanceError):
+        snapshot.cursor = 0
+
+
+def test_prompt_replacement_is_guarded_until_outer_input_finishes(ex_input_bot):
+    """Passive observers can reject replacement signals and resume on stable input."""
+    _, _, commandline, qtbot, widget, _ = ex_input_bot
+    qtbot.keyClicks(commandline, ":")
+    changing = []
+    finished = []
+
+    def text_changed():
+        changing.append(commandline.snapshot())
+
+    def input_finished():
+        finished.append(commandline.snapshot())
+
+    commandline.textChanged.connect(text_changed)
+    widget.sig_input_finished.connect(input_finished)
+    try:
+        commandline.replace_input(":write", cursor_position=3)
+    finally:
+        commandline.textChanged.disconnect(text_changed)
+        widget.sig_input_finished.disconnect(input_finished)
+
+    assert changing and all(snapshot.is_replacing for snapshot in changing)
+    assert len(finished) == 1
+    assert finished[0].text == ":write"
+    assert finished[0].cursor == 3
+    assert not finished[0].is_replacing
 
 
 @pytest.mark.parametrize(
@@ -224,7 +276,7 @@ def pending_command(vim_bot, monkeypatch):
     monkeypatch.setattr(widget.vim_status, "sub_mode", executor)
     monkeypatch.setattr(widget.vim_status, "vim_state", VimState.NORMAL)
     monkeypatch.setattr(widget.vim_status, "running_dot_cmd", False)
-    monkeypatch.setattr(widget, "_macro_generation", -1)
+    monkeypatch.setattr(widget.macro_playback, "generation", -1)
     monkeypatch.setattr(widget.which_key, "enabled", False)
     widget.which_key.cancel()
     return widget, executor

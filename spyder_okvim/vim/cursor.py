@@ -8,11 +8,9 @@ import weakref
 from qtpy.QtCore import QTimer
 from qtpy.QtGui import QBrush, QColor, QTextBlock, QTextCursor
 from qtpy.QtWidgets import QTextEdit
-from spyder.config.manager import CONF
-from spyder.plugins.editor.api.decoration import DRAW_ORDERS
 
 # Project Libraries
-from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.config import PluginSettings
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.utils.qtcompat import live_widget
 
@@ -20,7 +18,7 @@ from spyder_okvim.utils.qtcompat import live_widget
 class VimCursor:
     """Manage the Vim cursor."""
 
-    def __init__(self, editor_widget):
+    def __init__(self, editor_widget, settings=None):
         self.editor_widget = editor_widget
         self._editorstack = None
 
@@ -39,40 +37,30 @@ class VimCursor:
         self.hl_put = True
         self._highlight_timers = {}
 
-        self.set_config_from_conf()
+        self.apply_settings(settings or PluginSettings())
 
-        # Order of Selections
-        DRAW_ORDERS["vim_search"] = 6
-        DRAW_ORDERS["hl_put"] = 7
-        DRAW_ORDERS["hl_yank"] = 7
-        DRAW_ORDERS["vim_selection"] = 8
-        DRAW_ORDERS["vim_cursor"] = 9
-
-    def set_config_from_conf(self):
-        """Set config from conf."""
-        self.vim_cursor.format.setForeground(
-            QBrush(QColor(CONF.get(CONF_SECTION, "cursor_fg_color")))
-        )
-        self.vim_cursor.format.setBackground(
-            QBrush(QColor(CONF.get(CONF_SECTION, "cursor_bg_color")))
-        )
-
-        self.selection.format.setForeground(
-            QBrush(QColor(CONF.get(CONF_SECTION, "select_fg_color")))
-        )
-        self.selection.format.setBackground(
-            QBrush(QColor(CONF.get(CONF_SECTION, "select_bg_color")))
-        )
-
-        self.yank_fg_color = QBrush(QColor(CONF.get(CONF_SECTION, "yank_fg_color")))
-        self.yank_bg_color = QBrush(QColor(CONF.get(CONF_SECTION, "yank_bg_color")))
-        self.hl_yank_dur = CONF.get(CONF_SECTION, "highlight_yank_duration")
-        self.hl_yank = CONF.get(CONF_SECTION, "highlight_yank")
-        self.hl_put = CONF.get(CONF_SECTION, "highlight_put", default=True)
+    def apply_settings(self, settings):
+        """Apply one cursor/highlight snapshot and stop disabled highlight jobs."""
+        self.vim_cursor.format.setForeground(QBrush(QColor(settings.cursor_fg_color)))
+        self.vim_cursor.format.setBackground(QBrush(QColor(settings.cursor_bg_color)))
+        self.selection.format.setForeground(QBrush(QColor(settings.select_fg_color)))
+        self.selection.format.setBackground(QBrush(QColor(settings.select_bg_color)))
+        self.yank_fg_color = QBrush(QColor(settings.yank_fg_color))
+        self.yank_bg_color = QBrush(QColor(settings.yank_bg_color))
+        self.hl_yank_dur = settings.highlight_yank_duration
+        self.hl_yank = settings.highlight_yank
+        self.hl_put = settings.highlight_put
         if not self.hl_yank:
             self._clear_highlight("hl_yank")
         if not self.hl_put:
             self._clear_highlight("hl_put")
+
+    def set_config_from_conf(self):
+        """Compatibility refresh; plugin code passes an explicit snapshot."""
+        # Project Libraries
+        from spyder_okvim.spyder.config import read_settings
+
+        self.apply_settings(read_settings())
 
     def get_editor(self):
         """Get the editor focused."""

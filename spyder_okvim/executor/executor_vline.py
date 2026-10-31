@@ -1,42 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Vertical line selection helper."""
+"""Interpret Visual-line input while preserving whole-line selection semantics."""
 
 # Standard Libraries
 import re
 
-# Third Party Libraries
-from spyder.config.manager import CONF
-
 # Project Libraries
-from spyder_okvim.executor.executor_base import (
-    FUNC_INFO,
-    RETURN_EXECUTOR_METHOD_INFO,
-    ExecutorBase,
-)
 from spyder_okvim.executor.decorators import submode
-from spyder_okvim.executor.executor_colon import ExecutorColon
-from spyder_okvim.executor.executor_easymotion import ExecutorEasymotion
-from spyder_okvim.executor.executor_sub import (
-    ExecutorSearch,
-    ExecutorSubCmd_alnum,
-    ExecutorSubCmd_closesquarebracket,
-    ExecutorSubCmd_closebrace,
-    ExecutorSubCmd_f_t,
-    ExecutorSubCmd_g,
-    ExecutorSubCmd_opensquarebracket,
-    ExecutorSubCmd_openbrace,
-    ExecutorSubCmd_r,
-    ExecutorSubCmd_register,
-    ExecutorSubCmdLeap,
-    ExecutorSubMotion_a,
-    ExecutorSubMotion_i,
+from spyder_okvim.executor.executor_base import (
+    DeferredAction,
+    ExecutorBase,
+    ExecutorTransition,
 )
+from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.executor.mixins import MovementMixin, SelectionMixin
-from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.executor.prefixes import ModeSubmodes
 
 
-class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
-    """Executor for vline."""
+class VisualLineModeExecutor(SelectionMixin, MovementMixin, ExecutorBase):
+    """Interpret keys for a linewise Visual selection and preserve its endpoints."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -53,35 +34,18 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
         self.apply_motion_info_in_vline = (
             self.vim_status.cursor.apply_motion_info_in_vline
         )
-        self.executor_sub_g = ExecutorSubCmd_g(vim_status)
-        self.executor_sub_f_t = ExecutorSubCmd_f_t(vim_status)
-        self.executor_sub_r = ExecutorSubCmd_r(vim_status)
-        self.executor_sub_motion_i = ExecutorSubMotion_i(vim_status)
-        self.executor_sub_motion_a = ExecutorSubMotion_a(vim_status)
-        self.executor_sub_register = ExecutorSubCmd_register(vim_status)
-        self.executor_sub_alnum = ExecutorSubCmd_alnum(vim_status)
-        self.executor_sub_search = ExecutorSearch(vim_status)
-        self.executor_sub_easymotion = ExecutorEasymotion(vim_status)
-        self.executor_sub_leap = ExecutorSubCmdLeap(vim_status)
+        self.submodes = ModeSubmodes(vim_status)
         self.executor_colon = ExecutorColon(vim_status)
-        self.executor_sub_opensquarebracekt = ExecutorSubCmd_opensquarebracket(
-            vim_status
-        )
-        self.executor_sub_closesquarebracekt = (
-            ExecutorSubCmd_closesquarebracket(vim_status)
-        )
-        self.executor_sub_openbrace = ExecutorSubCmd_openbrace(vim_status)
-        self.executor_sub_closebrace = ExecutorSubCmd_closebrace(vim_status)
 
         # SelectionMixin hooks
         self.apply_motion_info_in_sel = self.apply_motion_info_in_vline
         self.set_cursor_pos_in_sel = self.set_cursor_pos_in_vline
 
-    def v(self, num=1, num_str=""):
+    def v(self, count=1, count_text=""):
         """Start Visual mode per character."""
         self.vim_status.to_visual_char()
 
-    def J(self, num=1, num_str=""):
+    def J(self, count=1, count_text=""):
         """Join lines, with a minimum of two lines."""
         block_no_start = self.get_block_no_start_in_selection()
         block_no_end = self.get_block_no_end_in_selection()
@@ -94,108 +58,108 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
             block_no_end += 1
 
         cursor_pos_start = self.get_pos_start_in_selection()
-        self.helper_action.join_lines(cursor_pos_start, block_no_start, block_no_end)
+        self.edits.join_lines(cursor_pos_start, block_no_start, block_no_end)
         self.vim_status.to_normal()
 
-    def g(self, num=1, num_str=""):
+    def g(self, count=1, count_text=""):
         """Start g submode."""
-        executor_sub = self.executor_sub_g
+        executor_sub = self.submodes.g_prefix
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            [DeferredAction(self.apply_motion_info_in_vline, True)]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def G(self, num=1, num_str=""):
+    def G(self, count=1, count_text=""):
         """Move to the line."""
-        motion_info = self.helper_motion.G(num=num, num_str=num_str)
+        motion_info = self.motions.G(count=count, count_text=count_text)
 
         self.set_cursor_pos_in_vline(motion_info.cursor_pos)
 
-    def tilde(self, num=1, num_str=""):
+    def tilde(self, count=1, count_text=""):
         """Switch case of the character under the cursor.
 
         Move the cursor to the start of selection.
         """
-        self.helper_action.handle_case(None, "swap")
+        self.edits.change_case(None, "swap")
 
-    def f(self, num=1, num_str=""):
+    def f(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        executor_sub = self.submodes.find_character
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            [DeferredAction(self.apply_motion_info_in_vline, True)]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def F(self, num=1, num_str=""):
+    def F(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        executor_sub = self.submodes.find_character
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            [DeferredAction(self.apply_motion_info_in_vline, True)]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def t(self, num=1, num_str=""):
+    def t(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        executor_sub = self.submodes.find_character
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            [DeferredAction(self.apply_motion_info_in_vline, True)]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def T(self, num=1, num_str=""):
+    def T(self, count=1, count_text=""):
         """Go to the next occurrence of a character."""
-        executor_sub = self.executor_sub_f_t
+        executor_sub = self.submodes.find_character
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+            [DeferredAction(self.apply_motion_info_in_vline, True)]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_vline, True)])
-    def opensquarebracket(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_vline, True)])
+    def opensquarebracket(self, count=1, count_text=""):
         """Start [ submode."""
-        return self.executor_sub_opensquarebracekt
+        return self.submodes.previous_structure
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_vline, True)])
-    def closesquarebracket(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_vline, True)])
+    def closesquarebracket(self, count=1, count_text=""):
         """Start ] submode."""
-        return self.executor_sub_closesquarebracekt
+        return self.submodes.next_structure
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_vline, True)])
-    def openbrace(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_vline, True)])
+    def openbrace(self, count=1, count_text=""):
         """Start { submode."""
-        return self.executor_sub_openbrace
+        return self.submodes.previous_block
 
-    @submode(lambda self: [FUNC_INFO(self.apply_motion_info_in_vline, True)])
-    def closebrace(self, num=1, num_str=""):
+    @submode(lambda self: [DeferredAction(self.apply_motion_info_in_vline, True)])
+    def closebrace(self, count=1, count_text=""):
         """Start } submode."""
-        return self.executor_sub_closebrace
+        return self.submodes.next_block
 
-    def d(self, num=1, num_str=""):
+    def d(self, count=1, count_text=""):
         """Delete text."""
         editor = self.get_editor()
         block_no_start = self.get_block_no_start_in_selection()
 
-        self.helper_action.yank(None)
-        self.helper_action.delete(None, is_insert=False)
+        self.edits.yank(None)
+        self.edits.delete(None, is_insert=False)
         self.vim_status.to_normal()
 
         # calc cursor position
@@ -208,16 +172,20 @@ class ExecutorVlineCmd(SelectionMixin, MovementMixin, ExecutorBase):
 
         self.set_cursor_pos(cursor_pos)
 
-    def S(self, num=1, num_str=""):
+    def S(self, count=1, count_text=""):
         """Delete text and start insert."""
-        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        use_leap = self.vim_status.settings.use_leap
         if use_leap:
-            executor_sub = self.executor_sub_leap
+            executor_sub = self.submodes.leap_input
 
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
+            self.set_parent_info_to_submode(executor_sub, count, count_text)
 
             executor_sub.set_func_list_deferred(
-                [FUNC_INFO(self.apply_motion_info_in_vline, True)]
+                [DeferredAction(self.apply_motion_info_in_vline, True)]
             )
 
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
+
+
+# Preserve the historically exported class name for external plugin users.
+ExecutorVlineCmd = VisualLineModeExecutor

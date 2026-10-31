@@ -1,29 +1,35 @@
-"""Expose Vim core classes.
+"""Public Vim values and services, loaded only when requested.
 
-This package gathers all classes implementing the Vim emulation logic.
-Users should import them directly from ``spyder_okvim.vim``.
-
+Pure model imports never load Qt, Spyder or editor services. The historical
+package exports stay available for consumers while implementation imports can
+name their owning modules directly.
 """
 
-from .cursor import VimCursor
-from .label import InlineLabel
-from .macro import MacroManager
-from .search import SearchInfo
-from .state import DotCmdInfo, FindInfo, InputCmdInfo, KeyInfo, RegisterInfo, VimState
-from .status import VimStatus
+# Standard Libraries
+from importlib import import_module
 
-__all__ = [
-    "VimState",
-    "FindInfo",
-    "InputCmdInfo",
-    "DotCmdInfo",
-    "KeyInfo",
-    "RegisterInfo",
-    "SearchInfo",
-    "MacroManager",
-    "InlineLabel",
-    "VimCursor",
-    "VimStatus",
-]
+_EXPORTS = {
+    "VimState": "state",
+    "FindInfo": "state",
+    "InputCmdInfo": "state",
+    "DotCmdInfo": "state",
+    "KeyInfo": "state",
+    "InputSource": "state",
+    "RegisterInfo": "state",
+    "SearchInfo": "search",
+    "MacroManager": "macro",
+    "InlineLabel": "label",
+    "VimCursor": "cursor",
+    "VimStatus": "status",
+}
+__all__ = list(_EXPORTS)
 
 
+def __getattr__(name):
+    """Resolve a historical public export without eager UI imports."""
+    module = _EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f".{module}", __name__), name)
+    globals()[name] = value
+    return value

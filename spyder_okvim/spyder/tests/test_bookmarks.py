@@ -6,13 +6,14 @@ from qtpy.QtCore import Qt
 
 # Project Libraries
 from spyder_okvim.vim import VimState
+from tests.qt_support import reset_vim_state
 
 
 def test_bookmark_set_and_jump(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     # set bookmark 'a'
@@ -29,7 +30,7 @@ def test_global_bookmark_and_jump(vim_bot):
     _, stack, editor0, vim, qtbot = vim_bot
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     # set bookmark 'A' (persistent)
@@ -53,7 +54,7 @@ def test_bookmark_visual_mode(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "vma")
@@ -68,7 +69,7 @@ def test_bookmark_vline_mode(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "Vma")
@@ -83,7 +84,7 @@ def test_local_bookmark_not_cross_file(vim_bot):
     _, stack, editor0, vim, qtbot = vim_bot
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -105,7 +106,7 @@ def test_local_bookmark_not_cross_file_visual(vim_bot):
     _, stack, editor0, vim, qtbot = vim_bot
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -125,7 +126,7 @@ def test_local_bookmark_not_cross_file_vline(vim_bot):
     _, stack, editor0, vim, qtbot = vim_bot
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -145,7 +146,7 @@ def test_bookmark_removed_after_edit(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(2)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -175,7 +176,7 @@ def test_mark_operations(vim_bot, cmd_list, text_expected, cursor_pos, reg_expec
 
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "2lma")
@@ -208,7 +209,7 @@ def test_mark_operations_after(
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(12)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -241,7 +242,7 @@ def test_global_mark_operations(
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "2lmA")
@@ -274,7 +275,7 @@ def test_global_mark_operations_after(
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(12)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "mA")
@@ -294,7 +295,7 @@ def test_global_mark_operations_removed(vim_bot, cmd):
     editor.set_text("abcd\nefgh\nijkl\n")
     # Place mark on the last line so it disappears after editing
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(10)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "mA")
@@ -316,7 +317,7 @@ def test_global_mark_operations_cross_file(vim_bot, cmd):
     stack.set_current_filename(stack.get_filenames()[0])
     editor0.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "mA")
@@ -332,7 +333,7 @@ def test_global_mark_operations_cross_file(vim_bot, cmd):
     assert editor_other.textCursor().position() == pos_before
     assert editor_other.toPlainText() == "x\ny\nz\n"
     assert reg_before == reg_after
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
 
 @pytest.mark.parametrize("cmd", ["y'a", "y`a", "d'a", "d`a", "c'a", "c`a"])
@@ -342,7 +343,7 @@ def test_mark_operations_removed(vim_bot, cmd):
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(4)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -361,7 +362,7 @@ def test_global_bookmark_removed_after_edit(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("a\nb\nc\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "mA")
@@ -379,7 +380,7 @@ def test_global_bookmark_overwrite(vim_bot):
     editor0 = stack.get_current_editor()
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "mA")
@@ -401,7 +402,7 @@ def test_jump_mark_visual_before_after(vim_bot, cmd, pos_expected):
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "2lma")
@@ -419,7 +420,7 @@ def test_jump_mark_visual_removed(vim_bot, cmd):
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(10)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "ma")
@@ -438,7 +439,7 @@ def test_jump_global_mark_visual(vim_bot, cmd, pos_expected):
     stack.set_current_filename(stack.get_filenames()[0])
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "2lmA")
@@ -457,7 +458,7 @@ def test_jump_global_mark_visual_cross_file(vim_bot, cmd, pos_expected):
     stack.set_current_filename(stack.get_filenames()[0])
     editor0.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "2lmA")
@@ -477,7 +478,7 @@ def test_jump_global_mark_visual_removed(vim_bot, cmd):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text("abcd\nefgh\nijkl\n")
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(10)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyClicks(cmd_line, "mA")

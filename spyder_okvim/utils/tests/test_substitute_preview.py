@@ -1,10 +1,13 @@
 """Incremental parsing and finite calculation share final execution semantics."""
 
+# Standard Libraries
 from dataclasses import replace
 
+# Third Party Libraries
 import pytest
 from qtpy.QtGui import QTextCursor, QTextDocument
 
+# Project Libraries
 from spyder_okvim.utils.ex_parser import (
     ExError,
     SubstituteSpec,
@@ -125,15 +128,7 @@ def test_highlights_match_execution_candidates_and_preserve_document(text, comma
     executed = prepare_substitution(
         context.header, context.spec, 0, document.blockCount()
     )
-    plan = build_substitution_plan(
-        document,
-        executed.first_line,
-        executed.last_line,
-        executed.pattern,
-        executed.tokens,
-        global_matches=executed.global_matches,
-        confirm=True,
-    )
+    plan = build_substitution_plan(document, replace(executed, confirm=True))
     assert (result.match_count, result.matched_lines) == (
         plan.match_count,
         plan.line_count,
@@ -156,6 +151,7 @@ def test_highlights_match_execution_candidates_and_preserve_document(text, comma
 def test_highlighting_never_tokenizes_or_expands_replacements(
     monkeypatch, command, expected_count
 ):
+    # Project Libraries
     from spyder_okvim.utils import substitute
 
     def fail(*args, **kwargs):
@@ -224,16 +220,17 @@ def test_scan_limits_bound_candidate_highlights(limit, value, expected_count, re
 
 
 def test_long_lines_are_omitted_before_regex_is_called(monkeypatch):
+    # Project Libraries
     from spyder_okvim.utils import substitute
 
     observed = []
-    iterate = substitute._iter_matches
+    iterate = substitute.iter_substitution_matches
 
     def record(pattern, text, global_matches):
         observed.append(text)
         yield from iterate(pattern, text, global_matches)
 
-    monkeypatch.setattr(substitute, "_iter_matches", record)
+    monkeypatch.setattr(substitute, "iter_substitution_matches", record)
     limits = replace(PreviewLimits(), max_line_chars=3)
     _, _, result = preview("xxxxxxxx\nx", ":%s/x/y/g", limits=limits)
     assert observed == ["x"]
@@ -307,14 +304,7 @@ def test_visible_overlay_lines_match_execution_without_mutating_source(text, com
         include_replacement=True,
     )
     expected = QTextDocument(text)
-    plan = build_substitution_plan(
-        expected,
-        prepared.first_line,
-        prepared.last_line,
-        prepared.pattern,
-        prepared.tokens,
-        global_matches=prepared.global_matches,
-    )
+    plan = build_substitution_plan(expected, replace(prepared, confirm=False))
     for start, end, replacement in reversed(plan.edits):
         cursor = QTextCursor(expected)
         cursor.setPosition(start)
@@ -364,6 +354,7 @@ def test_overlay_marks_are_in_output_utf16_coordinates(
 
 
 def test_only_requested_visible_blocks_expand_replacements(monkeypatch):
+    # Project Libraries
     from spyder_okvim.utils import substitute
 
     observed = []
@@ -433,6 +424,7 @@ def test_output_limits_omit_rows_while_candidate_scanning_continues(limit, value
 
 
 def test_output_limit_is_checked_before_assembling_large_expansions(monkeypatch):
+    # Project Libraries
     from spyder_okvim.utils import substitute
 
     def fail(*args, **kwargs):
@@ -479,6 +471,7 @@ def test_later_bad_capture_discards_all_prior_overlay_rows():
 def test_count_only_and_unfinished_pattern_never_prepare_overlay_replacements(
     monkeypatch,
 ):
+    # Project Libraries
     from spyder_okvim.utils import substitute
 
     def fail(*args, **kwargs):
@@ -524,6 +517,7 @@ def test_unchanged_syntax_spans_map_unicode_deletion_and_noop_replacement():
 
 
 def test_failed_expansion_is_not_retried_for_later_visible_rows(monkeypatch):
+    # Project Libraries
     from spyder_okvim.utils import substitute
 
     observed = []

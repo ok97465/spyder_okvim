@@ -1,10 +1,6 @@
 # -*- coding: utf-8 -*-
 """Executor handling leader-key sequences."""
 
-# Third Party Libraries
-from qtpy.QtCore import QTimer
-from spyder.api.plugins import Plugins
-
 # Project Libraries
 from spyder_okvim.executor.executor_base import CommandSpec, ExecutorBase
 
@@ -22,16 +18,13 @@ class ExecutorLeaderKey(ExecutorBase):
         CommandSpec("r", "run_selection", "Run selection or line"),
         CommandSpec("f", "formatting", "Format document or selection"),
         CommandSpec("p", "open_switcher", "Switch file"),
-        CommandSpec("s", "open_symbol_swicher", "Switch symbol"),
+        CommandSpec("s", "open_symbol_switcher", "Switch symbol"),
         CommandSpec("y", "show_yank_history", "Yank history"),
     )
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
-        self.set_selection_to_editor_using_vim_selection = (
-            self.vim_status.cursor.set_selection_to_editor_using_vim_selection
-        )
         self.prev_executor = None
 
     def set_easymotion_key(self, key):
@@ -56,97 +49,54 @@ class ExecutorLeaderKey(ExecutorBase):
 
         return self.process_return(ret)
 
-    def auto_import(self, num=1, num_str=""):
-        """Insert import statements from user defined list(for personal)."""
-        editor = self.get_editor()
-        try:
-            editor.auto_import.auto_import()
-            self.vim_status.set_focus_to_vim()
-        except AttributeError:
-            pass
+    def auto_import(self, count=1, count_text=""):
+        """Ask the host to insert imports and restore command input focus."""
+        self.vim_status.host.auto_import()
 
-    def search_imports(self, num=1, num_str=""):
-        """Browse import candidates without filtering by the cursor word."""
-        editor = self.get_editor()
-        if editor is None or not editor.is_python() or editor.isReadOnly():
-            return
-        search = getattr(getattr(editor, "auto_import", None), "search_imports", None)
-        if not callable(search):
-            return
-        try:
-            search(query="")
-        finally:
-            # Spyder runs the picker modally; restore focus after it closes.
-            self.vim_status.set_focus_to_vim()
+    def search_imports(self, count=1, count_text=""):
+        """Browse host import candidates without filtering by the cursor word."""
+        self.vim_status.host.search_imports()
 
-    def toggle_breakpoint(self, num=1, num_str=""):
-        """Toggle break."""
-        editor = self.get_editor()
-        editor.breakpoints_manager.toogle_breakpoint()
+    def toggle_breakpoint(self, count=1, count_text=""):
+        """Toggle the host editor's breakpoint at the current line."""
+        self.vim_status.host.toggle_breakpoint()
 
-    def run_cell_and_advance(self, num=1, num_str=""):
+    def run_cell_and_advance(self, count=1, count_text=""):
         """Run cell and advance."""
         self._trigger_run_action("run cell and advance")
 
-    def run_selection(self, num=1, num_str=""):
+    def run_selection(self, count=1, count_text=""):
         """Run selected text or current line in console."""
         self._trigger_run_action("run selection and advance", use_selection=True)
 
-    def debug_cell(self, num=1, num_str=""):
+    def debug_cell(self, count=1, count_text=""):
         """Debug the current cell without advancing to the next cell."""
         self._trigger_run_action("run cell in debugger")
 
-    def debug_selection(self, num=1, num_str=""):
+    def debug_selection(self, count=1, count_text=""):
         """Debug selected text or the current line without advancing."""
         self._trigger_run_action("run selection in debugger", use_selection=True)
 
     def _trigger_run_action(self, action, use_selection=False):
-        """Expose a Vim selection to Spyder and restore cursor and focus."""
-        editor_stack = self.get_editorstack()
-        editor = self.get_editor()
-        old_cursor = (
-            self.set_selection_to_editor_using_vim_selection()
-            if use_selection
-            else None
-        )
-        try:
-            editor_stack.sig_trigger_action.emit(action, Plugins.Run)
-        finally:
-            if old_cursor is not None:
-                editor.setTextCursor(old_cursor)
-            self.vim_status.set_focus_to_vim()
+        """Run or debug through the host, restoring Vim selection and focus."""
+        self.vim_status.host.trigger_run_action(action, use_selection=use_selection)
 
-    def retrieve_curosr_pos(self, pos: int, delay: int):
-        """Retrieve the cursor position."""
+    def formatting(self, count=1, count_text=""):
+        """Format the current document or selected range through the host."""
+        self.vim_status.host.format_document()
 
-        def _retrieve():
-            self.vim_status.cursor.set_cursor_pos(pos)
-            self.vim_status.set_focus_to_vim()
-            self.vim_status.cursor.draw_vim_cursor()
+    def open_switcher(self, count=1, count_text=""):
+        """Open the host's file switcher."""
+        self.vim_status.host.open_switcher()
 
-        QTimer.singleShot(delay, _retrieve)
+    def open_symbol_switcher(self, count=1, count_text=""):
+        """Open the host's symbol switcher."""
+        self.vim_status.host.open_switcher(symbol=True)
 
-    def formatting(self, num=1, num_str=""):
-        """Format document automatically."""
-        editor = self.get_editor()
-        editor.format_document_or_range()
-
-    def open_switcher(self, num=1, num_str=""):
-        """Open switcher for buffers."""
-        main = self.vim_status.main
-        switcher = main.get_plugin(Plugins.Switcher)
-        switcher.open_switcher()
-
-    def open_symbol_swicher(self, num=1, num_str=""):
-        """Open switcher for symbol."""
-        main = self.vim_status.main
-        switcher = main.get_plugin(Plugins.Switcher)
-        switcher.open_switcher(symbol=True)
-
-    def execute_easymotion(self, num=1, num_str=""):
+    def execute_easymotion(self, count=1, count_text=""):
         """Execute easymotion."""
         return self.prev_executor.run_easymotion()
 
-    def show_yank_history(self, num=1, num_str=""):
-        """Choose a previous yank or deletion to put at the current selection."""
-        self.vim_status.cmd_line.vim_widget.show_yank_history()
+    def show_yank_history(self, count=1, count_text=""):
+        """Request the active view's yank picker through the session callback."""
+        self.vim_status.show_yank_history()

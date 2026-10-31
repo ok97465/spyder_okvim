@@ -14,63 +14,15 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
-from spyder_okvim.spyder.tests.test_commandline_history_popup import (
-    history_popup as history_popup,
-    select_next,
-    send_ime,
-    shown,
-)
 from spyder_okvim.utils.ex_parser import SubstituteSpec
-
-
-@pytest.fixture
-def preview(history_popup):  # noqa: F811 - shared pytest fixture
-    """Use the real input lifecycle with isolated preview settings and timers."""
-    state = history_popup
-    state.preview = state.widget.substitute_preview
-    preferences = {
-        name: CONF.get(CONF_SECTION, name, True)
-        for name in ("substitute_preview_enabled", "substitute_guide_enabled")
-    }
-    old_interval = state.preview._timer.interval()
-    old_limits = state.preview.limits
-    old_read_only = state.editor.isReadOnly()
-    CONF.set(CONF_SECTION, "substitute_preview_enabled", True)
-    CONF.set(CONF_SECTION, "substitute_guide_enabled", True)
-    state.widget.apply_settings()
-    state.preview._timer.setInterval(0)
-    try:
-        yield state
-    finally:
-        state.preview.cancel()
-        state.preview._timer.setInterval(old_interval)
-        state.preview.limits = old_limits
-        state.editor.setReadOnly(old_read_only)
-        for name, value in preferences.items():
-            CONF.set(CONF_SECTION, name, value)
-        state.widget.apply_settings()
-
-
-def enter_command(state, command):
-    """Replace a complete Ex draft, including Unicode and middle edits."""
-    if state.status.sub_mode is None:
-        state.qtbot.keyClicks(state.line, ":")
-    state.line.setText(command)
-
-
-def result(state):
-    state.qtbot.waitUntil(lambda: state.preview.result is not None)
-    return state.preview.result
-
-
-def assert_no_replacement_panel(state):
-    """Replacement text never appears in a second view while typing."""
-    assert not hasattr(state.controller, "preview_popup")
-    assert state.editor.viewport().findChild(QPlainTextEdit) is None
-
-
-def selections(state):
-    return state.editor.get_extra_selections("vim_substitute_preview")
+from tests.commandline_support import (
+    assert_no_replacement_panel,
+    enter_command,
+)
+from tests.commandline_support import history_popup as history_popup
+from tests.commandline_support import preview as preview
+from tests.commandline_support import result, select_next, selections, send_ime, shown
+from tests.qt_support import reset_vim_state
 
 
 def test_pattern_then_replacement_and_backspace_clear_stale_results(preview):
@@ -333,7 +285,7 @@ def test_reset_invalidates_debounce_before_processing_queued_events(preview):
     state.preview._timer.setInterval(150)
     enter_command(state, ":%s/foo/bar/g")
     assert state.preview._timer.isActive()
-    state.status.reset_for_test()
+    reset_vim_state(state.status)
     assert not state.preview._timer.isActive()
     assert not state.preview._chunk_timer.isActive()
     assert state.preview.result is None

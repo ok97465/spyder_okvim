@@ -5,6 +5,9 @@
 import pytest
 from qtpy.QtCore import Qt
 
+# Project Libraries
+from tests.qt_support import reset_vim_state
+
 
 @pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
@@ -32,7 +35,7 @@ def test_easymotion_w_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -62,7 +65,7 @@ def test_easymotion_w_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -97,7 +100,7 @@ def test_easymotion_w_cmd_in_vline(vim_bot, text, cmd_list, cursor_pos, sel_pos)
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -150,7 +153,7 @@ def test_easymotion_w_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -180,7 +183,7 @@ def test_easymotion_b_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -228,7 +231,7 @@ def test_easymotion_b_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -264,7 +267,7 @@ def test_easymotion_j_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -312,7 +315,7 @@ def test_easymotion_j_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -348,7 +351,7 @@ def test_easymotion_k_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -396,7 +399,7 @@ def test_easymotion_k_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -425,7 +428,7 @@ def test_easymotion_f_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -453,7 +456,7 @@ def test_easymotion_f_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -506,7 +509,7 @@ def test_easymotion_f_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -535,7 +538,7 @@ def test_easymotion_F_cmd_in_normal(vim_bot, text, cmd_list, cursor_pos):
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -563,7 +566,7 @@ def test_easymotion_F_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:
@@ -616,7 +619,7 @@ def test_easymotion_F_cmd_in_submotion(
     _, _, editor, vim, qtbot = vim_bot
     editor.set_text(text)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(0)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
 
     cmd_line = vim.vim_cmd.commandline
     for cmd in cmd_list:

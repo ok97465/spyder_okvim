@@ -1,43 +1,40 @@
-"""Decorators for managing submode execution in the Spyder OkVim executor framework.
+"""Attach a pending action and inherited count when entering a continuation.
 
-This module provides decorators to help with entering and managing submodes
-within the executor system. The main decorator, `submode`, wraps command methods
-to prepare submode executors, attach deferred callbacks, and ensure a clean
-context switch using RETURN_EXECUTOR_METHOD_INFO.
-
-Typical usage involves applying the `submode` decorator to executor methods
-that need to transition into a submode, optionally providing a function to
-retrieve a list of deferred functions for the submode.
+The decorated handler returns an executor; the wrapper supplies its parent
+count and packages the transition for the caller. Preparing a continuation does
+not execute its deferred edit or selection callback.
 """
 
 # Standard Libraries
 from collections.abc import Callable
 from functools import wraps
 
-from .executor_base import FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO
+from .executor_base import DeferredAction, ExecutorTransition
 
 
 def submode(
-    func_list_getter: Callable[[object], list[FUNC_INFO]] | None = None,
+    func_list_getter: Callable[[object], list[DeferredAction]] | None = None,
     clear_command_line: bool = True,
 ):
     """Return a decorator that prepares and enters a submode.
 
-    The wrapped command should return the submode executor.  This helper
-    attaches any deferred callbacks defined by ``func_list_getter`` and
-    finally returns a :class:`RETURN_EXECUTOR_METHOD_INFO` instance so the
-    caller can switch context cleanly.
+    The wrapped command returns its continuation executor. Parent count values
+    retain the typed count text as well as the effective number, since an absent
+    count is meaningful for commands such as gg. ``func_list_getter`` supplies
+    callbacks only when the handler has not already prepared its own actions.
+    ``clear_command_line`` controls input display after entering the submode;
+    it does not indicate whether the Vim command has finished.
     """
 
     def decorator(func: Callable):
         @wraps(func)
-        def wrapper(self, num=1, num_str=""):
-            executor_sub = func(self, num, num_str)
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
-            func_list = func_list_getter(self) if func_list_getter else []
-            if not executor_sub.func_list_deferred:
-                executor_sub.set_func_list_deferred(func_list)
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, clear_command_line)
+        def wrapper(self, count=1, count_text=""):
+            continuation = func(self, count, count_text)
+            self.set_parent_info_to_submode(continuation, count, count_text)
+            actions = func_list_getter(self) if func_list_getter else []
+            if not continuation.func_list_deferred:
+                continuation.set_func_list_deferred(actions)
+            return ExecutorTransition(continuation, clear_command_line)
 
         return wrapper
 

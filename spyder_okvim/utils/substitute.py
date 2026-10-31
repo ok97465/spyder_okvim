@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+# Standard Libraries
 from dataclasses import dataclass
 from unicodedata import category
 
+# Third Party Libraries
 from qtpy.QtCore import QRegularExpression
 
+# Project Libraries
 from spyder_okvim.utils.ex_parser import (
     ExError,
     SubstituteSpec,
@@ -45,16 +48,32 @@ class PreparedSubstitution:
 
 
 def prepare_substitution(
-    header, spec, current_line, line_count, *, prepare_replacement=True
+    header,
+    spec,
+    current_line,
+    line_count,
+    *,
+    prepare_replacement=True,
+    ignorecase=True,
+    smartcase=True,
 ):
-    """Validate a resolved command for execution or incremental preview."""
+    """Validate a resolved command using explicit search settings.
+
+    Line numbers are zero-based and the last resolved line is inclusive.
+    No document edit, UI state or global configuration is consulted.
+    """
     first, last = resolve_range(header, current_line, line_count)
     if spec.count is not None:
         first, last = last, min(last + spec.count - 1, line_count - 1)
     override = next(
         (flag == "i" for flag in reversed(spec.flags) if flag in "iI"), None
     )
-    pattern = compile_pattern(spec.pattern, resolve_ignorecase(spec.pattern, override))
+    pattern = compile_pattern(
+        spec.pattern,
+        resolve_ignorecase(
+            spec.pattern, override, ignorecase=ignorecase, smartcase=smartcase
+        ),
+    )
     if not pattern.isValid():
         raise ExError(f"Invalid pattern: {pattern.errorString()}")
     count_only = "n" in spec.flags
@@ -125,7 +144,7 @@ def tokenize_replacement(replacement: str, delimiter: str):
     return tuple(tokens)
 
 
-def _check_boundary(source: bytes, offset: int):
+def validate_utf16_boundary(source: bytes, offset: int):
     """Reject an offset between the UTF-16 halves of a non-BMP character."""
     byte_offset = offset * 2
     if byte_offset < 0 or byte_offset > len(source):
@@ -144,8 +163,8 @@ class ReplacementLimitExceeded(ValueError):
 def substitution_match(tokens, source, match, *, max_chars=None):
     """Validate a UTF-16 edit and expand captures from the original paragraph."""
     start, end = match.capturedStart(), match.capturedEnd()
-    _check_boundary(source, start)
-    _check_boundary(source, end)
+    validate_utf16_boundary(source, start)
+    validate_utf16_boundary(source, end)
     captures = {}
     pieces = []
     size = 0
@@ -160,8 +179,8 @@ def substitution_match(tokens, source, match, *, max_chars=None):
                     # Vim expands both absent and unmatched groups to empty text.
                     captures[token] = ""
                 else:
-                    _check_boundary(source, capture_start)
-                    _check_boundary(source, capture_end)
+                    validate_utf16_boundary(source, capture_start)
+                    validate_utf16_boundary(source, capture_end)
                     captures[token] = source[
                         capture_start * 2 : capture_end * 2
                     ].decode("utf-16-le")
@@ -230,7 +249,7 @@ def _iter_reset_start_matches(pattern, text, source):
         offset = previous_end = end
 
 
-def _iter_matches(pattern, text, global_matches):
+def iter_substitution_matches(pattern, text, global_matches):
     """Follow Vim's empty-match progression with Qt's native UTF-16 iterator."""
     text = text.replace("\u00a0", " ")
     if not global_matches:
@@ -272,25 +291,17 @@ def _iter_matches(pattern, text, global_matches):
 
 
 def build_substitution_plan(
-    document,
-    first_line: int,
-    last_line: int,
-    pattern,
-    tokens,
-    *,
-    global_matches: bool = False,
-    count_only: bool = False,
-    confirm: bool = False,
+    document, prepared: PreparedSubstitution
 ) -> SubstitutionPlan:
     """Compute edits in an inclusive block range, using Vim's match progression.
 
     Count-only execution ignores replacements and never allocates edit lists.
     Confirmation retains every target, including unchanged replacements.
     """
-    if not pattern.isValid():
-        raise ValueError(f"Invalid pattern: {pattern.errorString()}")
+    first_line, last_line = prepared.first_line, prepared.last_line
     if not 0 <= first_line <= last_line < document.blockCount():
         raise ValueError("Invalid line range")
+    count_only, confirm = prepared.count_only, prepared.confirm
     edits = None if count_only else []
     match_count = line_count = 0
     last_target = None
@@ -300,14 +311,16 @@ def build_substitution_plan(
         source = None
         block_edits = None if count_only else []
         found = False
-        for match in _iter_matches(pattern, original, global_matches):
+        for match in iter_substitution_matches(
+            prepared.pattern, original, prepared.global_matches
+        ):
             match_count += 1
             found = True
             if count_only:
                 continue
             if source is None:
                 source = original.encode("utf-16-le")
-            start, end, replacement = substitution_match(tokens, source, match)
+            start, end, replacement = substitution_match(prepared.tokens, source, match)
             if (
                 confirm
                 or replacement.encode("utf-16-le") != source[start * 2 : end * 2]

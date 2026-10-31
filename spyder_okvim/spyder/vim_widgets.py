@@ -5,28 +5,22 @@
 # Licensed under the terms of the MIT License
 # (see LICENSE.txt for details)
 # -----------------------------------------------------------------------------
-"""OkVim Widget."""
+"""Spyder pane, shortcuts and the composition of OkVim input services.
+
+Small presentation classes stay with the widget that assembles them. Prompt
+input and queued macro playback have their own cohesive modules and lifetimes.
+"""
 
 # Standard Libraries
-import os
 import os.path as osp
 import re
-import sys
-import threading
 import weakref
 from contextlib import contextmanager
-from functools import wraps
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, QObject, Qt, QThread, Signal, Slot
-from qtpy.QtGui import (
-    QFocusEvent,
-    QInputMethodEvent,
-    QKeyEvent,
-    QKeySequence,
-    QTextCursor,
-)
-from qtpy.QtWidgets import QApplication, QHBoxLayout, QLabel, QLineEdit, QWidget, QStyle
+from qtpy.QtCore import QEvent, QObject, Qt, Signal, Slot
+from qtpy.QtGui import QKeySequence, QTextCursor
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QStyle, QWidget
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
@@ -35,51 +29,44 @@ from spyder.config.manager import CONF
 # Project Libraries
 from spyder_okvim.executor import (
     ExecutorLeaderKey,
-    ExecutorNormalCmd,
-    ExecutorVisualCmd,
-    ExecutorVlineCmd,
+    NormalModeExecutor,
+    VisualLineModeExecutor,
+    VisualModeExecutor,
 )
-from spyder_okvim.executor.executor_sub import ExecutorSubCmd_window
+from spyder_okvim.executor.prefixes import WindowPrefixExecutor
+from spyder_okvim.spyder.commandline_input import VimLineEdit
 from spyder_okvim.spyder.commandline_popup_controller import (
     CommandlinePopupController,
 )
 from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
+from spyder_okvim.spyder.macro_playback import (
+    MacroPlayback,
+    MacroPlaybackWorker,
+    enable_coverage_tracing,
+)
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
-from spyder_okvim.utils.commandline import completion_items, substitute_field_candidates
-from spyder_okvim.utils.commandline_history import (
-    HISTORY_LIMIT,
-    load_history,
-    save_history,
-)
-from spyder_okvim.utils.ex_parser import ExError, is_substitute, scan_header
 from spyder_okvim.utils.file_search import FileSearchDialog
-from spyder_okvim.utils.key_helpers import latin_command_key
 from spyder_okvim.utils.put import PutController
 from spyder_okvim.utils.qtcompat import (
     exec_dialog,
-    python_cursor_position,
-    qt_cursor_position,
     text_width,
     widget_is_deleted,
 )
 from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder_okvim.utils.yank_dialog import YankHistoryPicker
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
+from spyder_okvim.vim.state import InputSource
 
-running_coverage = "coverage" in sys.modules
 
+def _command_services(status):
+    """Compose fresh motion/edit collaborators for one executor's lifetime."""
+    # Project Libraries
+    from spyder_okvim.utils.editing import EditingActions
+    from spyder_okvim.utils.motions import CursorMotions
 
-def enable_coverage_tracing(fn):
-    """Apply coverage tracing to a thread entry point."""
-
-    @wraps(fn)
-    def wrapped(*args, **kwargs):
-        if running_coverage:
-            sys.settrace(threading._trace_hook)
-        fn(*args, **kwargs)
-
-    return wrapped
+    motions = CursorMotions(status)
+    return motions, EditingActions(status, motions)
 
 
 class VimPane(PluginMainWidget):
@@ -114,12 +101,11 @@ class VimPane(PluginMainWidget):
     @on_conf_change
     def apply_plugin_settings(self, options):
         """Apply the config settings."""
-        self.vim_cmd.vim_status.search.set_color()
         self.vim_cmd.apply_settings()
 
 
 class VimShortcut(QObject):
-    """Method class for vim shortcut."""
+    """Translate editor shortcuts into Vim commands and explicit host actions."""
 
     signal_cmd = Signal(str)
 
@@ -129,7 +115,7 @@ class VimShortcut(QObject):
         self.vim_status = vim_status
         self.get_editor = self.vim_status.get_editor
         self.cmd_line = None
-        self.executor_window = ExecutorSubCmd_window(vim_status)
+        self.executor_window = WindowPrefixExecutor(vim_status)
 
     def _scroll(self, half: bool, up: bool) -> None:
         """Scroll the editor window.
@@ -169,7 +155,7 @@ class VimShortcut(QObject):
 
         Returns:
             tuple[int | None, int, int]: Extracted number and its start and end
-            positions.
+            Qt UTF-16 positions. The end position is exclusive.
         """
         cursor = self.get_editor().textCursor()
 
@@ -236,7 +222,7 @@ class VimShortcut(QObject):
 
         cmd_info = InputCmdInfo(str(count), "")
         self.vim_status.input_cmd.set(cmd_info)
-        key_info = KeyInfo(key, "", Qt.ControlModifier, 0)
+        key_info = KeyInfo(key, "", Qt.ControlModifier, source=InputSource.COMMAND_LINE)
         self.vim_status.update_dot_cmd(False, key_list_to_cmd_line=[key_info])
 
     def add_num(self) -> None:
@@ -259,11 +245,11 @@ class VimShortcut(QObject):
         editor = self.vim_status.get_editor()
         n_block_old = editor.blockCount()
 
-        txt = self.cmd_line.text()
-        num = 1 if not txt else int(txt)
+        count_text = self.cmd_line.text()
+        count = 1 if not count_text else int(count_text)
 
         editor = self.get_editor()
-        for _ in range(num):
+        for _ in range(count):
             editor.redo()
 
         n_block_new = editor.blockCount()
@@ -273,7 +259,7 @@ class VimShortcut(QObject):
             else:
                 self.vim_status.set_message(f"{n_block_old - n_block_new} fewer lines")
         else:
-            self.vim_status.set_message(f"{num} changes")
+            self.vim_status.set_message(f"{count} changes")
 
         self.cmd_line.esc_pressed()
 
@@ -320,9 +306,9 @@ class VimShortcut(QObject):
             return
         if not self.vim_status.is_normal():
             return
-        count = self.cmd_line.text()
-        self.vim_status.input_cmd.set(InputCmdInfo(count, "<C-w>"))
-        self.executor_window.parent_num = [int(count) if count else 1]
+        count_text = self.cmd_line.text()
+        self.vim_status.input_cmd.set(InputCmdInfo(count_text, "<C-w>"))
+        self.executor_window.parent_counts = [int(count_text) if count_text else 1]
         self.vim_status.sub_mode = self.executor_window
         self.cmd_line.clear()
 
@@ -363,525 +349,6 @@ class VimStateLabel(QLabel):
             pass
 
 
-class VimLineEdit(QLineEdit):
-    """Vim Command input."""
-
-    def __init__(self, vim_widget, vim_status: VimStatus, vim_shortcut: VimShortcut):
-        super().__init__(vim_widget)
-        self.vim_widget = vim_widget
-        self.vim_status = vim_status
-        self.vim_shortcut = vim_shortcut
-        self._history_file = osp.join(
-            CONF.get_plugin_config_path(CONF_SECTION), "commandline_history.json"
-        )
-        self.histories = load_history(self._history_file)
-        self._history_dirty = False
-        self._history_index = None
-        self._history_draft = None
-        self._completion_candidates = []
-        self._completion_index = -1
-        self._completion_directory = None
-        self._updating_commandline = False
-        self._is_composing = False
-        self._prompt_focus_window = None
-        self.textChanged.connect(self._reset_navigation)
-        self.cursorPositionChanged.connect(self._reset_completion)
-
-        # Set size
-        tw = text_width(self.fontMetrics(), " :%s/international/internationl/g ")
-        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
-        self.setFixedWidth(tw + (2 * fw) + 4)
-
-        # Todo: Move setting shortcut to config file.
-        vim_shortcut.signal_cmd.connect(self.setText)
-        self.dispatcher = {
-            Qt.Key_A: vim_shortcut.add_num,
-            Qt.Key_X: vim_shortcut.subtract_num,
-            Qt.Key_D: vim_shortcut.pg_half_down,
-            Qt.Key_F: vim_shortcut.pg_down,
-            Qt.Key_U: vim_shortcut.pg_half_up,
-            Qt.Key_B: vim_shortcut.pg_up,
-            Qt.Key_R: vim_shortcut.redo,
-            Qt.Key_P: vim_shortcut.open_file_search,
-            Qt.Key_C: vim_shortcut.clear_tip_search,
-            Qt.Key_O: vim_shortcut.jump_backward,
-            Qt.Key_I: vim_shortcut.jump_forward,
-            Qt.Key_W: vim_shortcut.window_command,
-        }
-        self.setAttribute(Qt.WA_InputMethodEnabled, False)
-
-    def _reset_navigation(self, text="") -> None:
-        """Discard navigation state when the user edits or leaves a prompt."""
-        if not self._updating_commandline:
-            self._history_index = None
-            self._history_draft = None
-            self._clear_completion()
-
-    def _reset_completion(self, old_position, new_position) -> None:
-        """A manually moved caret starts a new completion at that position."""
-        if not self._updating_commandline:
-            self._clear_completion()
-
-    def _clear_completion(self):
-        """Release the cached Tab candidates and their selected row together."""
-        self._completion_candidates = []
-        self._completion_index = -1
-        self._completion_directory = None
-
-    @property
-    def completion_result(self):
-        """Expose the current Tab list without giving the popup its ownership."""
-        if not self._completion_candidates:
-            return None
-        current = (
-            self.text(),
-            python_cursor_position(self.text(), self.cursorPosition()),
-        )
-        candidate = self._completion_candidates[self._completion_index]
-        if (
-            current != (candidate.text, candidate.cursor_position)
-            or self._completion_directory != os.getcwd()
-        ):
-            return None
-        return (
-            tuple(self._completion_candidates),
-            self._completion_index,
-        )
-
-    def _history_context(self, text):
-        """Return the history kind, current prompt/count, and editable body."""
-        kind = getattr(self.vim_status.sub_mode, "history_kind", None)
-        if kind == "ex" and text.startswith(":"):
-            return kind, ":", text[1:]
-        if kind == "search":
-            match = re.fullmatch(r"(\d*[/?])(.*)", text, re.DOTALL)
-            if match:
-                return kind, *match.groups()
-        return None
-
-    def remember_command(self, text) -> None:
-        """Skip single-character Ex entries and consecutive duplicates."""
-        context = self._history_context(text)
-        if context is None:
-            return
-        kind, _, body = context
-        if not body or (kind == "ex" and len(body.strip()) <= 1):
-            return
-        history = self.histories[kind]
-        if not history or history[-1] != body:
-            history.append(body)
-            del history[:-HISTORY_LIMIT]
-            self._history_dirty = True
-        if self._history_dirty:
-            self._history_dirty = not save_history(self._history_file, self.histories)
-
-    def _replace_commandline(self, text, cursor_position=None) -> None:
-        """Update a recalled/completed input without restarting navigation."""
-        with self.vim_widget.input_processing():
-            self._updating_commandline = True
-            try:
-                self.setText(text)
-                if cursor_position is not None:
-                    self.setCursorPosition(cursor_position)
-            finally:
-                self._updating_commandline = False
-
-    def _browse_history(self, backward) -> None:
-        """Recall entries and restore the exact draft after the newest one."""
-        context = self._history_context(self.text())
-        if context is None:
-            return
-        self.vim_widget.commandline_popup.suppress_history()
-        kind, prompt, _ = context
-        history = self.histories[kind]
-        self._clear_completion()
-        if not history:
-            return
-        if self._history_index is None:
-            if not backward:
-                return
-            self._history_draft = (self.text(), self.cursorPosition())
-            self._history_index = len(history)
-        if backward:
-            self._history_index = max(0, self._history_index - 1)
-        else:
-            self._history_index += 1
-        if self._history_index >= len(history):
-            self._replace_commandline(*self._history_draft)
-            self._history_index = None
-            self._history_draft = None
-        else:
-            self._replace_commandline(prompt + history[self._history_index])
-
-    def _complete_commandline(self, backward=False) -> None:
-        """Apply and cycle the original command, field, or explicit path query."""
-        context = self._history_context(self.text())
-        if context is None:
-            return
-        controller = self.vim_widget.commandline_popup
-        if context[0] != "ex":
-            controller.suppress_history()
-            return
-        controller.clear_candidates()
-        working_directory = os.getcwd()
-        completion = self.completion_result
-        if completion is not None:
-            candidates, _ = completion
-            candidate = candidates[0]
-            # A single directory starts a fresh lookup on the next explicit Tab.
-            if (
-                len(candidates) == 1
-                and candidate.apply_scope == "path"
-                and candidate.text[: candidate.cursor_position].endswith(os.sep)
-            ):
-                completion = None
-        if completion is None:
-            self._clear_completion()
-            text = self.text()
-            cursor = python_cursor_position(text, self.cursorPosition())
-            self._completion_directory = working_directory
-            self._completion_candidates = substitute_field_candidates(
-                self.histories["ex"], text, cursor
-            )
-            if not self._completion_candidates:
-                commands = self.vim_status.sub_mode.SUPPORTED_COMMANDS
-                if controller.complete_paths(
-                    text, cursor, commands, working_directory, backward
-                ):
-                    return
-                self._completion_candidates = completion_items(
-                    text, cursor, commands, working_directory
-                )
-            self._completion_index = (
-                len(self._completion_candidates) - 1 if backward else 0
-            )
-        else:
-            step = -1 if backward else 1
-            self._completion_index = (self._completion_index + step) % len(
-                self._completion_candidates
-            )
-        self._apply_completion_candidate()
-
-    def _apply_path_completion(self, candidates, directory, index):
-        """Start the original Tab cycle after a cached or worker lookup."""
-        with self.vim_widget.input_processing():
-            self.vim_widget.commandline_popup.clear_candidates()
-            self._completion_candidates = list(candidates)
-            self._completion_directory = directory
-            self._completion_index = index % len(candidates) if candidates else 0
-            self._apply_completion_candidate()
-
-    def _apply_completion_candidate(self):
-        if not self._completion_candidates:
-            return
-        candidate = self._completion_candidates[self._completion_index]
-        self._replace_commandline(
-            candidate.text,
-            qt_cursor_position(candidate.text, candidate.cursor_position),
-        )
-
-    def event(self, event) -> bool:
-        """Keep Tab in the prompt instead of letting QWidget move focus."""
-        if (
-            event.type() == QEvent.ShortcutOverride
-            and self.vim_widget.commandline_popup.key_action(event) is not None
-        ):
-            event.accept()
-            return True
-        if self.vim_status.substitute_confirm is not None:
-            if event.type() == QEvent.ShortcutOverride:
-                event.accept()
-                return True
-            if event.type() == QEvent.KeyPress:
-                self.keyPressEvent(event)
-                return True
-        if (
-            event.type() == QEvent.ShortcutOverride
-            and event.modifiers() == Qt.ControlModifier
-            and event.key() in (Qt.Key_P, Qt.Key_N)
-            and self._yank_cycle_context()
-            and self.vim_widget.put_controller.can_cycle()
-        ):
-            # Reserve a valid cycle without editing during ShortcutOverride.
-            event.accept()
-            return True
-        if (
-            event.type() == QEvent.KeyPress
-            and event.key() in (Qt.Key_Tab, Qt.Key_Backtab)
-            and self._history_context(self.text()) is not None
-        ):
-            self.keyPressEvent(event)
-            return True
-        return super().event(event)
-
-    def inputMethodQuery(self, query):
-        """Report mode-specific IME availability to the native input context."""
-        if query == Qt.ImEnabled:
-            # Qt 6 QLineEdit reports ImEnabled independently of this attribute.
-            return (
-                self.testAttribute(Qt.WA_InputMethodEnabled)
-                and self.isEnabled()
-                and not self.isReadOnly()
-            )
-        return super().inputMethodQuery(query)
-
-    def sync_input_method(self) -> None:
-        """Allow composition only while entering search or Ex text."""
-        enabled = bool(
-            self.vim_status.sub_mode and self.vim_status.sub_mode.accepts_input_method
-        )
-        if enabled == self.testAttribute(Qt.WA_InputMethodEnabled):
-            return
-        # Disable delivery before resetting: some IMEs commit on reset.
-        self.setAttribute(Qt.WA_InputMethodEnabled, enabled)
-        if not enabled:
-            self._is_composing = False
-            if self.hasFocus():
-                QApplication.inputMethod().reset()
-            super().inputMethodEvent(QInputMethodEvent())
-
-    def inputMethodEvent(self, event: QInputMethodEvent) -> None:
-        """Keep late IME commits from being interpreted as Normal commands."""
-        if self.testAttribute(Qt.WA_InputMethodEnabled):
-            with self.vim_widget.input_processing():
-                self._is_composing = bool(event.preeditString())
-                super().inputMethodEvent(event)
-        else:
-            event.ignore()
-
-    @property
-    def is_composing(self):
-        """Whether the native input method still owns uncommitted text."""
-        return self._is_composing
-
-    def to_normal(self) -> None:
-        """Convert the state of vim to normal mode."""
-        self.clear()
-        self.vim_widget.vim_status.to_normal()
-        self.vim_widget.vim_status.cursor.draw_vim_cursor()
-
-    def keyPressEvent(self, e: QKeyEvent) -> None:
-        """Override Qt method."""
-        history_action = self.vim_widget.commandline_popup.key_action(e)
-        with self.vim_widget.input_processing():
-            self._handle_key_press(e, history_action)
-
-    def _handle_key_press(self, e: QKeyEvent, history_action=None) -> None:
-        """Process a key before synchronizing hints at the outer input boundary."""
-        if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape):
-            self.vim_widget.commandline_popup.cancel_pending_tab()
-        if history_action is not None:
-            self.vim_widget.commandline_popup.handle_key(history_action, e)
-            return
-        if not self.testAttribute(Qt.WA_InputMethodEnabled):
-            e = latin_command_key(e)
-        confirmation = self.vim_status.substitute_confirm
-        if confirmation is not None:
-            if e.key() == Qt.Key_Escape or (
-                e.key() == Qt.Key_C and e.modifiers() == Qt.ControlModifier
-            ):
-                self.esc_pressed()
-            elif e.modifiers() in (Qt.NoModifier, Qt.ShiftModifier):
-                confirmation(e.text())
-            self.clear()
-            self.sync_input_method()
-            e.accept()
-            return
-        self.vim_status.manager_macro.add_vim_keyevent(e)
-
-        key = e.key()
-        pressed_ctrl = e.modifiers() == Qt.ControlModifier
-        if self.try_handle_yank_cycle(e):
-            return
-        if key == Qt.Key_Escape:
-            self.esc_pressed()
-        elif pressed_ctrl and key == Qt.Key_C and self._substitute_input():
-            self.vim_shortcut.clear_tip_search()
-            self.esc_pressed()
-        elif pressed_ctrl and key in self.dispatcher.keys():
-            self.vim_widget.put_controller.cancel()
-            self.dispatcher[key]()
-        elif self.testAttribute(Qt.WA_InputMethodEnabled):
-            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Tab, Qt.Key_Backtab):
-                QApplication.inputMethod().commit()
-                if key in (Qt.Key_Up, Qt.Key_Down):
-                    self._browse_history(key == Qt.Key_Up)
-                else:
-                    self._complete_commandline(
-                        key == Qt.Key_Backtab or bool(e.modifiers() & Qt.ShiftModifier)
-                    )
-                e.accept()
-            elif key in (Qt.Key_Return, Qt.Key_Enter):
-                # Flush the final composing syllable before executing the text.
-                QApplication.inputMethod().commit()
-                self.setText(self.text() + "\r")
-            else:
-                super().keyPressEvent(e)
-        elif KEYCODE2STR.get(key, None):
-            self.setText(self.text() + KEYCODE2STR[key])
-        else:
-            super().keyPressEvent(e)
-
-    def _substitute_input(self):
-        """Cancel substitute prompts with Ctrl+C even when preview is disabled."""
-        if getattr(self.vim_status.sub_mode, "history_kind", None) != "ex":
-            return False
-        if not self.text().startswith(":"):
-            return False
-        try:
-            return is_substitute(scan_header(self.text()[1:]).command)
-        except ExError:
-            return False
-
-    def _yank_cycle_context(self):
-        """Only plain Normal input and an optional positive count can cycle."""
-        text = self.text()
-        return (
-            self.vim_status.is_normal()
-            and self.vim_status.sub_mode is None
-            and self.vim_widget._yank_picker is None
-            and (not text or re.fullmatch(r"[1-9][0-9]*", text) is not None)
-        )
-
-    def try_handle_yank_cycle(self, event):
-        """Consume valid cycles, including endpoints, before the file search."""
-        if event.modifiers() != Qt.ControlModifier or event.key() not in (
-            Qt.Key_P,
-            Qt.Key_N,
-        ):
-            return False
-        in_cycle_context = self._yank_cycle_context()
-        handled = in_cycle_context and self.vim_widget.put_controller.cycle(
-            1 if event.key() == Qt.Key_P else -1,
-            int(self.text()) if self.text() else 1,
-        )
-        if not handled:
-            if not self.vim_widget.is_playing_macro:
-                return False
-            self.vim_status.set_message("Yanky: no put to cycle in this macro")
-        if in_cycle_context:
-            self.clear()
-            self.vim_status.input_cmd.clear()
-        event.accept()
-        return True
-
-    def esc_pressed(self) -> None:
-        """Clear state."""
-        self._prompt_focus_window = None
-        self.vim_widget.cancel_substitute()
-        self.vim_widget.put_controller.cancel()
-        self.vim_widget.sig_command_cancelled.emit()
-        self.vim_status.input_cmd.clear()
-        self.vim_status.remove_marker_of_easymotion()
-        sub_mode = self.vim_status.sub_mode
-        if sub_mode:
-            try:
-                sub_mode.on_escape()
-            finally:
-                self.vim_status.sub_mode = None
-                self.sync_input_method()
-                self.clear()
-        else:
-            self.to_normal()
-
-    def focusInEvent(self, event: QFocusEvent) -> None:
-        """Override Qt method."""
-        self.vim_status.disconnect_from_editor()
-        super().focusInEvent(event)
-        preserve_prompt = (
-            self._prompt_focus_window is not None
-            and self._prompt_focus_window() is self.window()
-        )
-        self._prompt_focus_window = None
-        if preserve_prompt and self._history_context(self.text()) is not None:
-            self.vim_widget.substitute_preview.resume()
-            self.vim_widget.sig_command_changed.emit()
-            return
-        if self.vim_widget._yank_picker is not None:
-            return
-        if self.vim_status.cursor.get_editor():
-            self.to_normal()
-        self.vim_status.set_message("")
-        self.vim_widget.sig_command_changed.emit()
-
-    def _transient_prompt_focus_loss(self, event):
-        """Keep an Ex draft across application deactivation or temporary hide."""
-        context = self._history_context(self.text())
-        return bool(
-            context is not None
-            and context[0] == "ex"
-            and (event.reason() == Qt.ActiveWindowFocusReason or not self.isVisible())
-        )
-
-    def focusOutEvent(self, event: QFocusEvent) -> None:
-        """Override Qt method."""
-        if self._transient_prompt_focus_loss(event):
-            if self._prompt_focus_window is None:
-                self._prompt_focus_window = weakref.ref(self.window())
-            self.vim_widget.substitute_preview.suspend()
-            super().focusOutEvent(event)
-            return
-        self._prompt_focus_window = None
-        self.vim_widget.cancel_substitute()
-        if self.vim_widget._yank_picker is not None:
-            super().focusOutEvent(event)
-            return
-        self.vim_widget.put_controller.cancel()
-        self.vim_widget.sig_command_cancelled.emit()
-        if self.testAttribute(Qt.WA_InputMethodEnabled):
-            self.esc_pressed()
-        super().focusOutEvent(event)
-        self.clear()
-        try:
-            self.vim_widget.vim_status.to_insert()
-        except RuntimeError:
-            # The status may already be deleted when closing widgets
-            pass
-
-
-class MacroPlaybackWorker(QThread):
-    """Replay a recorded macro on the main thread."""
-
-    sig_focus_vim = Signal(int)
-    sig_send_key_info = Signal(object, int)
-    sig_playback_finished = Signal(int)
-
-    def __init__(self, parent: QObject | None) -> None:
-        super().__init__(parent)
-        self.key_info_list = []
-        self.num_iteration = 0
-        self.generation = 0
-
-    def set_key_infos(self, key_infos: list[KeyInfo], num: int) -> None:
-        """Set key infos of registers."""
-        self.generation += 1
-        self.key_info_list = key_infos.copy()
-        self.num_iteration = num
-
-    @enable_coverage_tracing
-    def run(self) -> None:
-        """Send key info to main thread."""
-        generation = self.generation
-        is_focus_vim = True
-        for _ in range(self.num_iteration):
-            if self.isInterruptionRequested():
-                return
-            for key_info in self.key_info_list:
-                if self.isInterruptionRequested():
-                    return
-                if key_info.identifier == 1:
-                    is_focus_vim = False
-                elif key_info.identifier == 0 and is_focus_vim is False:
-                    is_focus_vim = True
-                    self.sig_focus_vim.emit(generation)
-                self.sig_send_key_info.emit(key_info, generation)
-
-        if is_focus_vim is False:
-            self.sig_focus_vim.emit(generation)
-        # This shares the key signals' sender and queued delivery order.
-        self.sig_playback_finished.emit(generation)
-
-
 class VimWidget(QWidget):
     """Own command dispatch and report its stable input boundaries."""
 
@@ -895,6 +362,7 @@ class VimWidget(QWidget):
         self.editor_widget = editor_widget
         self.main = main
         self._input_depth = 0
+        self._closed = False
         self._yank_picker = None
         self.status_label = VimStateLabel(main)
         self.msg_label = QLabel("", main)
@@ -905,7 +373,13 @@ class VimWidget(QWidget):
         frame_width = self.msg_label.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
         self.msg_label.setFixedWidth(message_width + (2 * frame_width) + 4)
 
-        self.vim_status = VimStatus(editor_widget, main, self.msg_label)
+        self.vim_status = VimStatus(
+            editor_widget,
+            main,
+            self.msg_label,
+            command_services_factory=_command_services,
+        )
+        self.sig_command_cancelled.connect(self.vim_status.input_cancelled.emit)
         self.put_controller = PutController(self.vim_status)
         self.vim_status.put_controller = self.put_controller
         self.vim_status.change_label.connect(self.status_label.change_state)
@@ -918,9 +392,9 @@ class VimWidget(QWidget):
         self.vim_status.cmd_line = self.commandline
         self.vim_shortcut.cmd_line = self.commandline
 
-        self.executor_normal_cmd = ExecutorNormalCmd(self.vim_status)
-        self.executor_visual_cmd = ExecutorVisualCmd(self.vim_status)
-        self.executor_vline_cmd = ExecutorVlineCmd(self.vim_status)
+        self.executor_normal_cmd = NormalModeExecutor(self.vim_status)
+        self.executor_visual_cmd = VisualModeExecutor(self.vim_status)
+        self.executor_vline_cmd = VisualLineModeExecutor(self.vim_status)
         self.executors = {
             VimState.NORMAL: self.executor_normal_cmd,
             VimState.VISUAL: self.executor_visual_cmd,
@@ -931,17 +405,18 @@ class VimWidget(QWidget):
         self.executor_leader_key = ExecutorLeaderKey(self.vim_status)
         self.leader_key = " "
 
-        # macro
-        self._macro_generation = -1
-        self._macro_editor = None
-        self._macro_completion = None
-        self.worker_macro = MacroPlaybackWorker(main)
-        self.worker_macro.sig_send_key_info.connect(self.send_key_event)
-        self.worker_macro.sig_focus_vim.connect(self._focus_macro_input)
-        self.worker_macro.sig_playback_finished.connect(self._finish_macro)
+        self.macro_playback = MacroPlayback(self)
+        # Public worker alias retained for callers that wait for shutdown.
+        self.worker_macro = self.macro_playback.worker
         self.which_key = WhichKeyController(self)
         self.commandline_popup = CommandlinePopupController(self)
         self.substitute_preview = SubstitutePreviewController(self)
+        self.substitute_preview.sig_result_ready.connect(self.commandline_popup.sync)
+        self.vim_status.cancel_pending_input = lambda: self.cancel_pending_input()
+        self.vim_status.cancel_macro = lambda: self.cancel_macro()
+        self.vim_status.is_playing_macro = lambda: self.is_playing_macro
+        self.vim_status.show_yank_history = lambda: self.show_yank_history()
+        self.vim_status.clear_yank_history = lambda: self.clear_yank_history()
         self.apply_settings()
 
     @property
@@ -952,7 +427,7 @@ class VimWidget(QWidget):
     @property
     def is_playing_macro(self):
         """Whether a macro still has queued GUI input to finish."""
-        return self._macro_generation >= 0
+        return self.macro_playback.is_active
 
     def pending_hint(self):
         """Expose a stable prefix wait independently of the display controller."""
@@ -976,11 +451,12 @@ class VimWidget(QWidget):
 
     def apply_settings(self):
         """Apply command bindings and hint preferences explicitly."""
+        status = self.vim_status
+        status.refresh_settings()
         self.set_leader_key()
         self.which_key.apply_settings()
         self.commandline_popup.apply_settings()
         self.substitute_preview.apply_settings()
-        status = self.vim_status
         enabled = bool(CONF.get(CONF_SECTION, "yanky_enabled", True))
         length = CONF.get(CONF_SECTION, "yank_history_length", 100)
         if not isinstance(length, int) or isinstance(length, bool) or length < 1:
@@ -990,7 +466,65 @@ class VimWidget(QWidget):
             self.put_controller.cancel()
         status.yanky_enabled = enabled
         status.yank_history.resize(length)
-        status.cursor.set_config_from_conf()
+        status.cursor.apply_settings(status.settings)
+        status.search.apply_settings(status.settings)
+
+    @property
+    def has_yank_picker(self):
+        """Whether an active history request still owns popup focus restoration."""
+        return self._yank_picker is not None
+
+    def is_current_yank_picker(self, picker):
+        """Validate a picker callback without exposing the owning field."""
+        return self._yank_picker is picker
+
+    def bind_editor(self, editor):
+        """Bind view observers together after the host selects an editor stack.
+
+        Cancel requests against the old view before installing observers on a
+        replacement. Rebinding the same editor preserves its active prompt.
+        Passing None releases the view without retaining deleted Qt wrappers.
+        """
+        if self._closed:
+            return
+        if editor is not self.put_controller.editor:
+            self.cancel_pending_input()
+        self.which_key.set_editor(editor)
+        self.substitute_preview.set_editor(editor)
+        self.commandline_popup.set_editor(editor)
+        self.put_controller.bind_editor(editor)
+
+    def finish_yank_picker(self, picker):
+        """Release only the request that completed, preserving a newer picker."""
+        if self.is_current_yank_picker(picker):
+            self._yank_picker = None
+
+    def handle_prompt_event(self, event_type, *, transient_focus_loss=False):
+        """Apply prompt visibility policy at the shared input/view owner.
+
+        Hiding or deactivating retains the Ex draft and preview origin. A
+        permanent focus loss or close discards preview requests; accepted
+        replacements remain in the document. Repeated events are harmless.
+        """
+        if self._closed or not hasattr(self, "substitute_preview"):
+            return
+        if event_type in (QEvent.Hide, QEvent.WindowDeactivate):
+            self.substitute_preview.suspend()
+        elif event_type in (QEvent.Close, QEvent.FocusOut):
+            if transient_focus_loss:
+                self.substitute_preview.suspend()
+            else:
+                self.substitute_preview.cancel()
+        elif event_type in (QEvent.Show, QEvent.WindowActivate):
+            self.substitute_preview.resume()
+
+    def cancel_pending_input(self):
+        """Cancel view-owned pending work while leaving text and mode to the caller."""
+        self.substitute_preview.cancel()
+        self.cancel_substitute()
+        self.cancel_yank_picker()
+        self.put_controller.cancel()
+        self.cancel_macro()
 
     def clear_yank_history(self):
         """Clear memory explicitly, including while Yanky is disabled."""
@@ -1030,7 +564,13 @@ class VimWidget(QWidget):
             status.set_message("Yanky: history is empty")
             return
         self.put_controller.bind_editor(editor)
-        self._yank_picker = YankHistoryPicker(self, editor, entries)
+        self._yank_picker = YankHistoryPicker(
+            self,
+            editor,
+            entries,
+            is_current=self.is_current_yank_picker,
+            on_finished=self.finish_yank_picker,
+        )
         self._yank_picker.show()
 
     @contextmanager
@@ -1047,56 +587,16 @@ class VimWidget(QWidget):
         finally:
             self._input_depth -= 1
             if self._input_depth == 0:
-                if self._macro_completion is not None:
-                    self._finish_macro(self._macro_completion)
+                self.macro_playback.finish_pending()
                 self.sig_input_finished.emit()
 
     def cancel_macro(self) -> None:
         """Invalidate queued playback when its editor is left or closed."""
-        self.put_controller.cancel()
-        self._macro_generation = -1
-        self._macro_editor = None
-        self._macro_completion = None
-        self.worker_macro.requestInterruption()
-        self.sig_command_cancelled.emit()
+        self.macro_playback.cancel()
 
-    def _macro_is_current(self, generation) -> bool:
-        return (
-            generation == self._macro_generation
-            and self._macro_editor is not None
-            and self._macro_editor() is self.vim_status.get_editor()
-        )
-
-    @Slot(int)
-    def _focus_macro_input(self, generation) -> None:
-        if self._macro_is_current(generation):
-            self.commandline.setFocus()
-
-    @Slot(int)
-    def _finish_macro(self, generation) -> None:
-        """Release hint suppression after the last queued key has been handled."""
-        if not self._macro_is_current(generation):
-            return
-        if self._input_depth:
-            self._macro_completion = generation
-            return
-        self._macro_completion = None
-        self._macro_generation = -1
-        self._macro_editor = None
-        self.put_controller.cancel()
-        self.sig_command_changed.emit()
-
-    @Slot(object, int)
     def send_key_event(self, key_info: KeyInfo, generation=None) -> None:
-        if generation is not None and not self._macro_is_current(generation):
-            return
-        with self.input_processing():
-            event = key_info.to_event()
-            if key_info.identifier == 0:
-                self.commandline.keyPressEvent(event)
-            else:
-                editor = self.vim_status.get_editor()
-                self.vim_status.send_insert_event(editor, event)
+        """Replay a recorded key on the GUI thread through the input guard."""
+        self.macro_playback.deliver_key(key_info, generation)
 
     def set_leader_key(self) -> None:
         """Set leader key from CONF."""
@@ -1109,23 +609,23 @@ class VimWidget(QWidget):
         if hasattr(key, "key"):
             # PySide6 returns QKeyCombination objects; extract the raw key.
             key = key.key()
-        leader_key2 = KEYCODE2STR.get(key, None)
-        if leader_key2:
-            leader_key = leader_key2
+        command_key = KEYCODE2STR.get(key)
+        if command_key:
+            leader_key = command_key
         changed = self.leader_key != leader_key
         self.leader_key = leader_key
         self.executor_leader_key.set_easymotion_key(leader_key)
         if changed:
             self.sig_command_changed.emit()
 
-    def on_text_changed(self, txt: str) -> None:
-        """Send input command to executor."""
+    def on_text_changed(self, text: str) -> None:
+        """Dispatch visible command text within one stable input observation boundary."""
         with self.input_processing():
-            self._process_text(txt)
+            self._process_text(text)
 
-    def _process_text(self, txt: str) -> None:
+    def _process_text(self, text: str) -> None:
         """Run existing executors while recursive clears stay inside the guard."""
-        if not txt:
+        if not text:
             sub_mode = self.vim_status.sub_mode
             if sub_mode and sub_mode.accepts_input_method:
                 self.commandline.esc_pressed()
@@ -1134,7 +634,7 @@ class VimWidget(QWidget):
 
         confirmation = self.vim_status.substitute_confirm
         if confirmation is not None:
-            confirmation(txt)
+            confirmation(text)
             self.commandline.clear()
             self.commandline.sync_input_method()
             return
@@ -1142,7 +642,7 @@ class VimWidget(QWidget):
         if not (
             self.vim_status.is_normal()
             and self.vim_status.sub_mode is None
-            and re.fullmatch(r"[1-9][0-9]*", txt)
+            and re.fullmatch(r"[1-9][0-9]*", text)
         ):
             self.put_controller.cancel()
 
@@ -1151,7 +651,7 @@ class VimWidget(QWidget):
             executor = self.vim_status.sub_mode
 
         # workaround for easymotion (press leader, leader)
-        if txt == self.leader_key and executor != self.executor_leader_key:
+        if text == self.leader_key and executor != self.executor_leader_key:
             sub_mode = self.vim_status.sub_mode
             if sub_mode and sub_mode.allow_leaderkey is False:
                 pass
@@ -1161,10 +661,10 @@ class VimWidget(QWidget):
                 self.commandline.clear()
                 return
 
-        if txt.endswith("\r"):
+        if text.endswith("\r"):
             self.substitute_preview.cancel()
-            self.commandline.remember_command(txt[:-1])
-        if executor(txt):
+            self.commandline.remember_command(text[:-1])
+        if executor(text):
             self.commandline.clear()
 
         # Visual ':' captures rows before leaving Visual mode. Install its
@@ -1183,41 +683,45 @@ class VimWidget(QWidget):
 
         if self.vim_status.manager_macro.reg_name_for_execute:
             self.put_controller.cancel()
-            mm = self.vim_status.manager_macro
-            ch = mm.reg_name_for_execute
-            if self.worker_macro.isRunning():
-                self.worker_macro.requestInterruption()
-                self.worker_macro.wait()
-            self.worker_macro.set_key_infos(mm.registers[ch], mm.num_execute)
-            self._macro_generation = self.worker_macro.generation
-            self._macro_editor = weakref.ref(self.vim_status.get_editor())
-            self._macro_completion = None
-            self.sig_command_cancelled.emit()
-            self.worker_macro.start()
-            mm.set_info_for_execute("", 0)
+            macro_manager = self.vim_status.manager_macro
+            register = macro_manager.reg_name_for_execute
+            self.macro_playback.start(
+                macro_manager.registers[register], macro_manager.num_execute
+            )
+            macro_manager.set_info_for_execute("", 0)
 
     def cleanup(self) -> None:
         """Clean up resources used by the widget."""
+        if self._closed:
+            return
+        self._closed = True
+        self.vim_status.cancel_pending_work()
         self.substitute_preview.cleanup()
-        self.cancel_substitute()
-        self.cancel_yank_picker()
         self.put_controller.cleanup()
         self.which_key.cleanup()
         self.commandline_popup.cleanup()
-        self.cancel_macro()
         if self.vim_status.is_recording_macro():
             self.vim_status.stop_recording_macro()
-        self.vim_status.finish_insert(apply_count=False)
         self.vim_status.search.close()
         try:
             self.vim_status.change_label.disconnect(self.status_label.change_state)
         except Exception:
             pass
-        if self.worker_macro.isRunning():
-            self.worker_macro.quit()
-            self.worker_macro.wait()
+        self.macro_playback.cleanup()
         if running_in_pytest():
             self.worker_macro.deleteLater()
             self.commandline.deleteLater()
             self.status_label.deleteLater()
             self.msg_label.deleteLater()
+
+
+# Historical public imports retained after implementation extraction.
+__all__ = [
+    "VimPane",
+    "VimShortcut",
+    "VimStateLabel",
+    "VimLineEdit",
+    "VimWidget",
+    "MacroPlaybackWorker",
+    "enable_coverage_tracing",
+]

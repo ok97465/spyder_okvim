@@ -1,14 +1,18 @@
 """Cycle keys share the command line without changing its existing fallbacks."""
 
+# Standard Libraries
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
 from qtpy.QtGui import QKeyEvent
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.vim.state import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -24,7 +28,7 @@ def yank_input(vim_bot, monkeypatch):
     line.esc_pressed()
     status = widget.vim_status
     status.disconnect_from_editor()
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = status.get_editor()
     editor.set_text("xy")
     status.cursor.set_cursor_pos(0)
@@ -36,8 +40,8 @@ def yank_input(vim_bot, monkeypatch):
     yield widget, editor, status, line, bot, search
     widget.cancel_yank_picker()
     widget.put_controller.cancel()
-    widget._macro_generation = -1
-    widget._macro_editor = None
+    widget.macro_playback.generation = -1
+    widget.macro_playback.editor_ref = None
     line.esc_pressed()
 
 
@@ -96,7 +100,7 @@ def test_escape_and_manual_search_keep_original_fallback(yank_input):
 
 def test_macro_without_local_put_never_opens_search(yank_input):
     widget, editor, _, line, bot, search = yank_input
-    widget._macro_generation = 1
+    widget.macro_playback.generation = 1
     bot.keyPress(line, Qt.Key_P, Qt.ControlModifier)
     bot.keyPress(line, Qt.Key_N, Qt.ControlModifier)
     assert editor.toPlainText() == "xy"
@@ -107,7 +111,7 @@ def test_macro_operator_cycle_key_never_opens_search(yank_input):
     widget, editor, status, line, bot, search = yank_input
     bot.keyClicks(line, "d")
     operator = status.sub_mode
-    widget._macro_generation = 1
+    widget.macro_playback.generation = 1
     bot.keyPress(line, Qt.Key_P, Qt.ControlModifier)
     assert editor.toPlainText() == "xy"
     assert status.sub_mode is operator

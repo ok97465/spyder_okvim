@@ -4,12 +4,8 @@
 # Standard Libraries
 from typing import Callable
 
-# Third Party Libraries
-from spyder.config.manager import CONF
-
 # Project Libraries
-from spyder_okvim.executor.executor_base import FUNC_INFO, RETURN_EXECUTOR_METHOD_INFO
-from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.executor.executor_base import DeferredAction, ExecutorTransition
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.vim.state import VimState
 
@@ -29,7 +25,7 @@ class MovementMixin:
     # ------------------------------------------------------------------
     # Generic commands shared by normal, visual and vline executors
     # ------------------------------------------------------------------
-    def colon(self, num: int = 1, num_str: str = ""):
+    def colon(self, count: int = 1, count_text: str = ""):
         """Enter Ex mode, fixing a Visual selection to numeric line addresses."""
         vs = self.vim_status
         vs.set_message("")
@@ -50,119 +46,119 @@ class MovementMixin:
                 last = document.findBlock(end).blockNumber() + 1
                 self.executor_colon.pending_range_text = f":{first},{last}"
             vs.to_normal()
-        return RETURN_EXECUTOR_METHOD_INFO(self.executor_colon, False)
+        return ExecutorTransition(self.executor_colon, False)
 
     # ------------------------------------------------------------------
     # Basic cursor movement commands shared by multiple executors
     # ------------------------------------------------------------------
-    def zero(self, num: int = 1, num_str: str = ""):
+    def zero(self, count: int = 1, count_text: str = ""):
         """Move to the first column of the current line."""
-        motion_info = self.helper_motion.zero()
+        motion_info = self.motions.zero()
         self.move_cursor(motion_info.cursor_pos)
 
-    def h(self, num: int = 1, num_str: str = ""):
+    def h(self, count: int = 1, count_text: str = ""):
         """Move cursor left."""
-        motion_info = self.helper_motion.h(num=num)
+        motion_info = self.motions.h(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def j(self, num: int = 1, num_str: str = ""):
+    def j(self, count: int = 1, count_text: str = ""):
         """Move cursor down."""
-        motion_info = self.helper_motion.j(num=num)
+        motion_info = self.motions.j(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def k(self, num: int = 1, num_str: str = ""):
+    def k(self, count: int = 1, count_text: str = ""):
         """Move cursor up."""
-        motion_info = self.helper_motion.k(num=num)
+        motion_info = self.motions.k(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def l(self, num: int = 1, num_str: str = ""):
+    def l(self, count: int = 1, count_text: str = ""):
         """Move cursor right."""
-        motion_info = self.helper_motion.l(num=num)
+        motion_info = self.motions.l(count=count)
         self.move_cursor_no_end(motion_info.cursor_pos)
 
-    def H(self, num: int = 1, num_str: str = ""):
+    def H(self, count: int = 1, count_text: str = ""):
         """Move cursor to the top of the page."""
-        motion_info = self.helper_motion.H(num=num)
+        motion_info = self.motions.H(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def M(self, num: int = 1, num_str: str = ""):
+    def M(self, count: int = 1, count_text: str = ""):
         """Move cursor to the middle of the page."""
-        motion_info = self.helper_motion.M(num=num)
+        motion_info = self.motions.M(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def L(self, num: int = 1, num_str: str = ""):
+    def L(self, count: int = 1, count_text: str = ""):
         """Move cursor to the bottom of the page."""
-        motion_info = self.helper_motion.L(num=num)
+        motion_info = self.motions.L(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def caret(self, num: int = 1, num_str: str = ""):
+    def caret(self, count: int = 1, count_text: str = ""):
         """Move to the first non-blank character of the line."""
-        motion_info = self.helper_motion.caret(num=num)
+        motion_info = self.motions.caret(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def dollar(self, num: int = 1, num_str: str = ""):
+    def dollar(self, count: int = 1, count_text: str = ""):
         """Move cursor to the end of the line."""
-        motion_info = self.helper_motion.dollar(num=num)
+        motion_info = self.motions.dollar(count=count)
         self.move_cursor_no_end(motion_info.cursor_pos)
 
-    def w(self, num: int = 1, num_str: str = ""):
+    def w(self, count: int = 1, count_text: str = ""):
         """Move to the next word."""
-        motion_info = self.helper_motion.w(num=num)
+        motion_info = self.motions.w(count=count)
         self.move_cursor_no_end(motion_info.cursor_pos)
 
-    def W(self, num: int = 1, num_str: str = ""):
+    def W(self, count: int = 1, count_text: str = ""):
         """Move to the next WORD."""
-        motion_info = self.helper_motion.W(num=num)
+        motion_info = self.motions.W(count=count)
         self.move_cursor_no_end(motion_info.cursor_pos)
 
-    def b(self, num: int = 1, num_str: str = ""):
+    def b(self, count: int = 1, count_text: str = ""):
         """Move to the previous word."""
-        motion_info = self.helper_motion.b(num=num)
+        motion_info = self.motions.b(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def B(self, num: int = 1, num_str: str = ""):
+    def B(self, count: int = 1, count_text: str = ""):
         """Move to the previous WORD."""
-        motion_info = self.helper_motion.B(num=num)
+        motion_info = self.motions.B(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def e(self, num: int = 1, num_str: str = ""):
+    def e(self, count: int = 1, count_text: str = ""):
         """Move to the end of the current word."""
-        motion_info = self.helper_motion.e(num=num)
+        motion_info = self.motions.e(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
-    def percent(self, num: int = 1, num_str: str = ""):
+    def percent(self, count: int = 1, count_text: str = ""):
         """Go to the matching bracket."""
-        motion_info = self.helper_motion.percent(num=num, num_str=num_str)
+        motion_info = self.motions.percent(count=count, count_text=count_text)
         self.move_cursor(motion_info.cursor_pos)
 
-    def semicolon(self, num: int = 1, num_str: str = ""):
+    def semicolon(self, count: int = 1, count_text: str = ""):
         """Repeat the last f/t search."""
-        motion_info = self.helper_motion.semicolon(num=num, num_str=num_str)
+        motion_info = self.motions.semicolon(count=count, count_text=count_text)
         self.move_cursor(motion_info.cursor_pos)
 
-    def comma(self, num: int = 1, num_str: str = ""):
+    def comma(self, count: int = 1, count_text: str = ""):
         """Repeat the last f/t search in opposite direction."""
-        motion_info = self.helper_motion.comma(num=num, num_str=num_str)
+        motion_info = self.motions.comma(count=count, count_text=count_text)
         self.move_cursor(motion_info.cursor_pos)
 
-    def space(self, num: int = 1, num_str: str = ""):
+    def space(self, count: int = 1, count_text: str = ""):
         """Move cursor right (space key)."""
-        motion_info = self.helper_motion.space(num=num)
+        motion_info = self.motions.space(count=count)
         self.move_cursor_no_end(motion_info.cursor_pos)
 
-    def backspace(self, num: int = 1, num_str: str = ""):
+    def backspace(self, count: int = 1, count_text: str = ""):
         """Move cursor left (backspace key)."""
-        motion_info = self.helper_motion.backspace(num=num)
+        motion_info = self.motions.backspace(count=count)
         self.move_cursor_no_end(motion_info.cursor_pos)
 
-    def enter(self, num: int = 1, num_str: str = ""):
+    def enter(self, count: int = 1, count_text: str = ""):
         """Move cursor down (enter key)."""
-        motion_info = self.helper_motion.enter(num=num)
+        motion_info = self.motions.enter(count=count)
         self.move_cursor(motion_info.cursor_pos)
 
 
 class SelectionMixin:
-    """Common operations for visual and block-visual executors."""
+    """Common operations for characterwise and linewise Visual executors."""
 
     # Hooks provided by subclasses
     apply_motion_info_in_sel: Callable[[object], None]
@@ -179,113 +175,119 @@ class SelectionMixin:
             self.vim_status.to_visual_char()
         self.vim_status.cursor.set_block_selection_in_visual(motion_info)
 
-    def i(self, num: int = 1, num_str: str = ""):
+    def i(self, count: int = 1, count_text: str = ""):
         """Select an inner text object."""
-        executor_sub = self.executor_sub_motion_i
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-        executor_sub.set_func_list_deferred([FUNC_INFO(self.select_text_object, True)])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub = self.submodes.inner_text_object
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
+        executor_sub.set_func_list_deferred(
+            [DeferredAction(self.select_text_object, True)]
+        )
+        return ExecutorTransition(executor_sub, True)
 
-    def a(self, num: int = 1, num_str: str = ""):
+    def a(self, count: int = 1, count_text: str = ""):
         """Select a text object with its surroundings."""
-        executor_sub = self.executor_sub_motion_a
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
-        executor_sub.set_func_list_deferred([FUNC_INFO(self.select_text_object, True)])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub = self.submodes.around_text_object
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
+        executor_sub.set_func_list_deferred(
+            [DeferredAction(self.select_text_object, True)]
+        )
+        return ExecutorTransition(executor_sub, True)
 
-    def r(self, num: int = 1, num_str: str = ""):
+    def r(self, count: int = 1, count_text: str = ""):
         """Replace selection with a typed character."""
-        executor_sub = self.executor_sub_r
+        executor_sub = self.submodes.replace_character
         executor_sub.pos_start = self.get_pos_start_in_selection()
         executor_sub.pos_end = self.get_pos_end_in_selection()
 
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
             [
-                FUNC_INFO(self.vim_status.to_normal, False),
-                FUNC_INFO(lambda: self.set_cursor_pos(executor_sub.pos_start), False),
+                DeferredAction(self.vim_status.to_normal, False),
+                DeferredAction(
+                    lambda: self.set_cursor_pos(executor_sub.pos_start), False
+                ),
             ]
         )
 
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def greater(self, num: int = 1, num_str: str = ""):
+    def greater(self, count: int = 1, count_text: str = ""):
         """Indent the selected text."""
-        self.helper_action.indent(None)
+        self.edits.indent(None)
         self.vim_status.to_normal()
         self.vim_status.cursor.draw_vim_cursor()
 
-    def less(self, num: int = 1, num_str: str = ""):
+    def less(self, count: int = 1, count_text: str = ""):
         """Unindent the selected text."""
-        self.helper_action.unindent(None)
+        self.edits.unindent(None)
         self.vim_status.to_normal()
         self.vim_status.cursor.draw_vim_cursor()
 
-    def quote(self, num: int = 1, num_str: str = ""):
+    def quote(self, count: int = 1, count_text: str = ""):
         """Switch register name."""
-        executor_sub = self.executor_sub_register
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.register_prefix
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred([])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def x(self, num: int = 1, num_str: str = ""):
+    def x(self, count: int = 1, count_text: str = ""):
         """Alias for ``d``."""
-        self.d(num, num_str)
+        self.d(count, count_text)
 
-    def c(self, num: int = 1, num_str: str = ""):
+    def c(self, count: int = 1, count_text: str = ""):
         """Delete selection and enter insert mode."""
-        sel_start, _ = self.helper_action.yank(None)
-        self.helper_action.delete(None, is_insert=True)
+        sel_start, _ = self.edits.yank(None)
+        self.edits.delete(None, is_insert=True)
         self.vim_status.to_normal()
         self.set_cursor_pos(sel_start)
         self.get_editor().setFocus()
 
-    def s(self, num: int = 1, num_str: str = ""):
+    def s(self, count: int = 1, count_text: str = ""):
         """Replace selection using leap if enabled."""
-        use_leap = CONF.get(CONF_SECTION, "use_leap")
+        use_leap = self.vim_status.settings.use_leap
         if use_leap:
-            executor_sub = self.executor_sub_leap
-            self.set_parent_info_to_submode(executor_sub, num, num_str)
+            executor_sub = self.submodes.leap_input
+            self.set_parent_info_to_submode(executor_sub, count, count_text)
             executor_sub.set_func_list_deferred(
-                [FUNC_INFO(self.apply_motion_info_in_sel, True)]
+                [DeferredAction(self.apply_motion_info_in_sel, True)]
             )
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
         else:
-            self.c(num, num_str)
+            self.c(count, count_text)
 
-    def y(self, num: int = 1, num_str: str = ""):
+    def y(self, count: int = 1, count_text: str = ""):
         """Yank selection into register."""
-        sel_start, _ = self.helper_action.yank(None, is_explicit=True)
+        sel_start, _ = self.edits.yank(None, is_explicit=True)
         self.vim_status.to_normal()
         self.set_cursor_pos(sel_start)
 
-    def slash(self, num: int = 1, num_str: str = "", forward: bool = True):
+    def slash(self, count: int = 1, count_text: str = "", forward: bool = True):
         """Enter search submode and execute motion on return."""
         self.vim_status.set_message("")
-        executor_sub = self.executor_sub_search
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.search_prompt
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_sel, True)]
+            [DeferredAction(self.apply_motion_info_in_sel, True)]
         )
         if not executor_sub.begin(forward):
             return
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, False)
+        return ExecutorTransition(executor_sub, False)
 
-    def question(self, num: int = 1, num_str: str = ""):
+    def question(self, count: int = 1, count_text: str = ""):
         """Enter backward search while retaining the selection anchor."""
-        return self.slash(num, num_str, forward=False)
+        return self.slash(count, count_text, forward=False)
 
-    def n(self, num: int = 1, num_str: str = ""):
+    def n(self, count: int = 1, count_text: str = ""):
         """Jump to next search occurrence."""
-        motion_info = self.helper_motion.n(num=num, num_str=num_str)
+        motion_info = self.motions.n(count=count, count_text=count_text)
         self.set_cursor_pos_in_sel(motion_info.cursor_pos)
 
-    def N(self, num: int = 1, num_str: str = ""):
+    def N(self, count: int = 1, count_text: str = ""):
         """Jump to previous search occurrence."""
-        motion_info = self.helper_motion.N(num=num, num_str=num_str)
+        motion_info = self.motions.N(count=count, count_text=count_text)
         self.set_cursor_pos_in_sel(motion_info.cursor_pos)
 
-    def o(self, num: int = 1, num_str: str = ""):
+    def o(self, count: int = 1, count_text: str = ""):
         """Move cursor to the opposite end of the selection."""
         sel_start = self.vim_status.get_pos_start_in_selection()
         sel_end = self.vim_status.get_pos_end_in_selection()
@@ -297,33 +299,33 @@ class SelectionMixin:
         )
         self.set_cursor_pos(new_pos)
 
-    def u(self, num: int = 1, num_str: str = ""):
+    def u(self, count: int = 1, count_text: str = ""):
         """Lowercase selected text."""
-        self.helper_action.handle_case(None, "lower")
+        self.edits.change_case(None, "lower")
 
-    def U(self, num: int = 1, num_str: str = ""):
+    def U(self, count: int = 1, count_text: str = ""):
         """Uppercase selected text."""
-        self.helper_action.handle_case(None, "upper")
+        self.edits.change_case(None, "upper")
 
-    def p(self, num: int = 1, num_str: str = ""):
+    def p(self, count: int = 1, count_text: str = ""):
         """Paste contents of register over the selection."""
-        self.vim_status.put_controller.put(num)
+        self.vim_status.put_controller.put(count)
 
     P = p
 
-    def m(self, num: int = 1, num_str: str = ""):
+    def m(self, count: int = 1, count_text: str = ""):
         """Set a bookmark name."""
-        executor_sub = self.executor_sub_alnum
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.mark_name
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.vim_status.bookmark_manager.set_bookmark, True)]
+            [DeferredAction(self.vim_status.bookmark_manager.set_bookmark, True)]
         )
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def apostrophe(self, num: int = 1, num_str: str = ""):
+    def apostrophe(self, count: int = 1, count_text: str = ""):
         """Jump to a bookmark linewise and keep selection."""
-        executor_sub = self.executor_sub_alnum
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.mark_name
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         def run(ch: str):
             if ch.isupper():
@@ -338,17 +340,17 @@ class SelectionMixin:
                     self.set_cursor_pos(cursor.block().position())
                     self.vim_status.to_normal()
             else:
-                info = self.helper_motion.apostrophe(ch)
+                info = self.motions.apostrophe(ch)
                 if info.cursor_pos is not None:
                     self.set_cursor_pos_in_sel(info.cursor_pos)
 
-        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub.set_func_list_deferred([DeferredAction(run, True)])
+        return ExecutorTransition(executor_sub, True)
 
-    def backtick(self, num: int = 1, num_str: str = ""):
+    def backtick(self, count: int = 1, count_text: str = ""):
         """Jump to a bookmark charwise and keep selection."""
-        executor_sub = self.executor_sub_alnum
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.mark_name
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
 
         def run(ch: str):
             if ch.isupper():
@@ -358,28 +360,28 @@ class SelectionMixin:
                 if cur != new:
                     self.vim_status.to_normal()
             else:
-                info = self.helper_motion.backtick(ch)
+                info = self.motions.backtick(ch)
                 if info.cursor_pos is not None:
                     self.set_cursor_pos_in_sel(info.cursor_pos)
 
-        executor_sub.set_func_list_deferred([FUNC_INFO(run, True)])
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        executor_sub.set_func_list_deferred([DeferredAction(run, True)])
+        return ExecutorTransition(executor_sub, True)
 
-    def run_easymotion(self, num: int = 1, num_str: str = ""):
+    def run_easymotion(self, count: int = 1, count_text: str = ""):
         """Invoke the EasyMotion submode."""
-        executor_sub = self.executor_sub_easymotion
-        self.set_parent_info_to_submode(executor_sub, num, num_str)
+        executor_sub = self.submodes.easymotion
+        self.set_parent_info_to_submode(executor_sub, count, count_text)
         executor_sub.set_func_list_deferred(
-            [FUNC_INFO(self.apply_motion_info_in_sel, True)]
+            [DeferredAction(self.apply_motion_info_in_sel, True)]
         )
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def asterisk(self, num: int = 1, num_str: str = ""):
+    def asterisk(self, count: int = 1, count_text: str = ""):
         """Search forward for word under the cursor."""
-        motion_info = self.helper_motion.asterisk(num)
+        motion_info = self.motions.asterisk(count)
         self.apply_motion_info_in_sel(motion_info)
 
-    def sharp(self, num: int = 1, num_str: str = ""):
+    def sharp(self, count: int = 1, count_text: str = ""):
         """Search backward for word under the cursor."""
-        motion_info = self.helper_motion.sharp(num)
+        motion_info = self.motions.sharp(count)
         self.apply_motion_info_in_sel(motion_info)

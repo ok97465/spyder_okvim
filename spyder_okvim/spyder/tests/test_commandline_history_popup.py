@@ -1,123 +1,35 @@
 """History suggestions share the existing command-line input and lifetime."""
 
+# Standard Libraries
 import os
 from threading import Event
 from time import perf_counter
-from types import SimpleNamespace
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
-from qtpy.QtGui import QInputMethodEvent, QKeyEvent
+from qtpy.QtGui import QKeyEvent
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.executor.executor_colon import ExecutorColon
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.vim import KeyInfo, VimState
-
-
-@pytest.fixture
-def history_popup(vim_bot, qtbot):
-    """Restore histories, preferences, active view and focus after each test."""
-    main, stack, _, vim, _ = vim_bot
-    widget = vim.vim_cmd
-    line = widget.commandline
-    status = widget.vim_status
-    controller = widget.commandline_popup
-    previous_index = stack.get_stack_index()
-    previous_enabled = CONF.get(CONF_SECTION, "commandline_history_enabled", True)
-    previous_preview = CONF.get(CONF_SECTION, "substitute_preview_enabled", True)
-    previous_completion = CONF.get(CONF_SECTION, "commandline_completion_enabled", True)
-    previous_histories = {kind: items[:] for kind, items in line.histories.items()}
-    widget.cancel_macro()
-    line.esc_pressed()
-    status.disconnect_from_editor()
-    stack.set_stack_index(0)
-    vim._use_stack(stack)
-    status.reset_for_test()
-    editor = stack.get_current_editor()
-    previous_text = editor.toPlainText()
-    editor.set_text("alpha beta\nfoo x foo x foo\nlast line")
-    status.cursor.set_cursor_pos(0)
-    for items in line.histories.values():
-        items.clear()
-    CONF.set(CONF_SECTION, "commandline_history_enabled", True)
-    CONF.set(CONF_SECTION, "commandline_completion_enabled", True)
-    CONF.set(CONF_SECTION, "substitute_preview_enabled", False)
-    widget.apply_settings()
-    main.show()
-    main.activateWindow()
-    line.setFocus()
-    qtbot.waitUntil(line.hasFocus)
-    state = SimpleNamespace(
-        main=main,
-        stack=stack,
-        vim=vim,
-        widget=widget,
-        controller=controller,
-        line=line,
-        status=status,
-        editor=editor,
-        qtbot=qtbot,
-    )
-    try:
-        yield state
-    finally:
-        widget.cancel_macro()
-        if widget.worker_macro.isRunning():
-            widget.worker_macro.wait()
-        if status.is_recording_macro():
-            status.stop_recording_macro()
-        status.running_dot_cmd = False
-        line.esc_pressed()
-        status.finish_insert(apply_count=False)
-        status.disconnect_from_editor()
-        editor.set_text(previous_text)
-        for kind, items in previous_histories.items():
-            line.histories[kind][:] = items
-        CONF.set(CONF_SECTION, "commandline_history_enabled", previous_enabled)
-        CONF.set(CONF_SECTION, "substitute_preview_enabled", previous_preview)
-        CONF.set(CONF_SECTION, "commandline_completion_enabled", previous_completion)
-        widget.apply_settings()
-        controller.cancel()
-        stack.set_stack_index(previous_index)
-        vim._use_stack(stack)
-        main.activateWindow()
-        line.setFocus()
-
-
-def shown(state):
-    popup = state.controller.popup
-    return popup is not None and popup.isVisible()
+from tests.commandline_support import history_popup as history_popup
+from tests.commandline_support import select_next, send_ime, show, shown
 
 
 def history_bodies(state):
     """Return full-history rows without the active prompt prefix."""
-    context = state.line._history_context(state.line.text())
+    context = state.line.history_context()
     prompt = context[1] if context is not None else ":"
     return [
         candidate.text[len(prompt) :]
         for candidate in state.controller.candidates
         if "history" in candidate.source.split(", ")
     ]
-
-
-def show(state, prefix=":", history=("old", "new"), kind="ex"):
-    state.line.histories[kind][:] = history
-    state.qtbot.keyClicks(state.line, prefix)
-    assert shown(state)
-    return state.controller.popup
-
-
-def select_next(state):
-    state.qtbot.keyPress(state.line, Qt.Key_N, Qt.ControlModifier)
-
-
-def send_ime(state, preedit="", commit=""):
-    event = QInputMethodEvent(preedit, [])
-    event.setCommitString(commit)
-    QCoreApplication.sendEvent(state.line, event)
 
 
 @pytest.mark.parametrize(
@@ -659,7 +571,9 @@ def test_automatic_history_filtering_never_reads_path_completion(
 ):
     state = history_popup
     completion = Mock(side_effect=AssertionError("automatic disk lookup"))
-    monkeypatch.setattr("spyder_okvim.spyder.vim_widgets.completion_items", completion)
+    monkeypatch.setattr(
+        "spyder_okvim.spyder.commandline_input.completion_items", completion
+    )
     show(state, prefix=":w", history=("write first.py", "write second.py"))
     state.qtbot.keyClicks(state.line, "r")
     select_next(state)
@@ -709,7 +623,7 @@ def test_macro_and_dot_keep_popup_keys_out_of_input(
     if suppression == "recording":
         state.status.manager_macro.start_record("a")
     elif suppression == "playback":
-        state.widget._macro_generation = 1
+        state.widget.macro_playback.generation = 1
     else:
         state.status.running_dot_cmd = True
     state.line.histories["ex"][:] = ["2"]
@@ -1101,7 +1015,7 @@ def test_pending_path_query_is_invalidated_by_macro_and_dot(path_popup, suppress
     if suppression == "recording":
         state.status.manager_macro.start_record("a")
     elif suppression == "playback":
-        state.widget._macro_generation = 1
+        state.widget.macro_playback.generation = 1
     else:
         state.status.running_dot_cmd = True
     state.controller.sync()
@@ -1305,18 +1219,19 @@ def test_reenabling_completion_queries_after_discarding_old_path_cache(path_popu
     assert state.controller.selected_index is None
 
 
-def test_cancelled_callback_cannot_reuse_same_input_after_composition(path_popup):
+def test_composition_cancels_pending_path_timeout_and_rearms_afterwards(path_popup):
     state = path_popup
     state.qtbot.keyClicks(state.line, ":e al")
-    previous_callback = state.controller._path_callback
+    assert state.controller._path_timer.isActive()
     send_ime(state, preedit="한")
-    send_ime(state)
-    assert state.line.text() == ":e al"
+    assert not state.controller._path_timer.isActive()
 
-    previous_callback()
+    state.controller._load_paths()
 
     state.scans.assert_not_called()
     assert path_rows(state) == []
+    send_ime(state)
+    assert state.line.text() == ":e al"
     wait_for_paths(state)
     assert path_rows(state) == [":e alpha.py", ":e alpine.json"]
     state.scans.assert_called_once()
@@ -1337,6 +1252,7 @@ def test_repeated_sync_does_not_postpone_unchanged_pending_query(path_popup):
 @pytest.fixture
 def blocked_path_lookup(path_popup, monkeypatch):
     """Hold a filesystem worker while allowing the GUI event loop to continue."""
+    # Project Libraries
     from spyder_okvim.spyder import commandline_path_lookup
 
     state = path_popup

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 # Standard Libraries
 import logging
-from dataclasses import dataclass
 from threading import Event
 
 # Third Party Libraries
@@ -12,38 +11,32 @@ from qtpy.QtCore import QObject, QRunnable, QThreadPool, Qt, Signal, Slot
 from qtpy.QtWidgets import QApplication
 
 # Project Libraries
-from spyder_okvim.utils.commandline import PathCompletionRequest, path_completion_items
+from spyder_okvim.utils.commandline import path_completion_items
 
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class _LookupJob:
-    generation: int
-    request: PathCompletionRequest
-    cancelled: Event
-
-
 class _PathLookupTask(QRunnable):
     """Read immutable request data and emit a result without reading widgets."""
 
-    def __init__(self, job, finished):
+    def __init__(self, generation, request, finished):
         super().__init__()
-        self._job = job
+        self.generation = generation
+        self.request = request
+        self.cancelled = Event()
         self._finished = finished
 
     def run(self):
-        job = self._job
         try:
-            candidates = path_completion_items(job.request, job.cancelled.is_set)
+            candidates = path_completion_items(self.request, self.cancelled.is_set)
         except Exception:
             # Always release the active slot, including unexpected backend
             # failures; an exception must not strand the latest pending input.
             logger.exception("Path completion lookup failed")
             candidates = []
         try:
-            self._finished(job, candidates)
+            self._finished(self, candidates)
         except RuntimeError:
             # QApplication may already have destroyed the service at shutdown.
             # The pool still owns this runnable until its filesystem call ends.
@@ -66,7 +59,6 @@ class PathLookupService(QObject):
         if application is None:
             raise RuntimeError("PathLookupService requires a QApplication")
         super().__init__(application)
-        self._pool = QThreadPool.globalInstance()
         self._active_job = None
         self._pending_job = None
         self._closed = False
@@ -82,7 +74,7 @@ class PathLookupService(QObject):
         """Cancel older work and retain only this latest request."""
         if self._closed:
             return
-        self._pending_job = _LookupJob(generation, request, Event())
+        self._pending_job = _PathLookupTask(generation, request, self._finished.emit)
         if self._active_job is not None:
             self._active_job.cancelled.set()
         else:
@@ -94,7 +86,7 @@ class PathLookupService(QObject):
         job = self._pending_job
         self._pending_job = None
         self._active_job = job
-        self._pool.start(_PathLookupTask(job, self._finished.emit))
+        QThreadPool.globalInstance().start(job)
 
     @Slot(object, object)
     def _finish(self, job, candidates):

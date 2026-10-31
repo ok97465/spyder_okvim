@@ -12,6 +12,8 @@ from spyder.api.plugins import Plugins
 
 # Project Libraries
 from spyder_okvim.executor.executor_leader import ExecutorLeaderKey
+from spyder_okvim.spyder.editor import EditorCommands
+from tests.qt_support import reset_vim_state
 
 
 def test_leader_hint_candidates_match_dispatch(vim_bot):
@@ -158,7 +160,7 @@ def test_search_imports_opens_unfiltered_project_picker(
     editor.set_text(text)
     cmd_line = vim.vim_cmd.commandline
     cmd_line.to_normal()
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(3)
     cmd_line.setFocus()
     observed = []
@@ -170,12 +172,16 @@ def test_search_imports_opens_unfiltered_project_picker(
         for dialog in editor.findChildren(selector.ImportSearchDialog):
             if not dialog.isVisible() or not dialog._scan_complete:
                 continue
-            observed.append((
-                dialog.search.text(),
-                {dialog.results.topLevelItem(i).text(0)
-                 for i in range(dialog.results.topLevelItemCount())},
-                dialog.search.hasFocus(),
-            ))
+            observed.append(
+                (
+                    dialog.search.text(),
+                    {
+                        dialog.results.topLevelItem(i).text(0)
+                        for i in range(dialog.results.topLevelItemCount())
+                    },
+                    dialog.search.hasFocus(),
+                )
+            )
             timer.stop()
             if accept:
                 dialog.search.setText("Worker")
@@ -268,7 +274,7 @@ def test_debug_cell(vim_bot):
     cmd_line.to_normal()
     text = "# %% First\nalpha = 1\n# %% Second\nbeta = 2\n"
     editor.set_text(text)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(text.index("beta"))
     cmd_line.setFocus()
     original_cursor = editor.textCursor()
@@ -314,7 +320,7 @@ def test_run_or_debug_selection(
     cmd_line.to_normal()
     text = "alpha = 1\nbeta = 2\ngamma = 3\n"
     editor.set_text(text)
-    vim.vim_cmd.vim_status.reset_for_test()
+    reset_vim_state(vim.vim_cmd.vim_status)
     vim.vim_cmd.vim_status.cursor.set_cursor_pos(start)
     cmd_line.setFocus()
     if selection_keys:
@@ -369,21 +375,24 @@ def test_selection_and_focus_restored_when_run_action_fails(vim_bot, method_name
     executor = ExecutorLeaderKey(vim.vim_cmd.vim_status)
     original_cursor = object()
     editor = Mock()
-    executor.get_editor = Mock(return_value=editor)
-    executor.set_selection_to_editor_using_vim_selection = Mock(
-        return_value=original_cursor
-    )
     emit = Mock(side_effect=RuntimeError("action failed"))
-    executor.get_editorstack = Mock(
-        return_value=SimpleNamespace(sig_trigger_action=SimpleNamespace(emit=emit))
+    cursor = SimpleNamespace(
+        get_editor=Mock(return_value=editor),
+        get_editorstack=Mock(
+            return_value=SimpleNamespace(sig_trigger_action=SimpleNamespace(emit=emit))
+        ),
+        set_selection_to_editor_using_vim_selection=Mock(return_value=original_cursor),
     )
-    executor.vim_status = SimpleNamespace(set_focus_to_vim=Mock())
+    focus_input = Mock()
+    executor.vim_status = SimpleNamespace(
+        host=EditorCommands(Mock(), cursor, Mock(), focus_input)
+    )
 
     with pytest.raises(RuntimeError, match="action failed"):
         getattr(executor, method_name)()
 
     editor.setTextCursor.assert_called_once_with(original_cursor)
-    executor.vim_status.set_focus_to_vim.assert_called_once_with()
+    focus_input.assert_called_once_with()
 
 
 def test_formatting(vim_bot):

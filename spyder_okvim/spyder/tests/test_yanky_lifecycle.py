@@ -1,17 +1,21 @@
 """History picker integration with modes, dispatch, and asynchronous lifetime."""
 
-from types import SimpleNamespace
+# Standard Libraries
 import weakref
+from types import SimpleNamespace
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtWidgets import QDialog
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.spyder.vim_widgets import VimWidget
 from spyder_okvim.utils.qtcompat import widget_is_deleted
 from spyder_okvim.vim.state import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -31,7 +35,7 @@ def picker(vim_bot):
     vim._use_stack(stack)
     editor = stack.get_current_editor()
     original = editor.toPlainText()
-    status.reset_for_test()
+    reset_vim_state(status)
     editor.set_text("alpha beta\nsecond line\nthird line")
     status.cursor.set_cursor_pos(0)
     CONF.set(CONF_SECTION, "yanky_enabled", True)
@@ -61,7 +65,7 @@ def picker(vim_bot):
         status.stop_recording_macro()
     commandline.esc_pressed()
     status.disconnect_from_editor()
-    status.reset_for_test()
+    reset_vim_state(status)
     stack.set_stack_index(0)
     vim._use_stack(stack)
     editor.set_text(original)
@@ -99,7 +103,7 @@ def test_test_reset_closes_picker_and_stops_highlight_timers(picker):
     state.status.cursor.hl_yank_dur = 1000
     state.status.cursor.highlight_put(0, 1)
     assert state.status.cursor._highlight_timers
-    state.status.reset_for_test()
+    reset_vim_state(state.status)
     assert state.widget._yank_picker is None
     assert not dialog.isVisible()
     assert not state.status.cursor._highlight_timers
@@ -372,8 +376,8 @@ def test_picker_is_unavailable_in_macro(picker, macro):
     if macro == "recording":
         state.status.manager_macro.start_record("a")
     else:
-        state.widget._macro_generation = 123
-        state.widget._macro_editor = weakref.ref(state.editor)
+        state.widget.macro_playback.generation = 123
+        state.widget.macro_playback.editor_ref = weakref.ref(state.editor)
     original = state.editor.toPlainText()
     state.widget.show_yank_history()
     assert state.widget._yank_picker is None

@@ -251,6 +251,31 @@ For operators use `z` because `s` belongs to vim-surround.
 When there are matches in another group, hints appear around the group.
 ![leap](https://github.com/ok97465/spyder_okvim/raw/main/doc/leap.gif)
 
+## Development and tests
+
+[Design notes](doc/design_patterns.md) describe command groups, state ownership,
+host operations and input lifetimes. Related handlers stay together in each
+module; the structure does not require one file per class.
+
+Run the normal suite, including the pure model/storage tests in root `tests/`:
+
+```sh
+python runtests.py
+```
+
+Set `QT_API` and `PYTEST_QT_API` to the same installed binding for GUI tests and
+test each binding in a separate process. Pure tests can run without Qt or Spyder:
+
+```sh
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests
+```
+
+Integration fixtures create the editor only for tests requesting `vim_bot`.
+Test setup/reset helpers live in `tests/qt_support.py`; tests that change plugin
+settings apply them through `VimWidget.apply_settings()` or the reset helper.
+Native IME tests must also run on the native platform (`cocoa` on macOS,
+`windows` on Windows), separately from offscreen checks.
+
 ## Window integration tests
 
 The real-window matrix targets the paired Spyder fork, including its window and

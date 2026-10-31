@@ -17,7 +17,6 @@ from spyder_okvim.utils.ex_parser import (
     scan_substitute_guide,
 )
 
-
 PATH_COMPLETION_EXTENSIONS = frozenset({".py", ".json", ".toml"})
 
 
@@ -34,6 +33,22 @@ class CompletionCandidate:
     apply_scope: str
     text: str
     cursor_position: int
+
+
+@dataclass(frozen=True)
+class PathArgument:
+    """Parsed path spelling before home expansion or directory resolution.
+
+    Prefix/suffix and cursor positions use Python string indices. Parsing this
+    value never reads the environment or enumerates directories.
+    """
+
+    command: str
+    explicit_range: bool
+    directory_prefix: str
+    prefix: str
+    replacement_prefix: str
+    suffix: str
 
 
 @dataclass(frozen=True)
@@ -54,25 +69,20 @@ class PathCompletionRequest:
 
 def merge_candidates(*groups):
     """Combine equal applications, keeping group order and all their sources."""
-    candidates = []
-    positions = {}
+    candidates = {}
     for group in groups:
         for candidate in group:
             key = candidate.text, candidate.cursor_position
-            if key not in positions:
-                positions[key] = len(candidates)
-                candidates.append(candidate)
+            if key not in candidates:
+                candidates[key] = candidate
                 continue
-            index = positions[key]
-            previous = candidates[index]
-            sources = list(
-                dict.fromkeys(
-                    previous.source.split(", ") + candidate.source.split(", ")
-                )
+            previous = candidates[key]
+            sources = dict.fromkeys(
+                previous.source.split(", ") + candidate.source.split(", ")
             )
             # The first row determines its label and application-scope display.
-            candidates[index] = replace(previous, source=", ".join(sources))
-    return candidates
+            candidates[key] = replace(previous, source=", ".join(sources))
+    return list(candidates.values())
 
 
 def _completion_header(text, cursor_position):
@@ -84,13 +94,6 @@ def _completion_header(text, cursor_position):
         return None
 
 
-def _supported_commands(commands):
-    # Single-symbol repeat commands follow the existing named command order.
-    return sorted(
-        set(commands), key=lambda name: (not name[0].isalpha(), name.casefold(), name)
-    )
-
-
 def command_candidates(text, cursor_position, commands):
     """Complete command names without looking up paths or history files."""
     header = _completion_header(text, cursor_position)
@@ -100,9 +103,13 @@ def command_candidates(text, cursor_position, commands):
     if not start <= cursor_position <= end:
         return []
     prefix = text[start:cursor_position]
+    # Single-symbol repeat commands follow the existing named command order.
+    commands = sorted(
+        set(commands), key=lambda name: (not name[0].isalpha(), name.casefold(), name)
+    )
     return [
         (text[:start] + name + text[end:], start + len(name))
-        for name in _supported_commands(commands)
+        for name in commands
         if name.startswith(prefix)
     ]
 
@@ -127,7 +134,30 @@ def completion_items(text, cursor_position, commands, base_directory):
 
 
 def parse_path_completion(text, cursor_position, commands, base_directory):
-    """Parse a single path argument without accessing directory entries."""
+    """Prepare a filesystem request while preserving the user's path spelling.
+
+    Syntax parsing is independent of home expansion. Only this preparation
+    boundary resolves the parsed directory against the supplied working path;
+    scanning remains in ``path_completion_items`` and its background worker.
+    """
+    argument = parse_path_argument(text, cursor_position, commands)
+    if argument is None:
+        return None
+    directory = os.path.expanduser(argument.directory_prefix or ".")
+    if not os.path.isabs(directory):
+        directory = os.path.join(base_directory, directory)
+    return PathCompletionRequest(
+        argument.command,
+        argument.explicit_range,
+        directory,
+        argument.prefix,
+        argument.replacement_prefix,
+        argument.suffix,
+    )
+
+
+def parse_path_argument(text, cursor_position, commands):
+    """Parse a path and its literal suffix without consulting user files/home."""
     header = _completion_header(text, cursor_position)
     if header is None:
         return None
@@ -168,14 +198,10 @@ def parse_path_completion(text, cursor_position, commands, base_directory):
     while component_end < path_end and text[component_end] not in separators:
         component_end += 1
     suffix = text[component_end:]
-    directory = os.path.expanduser(directory_prefix or ".")
-    if not os.path.isabs(directory):
-        directory = os.path.join(base_directory, directory)
-
-    return PathCompletionRequest(
+    return PathArgument(
         command,
         header.explicit_range,
-        directory,
+        directory_prefix,
         prefix,
         text[:path_start] + directory_prefix,
         suffix,
@@ -230,17 +256,6 @@ def path_completion_items(request, cancelled=None):
         results, key=lambda candidate: (candidate.text, candidate.cursor_position)
     )
     return [] if cancelled is not None and cancelled() else results
-
-
-def path_candidates(text, cursor_position, commands, base_directory):
-    """Complete a single path argument, scanning only its current directory."""
-    request = parse_path_completion(text, cursor_position, commands, base_directory)
-    if request is None:
-        return []
-    return [
-        (candidate.text, candidate.cursor_position)
-        for candidate in path_completion_items(request)
-    ]
 
 
 @lru_cache(maxsize=1)

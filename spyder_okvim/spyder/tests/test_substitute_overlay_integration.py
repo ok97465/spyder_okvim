@@ -1,26 +1,28 @@
 """Editor overlays share the substitute input and document lifetime."""
 
-# ruff: noqa: F811 - imported pytest fixtures are injected by parameter name
-
+# Standard Libraries
 from dataclasses import replace
 from unittest.mock import Mock
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
 from qtpy.QtGui import QTextCursor
 from qtpy.QtWidgets import QApplication
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
-from spyder_okvim.spyder.tests.test_commandline_history_popup import (
-    history_popup as history_popup,
-)
-from spyder_okvim.spyder.tests.test_substitute_preview import (
+from tests.commandline_support import (
     assert_no_replacement_panel,
     enter_command,
-    preview as preview,
-    result,
 )
+from tests.commandline_support import history_popup as history_popup
+from tests.commandline_support import preview as preview
+from tests.commandline_support import result
+from tests.qt_support import reset_vim_state
+
+# ruff: noqa: F811 - imported pytest fixtures are injected by parameter name
 
 
 def overlay_rows(state):
@@ -210,7 +212,7 @@ def test_cancellation_always_removes_drawn_replacement(preview, action):
         cursor = QTextCursor(state.editor.document())
         cursor.insertText("external ")
     else:
-        state.status.reset_for_test()
+        reset_vim_state(state.status)
     QCoreApplication.processEvents()
     assert_overlay_cleared(state)
     assert state.preview.result is None

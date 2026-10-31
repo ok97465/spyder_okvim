@@ -40,7 +40,6 @@ class WhichKeyPopup(QFrame):
         self.setFocusPolicy(Qt.NoFocus)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self._contents = None
-        self._scroll = None
         self.candidate_labels = []
         self.column_count = 2
 
@@ -64,7 +63,22 @@ class WhichKeyPopup(QFrame):
         layout.setSpacing(4)
         layout.setSizeConstraint(QLayout.SetNoConstraint)
         layout.addWidget(self.header)
-        layout.addWidget(self.body)
+        self._scroll = QScrollArea(self)
+        self._scroll.setObjectName("whichKeyScroll")
+        self._scroll.setFrameShape(QFrame.NoFrame)
+        for widget in (
+            self._scroll,
+            self._scroll.viewport(),
+            self._scroll.verticalScrollBar(),
+            self._scroll.horizontalScrollBar(),
+        ):
+            widget.setFocusPolicy(Qt.NoFocus)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setMinimumSize(0, 0)
+        self._scroll.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+        self._scroll.setWidget(self.body)
+        layout.addWidget(self._scroll)
         self.hide()
 
     def set_candidates(self, prefix, candidates):
@@ -74,8 +88,7 @@ class WhichKeyPopup(QFrame):
         if contents == self._contents:
             return
         self._contents = contents
-        if self._scroll is not None:
-            self._scroll.verticalScrollBar().setValue(0)
+        self._scroll.verticalScrollBar().setValue(0)
         self.header.setText(f"Prefix: {display_key(prefix)}")
         while self._grid.count():
             widget = self._grid.takeAt(0).widget()
@@ -97,7 +110,10 @@ class WhichKeyPopup(QFrame):
             description_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             self._grid.addWidget(key_label, row, column, Qt.AlignTop)
             self._grid.addWidget(description_label, row, column + 1)
+            key_label.show()
+            description_label.show()
             self.candidate_labels.append((key_label, description_label))
+        self._grid.invalidate()
 
     def refresh_appearance(self, font):
         """Use a smaller UI font and the palette applied by Spyder."""
@@ -124,44 +140,6 @@ class WhichKeyPopup(QFrame):
             "QScrollArea#whichKeyScroll { background: transparent; border: none; }"
         )
 
-    def _set_scrolling(self, enabled):
-        """Add a scrolling surface only when the candidate rows cannot fit."""
-        if enabled and self._scroll is None:
-            self.layout().removeWidget(self.body)
-            scroll = QScrollArea(self)
-            scroll.setObjectName("whichKeyScroll")
-            scroll.setFrameShape(QFrame.NoFrame)
-            scroll.setFocusPolicy(Qt.NoFocus)
-            scroll.viewport().setFocusPolicy(Qt.NoFocus)
-            scroll.verticalScrollBar().setFocusPolicy(Qt.NoFocus)
-            scroll.horizontalScrollBar().setFocusPolicy(Qt.NoFocus)
-            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-            scroll.setWidgetResizable(True)
-            scroll.setMinimumSize(0, 0)
-            scroll.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
-            scroll.setWidget(self.body)
-            self.layout().addWidget(scroll)
-            self._scroll = scroll
-            scroll.show()
-        elif not enabled and self._scroll is not None:
-            scroll = self._scroll
-            self.layout().removeWidget(scroll)
-            scroll.takeWidget()
-            self.body.setParent(self)
-            self.body.setMinimumHeight(0)
-            self.layout().addWidget(self.body)
-            self.body.show()
-            self._scroll = None
-            scroll.hide()
-            scroll.setParent(None)
-            scroll.deleteLater()
-
-    def _layout_padding(self):
-        """Return the space occupied by the frame and outer layout margins."""
-        margins = self.layout().contentsMargins() + self.contentsMargins()
-        return margins.left() + margins.right(), margins.top() + margins.bottom()
-
     def _preferred_width(self, horizontal_padding):
         """Measure unwrapped rows so short menus use only the space they need."""
         key_widths = [0] * self.column_count
@@ -182,10 +160,6 @@ class WhichKeyPopup(QFrame):
             + horizontal_padding
         )
 
-    def _wrapped_body_height(self, width):
-        """Measure the rows at their final width, including wrapped descriptions."""
-        return self._grid.totalHeightForWidth(max(1, width))
-
     def update_geometry(self):
         """Fit wrapped rows, allowing overflow menus to scroll without focus."""
         self.ensurePolished()
@@ -194,23 +168,30 @@ class WhichKeyPopup(QFrame):
         margin = min(8, max(0, (min(width, height) - 1) // 2))
         available_width = max(1, width - 2 * margin)
         available_height = max(1, height - 2 * margin)
-        horizontal_padding, vertical_padding = self._layout_padding()
+        margins = self.layout().contentsMargins() + self.contentsMargins()
+        horizontal_padding = margins.left() + margins.right()
+        vertical_padding = margins.top() + margins.bottom()
         wanted_width = self._preferred_width(horizontal_padding)
         popup_width = min(wanted_width, available_width)
-        body_height = self._wrapped_body_height(popup_width - horizontal_padding)
+        body_height = self._grid.totalHeightForWidth(
+            max(1, popup_width - horizontal_padding)
+        )
         fixed_height = (
             self.header.sizeHint().height() + self.layout().spacing() + vertical_padding
         )
         wanted_height = body_height + fixed_height
-        self._set_scrolling(wanted_height > available_height)
-        if self._scroll is not None:
+        overflowing = wanted_height > available_height
+        self._scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOn if overflowing else Qt.ScrollBarAlwaysOff
+        )
+        if overflowing:
             scrollbar_width = self._scroll.verticalScrollBar().sizeHint().width()
             popup_width = min(wanted_width + scrollbar_width, available_width)
-            body_height = self._wrapped_body_height(
-                popup_width - horizontal_padding - scrollbar_width
+            body_height = self._grid.totalHeightForWidth(
+                max(1, popup_width - horizontal_padding - scrollbar_width)
             )
-            self.body.setMinimumHeight(body_height)
             wanted_height = body_height + fixed_height
+        self.body.setMinimumHeight(max(0, body_height))
         popup_height = min(wanted_height, available_height)
         self.setGeometry(
             margin,
@@ -219,8 +200,3 @@ class WhichKeyPopup(QFrame):
             popup_height,
         )
         self.layout().activate()
-        if self._scroll is not None:
-            # Use the actual viewport after layout, including the scrollbar's
-            # platform-specific width, so the final wrapped row stays reachable.
-            body_height = self._wrapped_body_height(self._scroll.viewport().width())
-            self.body.setMinimumHeight(body_height)

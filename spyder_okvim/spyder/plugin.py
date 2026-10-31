@@ -5,7 +5,12 @@
 # Licensed under the terms of the MIT License
 # (see LICENSE.txt for details)
 # -----------------------------------------------------------------------------
-"""OkVim Plugin."""
+"""Route Spyder editor views and shared Vim UI through the plugin lifecycle.
+
+The plugin binds the active stack, reparents status widgets between windows and
+cancels old view work before a replacement is selected. Split-close focus intent
+belongs to this transition; delayed input delivery remains editor-bound.
+"""
 
 # Standard Libraries
 import weakref
@@ -20,7 +25,6 @@ from spyder.api.plugin_registration.decorators import (
     on_plugin_teardown,
 )
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
-
 from spyder.api.widgets.status import StatusBarWidget
 from spyder.utils.icon_manager import MAIN_FG_COLOR
 
@@ -104,7 +108,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     @property
     def vim_cmd(self):
-        """Return vim_cmd for test."""
+        """Return the shared command widget owned by the plugin pane."""
         return self.get_widget().vim_cmd
 
     # --- SpyderDockablePlugin API
@@ -143,6 +147,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._editor_widget = vim_cmd.editor_widget.get_widget()
         self._active_stack = None
         self._active_editor = None
+        self._input_focus_after_split_close = None
         self._status_window = None
         self._window_stacks = weakref.WeakKeyDictionary()
         self._vim_focus = weakref.WeakKeyDictionary()
@@ -176,10 +181,19 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         if event.type() == QEvent.Close and watched in self._window_stacks:
             if watched is not self._main:
                 self._closing_windows.add(watched)
+            self._input_focus_after_split_close = None
         if event.type() == QEvent.Close and (
             watched is live_widget(self._status_window)
             or watched is live_widget(self._active_stack)
         ):
+            if (
+                watched is live_widget(self._active_stack)
+                and self.vim_cmd.commandline.hasFocus()
+            ):
+                # Closing a Vim-focused split hands input to its replacement.
+                # The request belongs to the host transition, not the deleted
+                # editor, and is scheduled only after the new view is bound.
+                self._input_focus_after_split_close = weakref.ref(watched.window())
             if watched is not self._main and isinstance(watched, QMainWindow):
                 self._closing_windows.add(watched)
             self._reset_view()
@@ -201,19 +215,25 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._use_stack(stack)
 
     def _use_stack(self, stack):
-        """Bind both Vim and Spyder commands to the selected editor view."""
+        """Bind commands to a view before restoring a closed split's Vim focus.
+
+        A pending close handoff is valid only in its original host window. All
+        old editor requests are cancelled before the new input-focus request is
+        scheduled, so a later view change can still reject that request.
+        """
         if stack is None or stack.window() in self._closing_windows:
             return
+        restore_input = (
+            live_widget(self._input_focus_after_split_close) is stack.window()
+        )
+        self._input_focus_after_split_close = None
         editor = stack.get_current_editor()
         if editor is not live_widget(self._active_editor):
             self._reset_view()
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None
         self.vim_cmd.vim_status.cursor.set_editorstack(stack)
-        self.vim_cmd.which_key.set_editor(editor)
-        self.vim_cmd.substitute_preview.set_editor(editor)
-        self.vim_cmd.commandline_popup.set_editor(editor)
-        self.vim_cmd.put_controller.bind_editor(editor)
+        self.vim_cmd.bind_editor(editor)
         if editor is not None and editor not in self._editors:
             self._editors.add(editor)
             editor.installEventFilter(self)
@@ -234,6 +254,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             stack.installEventFilter(self)
         self._sync_statusbar()
         self.vim_cmd.vim_status.search.refresh()
+        if restore_input:
+            self.vim_cmd.vim_status.set_focus_to_vim_after_delay(0)
 
     def _focus_vim(self):
         """Keep the command line and command target on the focused stack."""
@@ -242,18 +264,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _reset_view(self):
         """Cancel partial commands before they can cross into another view."""
-        self.vim_cmd.substitute_preview.set_editor(None)
-        self.vim_cmd.which_key.cancel()
-        self.vim_cmd.which_key.set_editor(None)
-        self.vim_cmd.commandline_popup.set_editor(None)
-        self.vim_cmd.cancel_yank_picker()
-        self.vim_cmd.put_controller.bind_editor(None)
+        self.vim_cmd.bind_editor(None)
         status = self.vim_cmd.vim_status
         self.vim_cmd.cancel_macro()
         if status.is_recording_macro():
             status.stop_recording_macro()
-        status.finish_insert(apply_count=False)
-        status.disconnect_from_editor()
+        status.cancel_pending_work()
         editor = live_widget(self._active_editor)
         if editor is not None:
             editor.clear_extra_selections("vim_selection")
@@ -330,6 +346,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def on_close(self, cancellable: bool = True) -> bool:
         """Handle plugin shutdown."""
+        self._input_focus_after_split_close = None
         self.on_switcher_teardown()
         if hasattr(self, "_editor_widget"):
             self._editor_widget.removeEventFilter(self)

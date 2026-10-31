@@ -1,8 +1,12 @@
 """Regression tests for document searches and refreshed search results."""
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QTextCursor
+
+# Project Libraries
+from tests.qt_support import reset_vim_state
 
 
 def _highlight_ranges(editor):
@@ -42,11 +46,11 @@ def search_editor(vim_bot):
     original_text = editor.toPlainText()
     filename = next(info.filename for info in stack.data if info.editor is editor)
     stack.set_current_filename(filename)
-    status.reset_for_test()
+    reset_vim_state(status)
     try:
         yield stack, editor, status, helper, qtbot
     finally:
-        status.reset_for_test()
+        reset_vim_state(status)
         editor.set_text(original_text)
         stack.set_current_filename(original_filename)
 
@@ -306,7 +310,7 @@ def test_reset_cancels_pending_search_updates(search_editor, monkeypatch):
     cursor = editor.textCursor()
     cursor.movePosition(QTextCursor.End)
     cursor.insertText(" foo")
-    status.reset_for_test()
+    reset_vim_state(status)
     updates = _record_highlight_updates(editor, monkeypatch)
 
     cursor.insertText(" foo")

@@ -1,12 +1,15 @@
 """Search direction, incremental previews, and cancellation regressions."""
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtGui import QInputMethodEvent, QTextCursor
 from spyder.config.manager import CONF
 
+# Project Libraries
 from spyder_okvim.spyder.config import CONF_SECTION
 from spyder_okvim.vim import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -21,7 +24,7 @@ def search_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     original_text = editor.toPlainText()
     editor.set_text("foo x foo x foo")
@@ -36,7 +39,7 @@ def search_bot(vim_bot):
     finally:
         commandline.esc_pressed()
         status.disconnect_from_editor()
-        status.reset_for_test()
+        reset_vim_state(status)
         editor.set_text(original_text)
         stack.set_stack_index(previous_index)
         for name, value in options.items():
@@ -344,7 +347,7 @@ def test_reset_and_close_stop_pending_previews(search_bot, close):
         search.close()
         search.close()  # Shutdown can reach the same state twice.
     else:
-        status.reset_for_test()
+        reset_vim_state(status)
     qtbot.wait(250)
     assert search.txt_searched == ""
     assert status.search.txt_searched == ""

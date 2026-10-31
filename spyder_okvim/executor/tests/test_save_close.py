@@ -10,6 +10,9 @@ from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QMessageBox
 from spyder.plugins.editor.widgets.editorstack import EditorStack
 
+# Project Libraries
+from tests.qt_support import reset_vim_state
+
 
 @pytest.fixture
 def file_bot(vim_bot, monkeypatch, tmp_path):
@@ -28,7 +31,7 @@ def file_bot(vim_bot, monkeypatch, tmp_path):
     stack.set_stack_index(stack.data.index(finfo))
     finfo.newly_created = False
     finfo.editor.document().setModified(True)
-    status.reset_for_test()
+    reset_vim_state(status)
     status.cursor.set_cursor_pos(0)
     commandline.clear()
     commandline.setFocus()

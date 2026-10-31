@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Standard Libraries
 import weakref
+from collections.abc import Callable
 
 # Third Party Libraries
 from qtpy.QtCore import QEvent, Qt, QTimer
@@ -32,7 +33,6 @@ class YankHistoryDialog(PopupTableDialog):
             max_height=360,
         )
         self.entries = tuple(entries)
-        self._entries_by_id = {entry.id: entry for entry in self.entries}
         self.selected_entry = None
         self.list_viewer.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # Previews are bounded, and only the small metadata columns autosize.
@@ -63,7 +63,7 @@ class YankHistoryDialog(PopupTableDialog):
             ]
             for item in row:
                 item.setEditable(False)
-                item.setData(entry.id, Qt.UserRole)
+                item.setData(entry, Qt.UserRole)
             row[1].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.list_model.appendRow(row)
 
@@ -107,8 +107,7 @@ class YankHistoryDialog(PopupTableDialog):
 
     def accept(self):
         index = self.list_viewer.currentIndex()
-        entry_id = index.data(Qt.UserRole) if index.isValid() else None
-        self.selected_entry = self._entries_by_id.get(entry_id)
+        self.selected_entry = index.data(Qt.UserRole) if index.isValid() else None
         super().accept()
 
     def reject(self):
@@ -117,11 +116,27 @@ class YankHistoryDialog(PopupTableDialog):
 
 
 class YankHistoryPicker:
-    """One popup request, valid only while its captured view stays unchanged."""
+    """One popup request, valid only while its captured view stays unchanged.
 
-    def __init__(self, widget, editor, entries):
+    ``is_current(picker)`` checks ownership without exposing the owner's private
+    fields. ``on_finished(picker)`` releases a completed request and must ignore
+    an older picker after replacement. Both callbacks run on the GUI thread;
+    cancellation invalidates ownership before rejecting the dialog.
+    """
+
+    def __init__(
+        self,
+        widget,
+        editor,
+        entries,
+        *,
+        is_current: Callable[[YankHistoryPicker], bool],
+        on_finished: Callable[[YankHistoryPicker], None],
+    ):
         self.widget = widget
         self.status = widget.vim_status
+        self._is_owned = is_current
+        self._on_finished = on_finished
         self.editor_ref = weakref.ref(editor)
         self.document_ref = weakref.ref(editor.document())
         self.generation = widget.put_controller.text_generation
@@ -174,10 +189,11 @@ class YankHistoryPicker:
             self.dialog.reject()
 
     def is_current(self):
+        """Check ownership plus the captured document, mode, cursor and generation."""
         editor = live_widget(self.editor_ref)
         document = live_widget(self.document_ref)
         if (
-            self.widget._yank_picker is not self
+            not self._is_owned(self)
             or not self.status.yanky_enabled
             or editor is None
             or editor is not self.status.get_editor()
@@ -195,7 +211,7 @@ class YankHistoryPicker:
         )
 
     def _invalidate(self, *args):
-        if self.widget._yank_picker is self:
+        if self._is_owned(self):
             self.widget.cancel_yank_picker()
 
     def _text_changed(self, position, removed, added):
@@ -203,7 +219,7 @@ class YankHistoryPicker:
             self._invalidate()
 
     def _finished(self, result):
-        if self.widget._yank_picker is self and not self._finishing:
+        if self._is_owned(self) and not self._finishing:
             self._finishing = True
             # Capture synchronously while the dialog still exists.
             self.entry = (
@@ -214,7 +230,7 @@ class YankHistoryPicker:
             QTimer.singleShot(0, self._complete)
 
     def _complete(self):
-        if self.widget._yank_picker is not self:
+        if not self._is_owned(self):
             return
         valid = self.is_current()
         editor = live_widget(self.editor_ref)
@@ -235,11 +251,11 @@ class YankHistoryPicker:
             # Focus handlers preserve state while this request is active, and
             # is_current() has verified the captured cursor and selection.
             self.status.change_label.emit(self.mode)
-            if self.widget._yank_picker is not self:
+            if not self._is_owned(self):
                 return
             self.status.cursor.draw_vim_cursor()
             if self.entry is not None:
                 self.widget.put_controller.put(entry=self.entry)
         finally:
-            if self.widget._yank_picker is self:
-                self.widget._yank_picker = None
+            if self._is_owned(self):
+                self._on_finished(self)

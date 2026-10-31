@@ -1,31 +1,27 @@
 """Substitution computation preserves text and follows Vim's match progression."""
 
+# Third Party Libraries
 import pytest
 from qtpy.QtGui import QTextCursor, QTextDocument
 
+# Project Libraries
 from spyder_okvim.utils import substitute
+from spyder_okvim.utils.ex_parser import SubstituteSpec, scan_header
 from spyder_okvim.utils.search_helpers import compile_pattern
 
 
 def _plan(
-    text, expression, replacement, *, delimiter="/", first=0, last=None, **kwargs
+    text, expression, replacement, *, delimiter="/", first=0, last=None, flags=""
 ):
     document = QTextDocument(text)
-    pattern = compile_pattern(expression, ignorecase=False)
-    tokens = (
-        ()
-        if kwargs.get("count_only")
-        else substitute.tokenize_replacement(replacement, delimiter)
-    )
-    plan = substitute.build_substitution_plan(
-        document,
+    last = document.blockCount() - 1 if last is None else last
+    prepared = substitute.prepare_substitution(
+        scan_header(f"{first + 1},{last + 1}s"),
+        SubstituteSpec(expression, replacement, delimiter, flags + "I"),
         first,
-        document.blockCount() - 1 if last is None else last,
-        pattern,
-        tokens,
-        **kwargs,
+        document.blockCount(),
     )
-    return document, plan
+    return document, substitute.build_substitution_plan(document, prepared)
 
 
 def _apply(document, plan):
@@ -93,15 +89,13 @@ def test_nbsp_capture_and_whole_match_preserve_original_paragraph():
 def test_global_empty_and_same_start_matches(
     text, pattern, replacement, expected, count
 ):
-    document, plan = _plan(text, pattern, replacement, global_matches=True)
+    document, plan = _plan(text, pattern, replacement, flags="g")
     assert plan.match_count == count
     assert _apply(document, plan) == expected
 
 
 def test_range_starts_at_requested_block_and_counts_target_lines():
-    document, plan = _plan(
-        "x\nx x\nx x\nx", "x", "z", first=1, last=2, global_matches=True
-    )
+    document, plan = _plan("x\nx x\nx x\nx", "x", "z", first=1, last=2, flags="g")
     assert plan.edits == ((2, 3, "z"), (4, 5, "z"), (6, 7, "z"), (8, 9, "z"))
     assert (plan.match_count, plan.line_count, plan.last_line) == (4, 2, 2)
     assert _apply(document, plan) == "x\nz z\nz z\nx"
@@ -109,13 +103,13 @@ def test_range_starts_at_requested_block_and_counts_target_lines():
 
 def test_only_target_blocks_are_matched(monkeypatch):
     observed = []
-    iterate = substitute._iter_matches
+    iterate = substitute.iter_substitution_matches
 
     def record(pattern, text, global_matches):
         observed.append(text)
         yield from iterate(pattern, text, global_matches)
 
-    monkeypatch.setattr(substitute, "_iter_matches", record)
+    monkeypatch.setattr(substitute, "iter_substitution_matches", record)
     _plan("outside\nfirst\nsecond\noutside", ".", "x", first=1, last=2)
     assert observed == ["first", "second"]
 
@@ -131,7 +125,7 @@ def test_invalid_replacements_rejected_even_without_matches(replacement):
 
 @pytest.mark.parametrize("replacement", [r"\r", r"\U", r"\2", "a\u2028b"])
 def test_count_only_ignores_replacement(replacement):
-    document, plan = _plan("foo foo", "foo", replacement, count_only=True)
+    document, plan = _plan("foo foo", "foo", replacement, flags="n")
     assert plan.match_count == 1
     assert plan.edits == ()
     assert document.toPlainText() == "foo foo"
@@ -146,7 +140,7 @@ def test_reject_surrogate_boundaries_in_edit_and_used_captures(pattern, replacem
 
 
 def test_count_only_can_count_qt_utf16_matches_without_edit_validation():
-    _, plan = _plan("😀", r"\C", "x", count_only=True, global_matches=True)
+    _, plan = _plan("😀", r"\C", "x", flags="gn")
     assert plan.match_count == 2
 
 
@@ -154,7 +148,7 @@ def test_count_only_can_count_qt_utf16_matches_without_edit_validation():
 def test_global_matching_rejects_invalid_unicode_before_unchecked_qt_match(text):
     pattern = compile_pattern(r".\K", ignorecase=False)
     with pytest.raises(UnicodeEncodeError):
-        list(substitute._iter_matches(pattern, text, True))
+        list(substitute.iter_substitution_matches(pattern, text, True))
 
 
 def test_unused_capture_can_split_surrogate_when_edit_boundaries_are_safe():
@@ -182,20 +176,20 @@ def test_separator_byte_sequence_across_code_units_is_not_a_separator():
 
 @pytest.mark.parametrize("replacement", ["&", r"\0", r"\1"])
 def test_equal_replacements_keep_counts_without_edits(replacement):
-    _, plan = _plan("aa\naa", "(a)", replacement, global_matches=True)
+    _, plan = _plan("aa\naa", "(a)", replacement, flags="g")
     assert plan.edits == ()
     assert (plan.match_count, plan.line_count, plan.last_line) == (4, 2, 1)
 
 
 def test_confirmation_retains_unchanged_targets_in_match_order():
-    document, plan = _plan("aa", "a", "&", global_matches=True, confirm=True)
+    document, plan = _plan("aa", "a", "&", flags="gc")
     assert plan.edits == ((0, 1, "a"), (1, 2, "a"))
     assert plan.match_count == 2
     assert document.toPlainText() == "aa"
 
 
 def test_adjacent_replacements_can_cancel_for_whole_block():
-    _, plan = _plan("aa", r"a(?=a)|(a)", r"\1\1", global_matches=True)
+    _, plan = _plan("aa", r"a(?=a)|(a)", r"\1\1", flags="g")
     assert plan.match_count == 2
     assert plan.edits == ()
 
@@ -205,7 +199,7 @@ def test_count_only_does_not_expand_or_allocate_edits(monkeypatch):
         pytest.fail("Count-only execution expanded a replacement")
 
     monkeypatch.setattr(substitute, "substitution_match", fail)
-    document, plan = _plan("a a\na", "a", "z", global_matches=True, count_only=True)
+    document, plan = _plan("a a\na", "a", "z", flags="gn")
     assert (plan.match_count, plan.line_count, plan.last_line) == (3, 2, 1)
     assert plan.edits == ()
     assert document.toPlainText() == "a a\na"

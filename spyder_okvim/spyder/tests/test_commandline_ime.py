@@ -11,6 +11,7 @@ from qtpy.QtWidgets import QApplication
 
 # Project Libraries
 from spyder_okvim.vim import VimState
+from tests.qt_support import reset_vim_state
 
 
 @pytest.fixture
@@ -25,7 +26,7 @@ def commandline_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     editor.set_text("start 한글 target 한글")
     status.cursor.set_cursor_pos(0)
@@ -603,6 +604,7 @@ def test_windows_native_ime_context_follows_command_mode(
 
     # Import Windows APIs only on their platform; inspect the top-level HWND
     # used by Qt rather than creating a native child window for the line edit.
+    # Standard Libraries
     import ctypes
     from ctypes import wintypes
 

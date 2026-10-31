@@ -1,14 +1,11 @@
 """Confirmed substitutions through the real Ex prompt and editor undo stack."""
 
+# Third Party Libraries
 import pytest
 from qtpy.QtCore import Qt
 
-from spyder_okvim.executor.tests.test_substitute import (
-    submit,
-    substitute_bot as _substitute_bot,
-)
-
-substitute_bot = _substitute_bot
+# Project Libraries
+from tests.qt_support import submit_substitution as submit
 
 
 @pytest.mark.parametrize(

@@ -4,9 +4,8 @@
 import sys
 
 # Third Party Libraries
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent
-
 
 # macOS ANSI virtual key codes, with their unshifted and shifted characters.
 _MACOS_LATIN_KEYS = {
@@ -122,3 +121,10 @@ def latin_command_key(event: QKeyEvent) -> QKeyEvent:
         event.isAutoRepeat(),
         event.count(),
     )
+
+
+def key_event_from_info(info):
+    """Build an ignored KeyPress event from recorded native key values."""
+    event = QKeyEvent(QEvent.KeyPress, info.key_code, info.modifiers, info.text)
+    event.ignore()
+    return event

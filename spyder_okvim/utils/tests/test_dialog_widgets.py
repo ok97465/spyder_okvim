@@ -1,31 +1,20 @@
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import Qt, QEvent
+from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QKeyEvent, QStandardItem
 from qtpy.QtWidgets import QDialog
 
 # Project Libraries
-from spyder_okvim.utils.list_dialog import PopupListDialog, PopupTableDialog
-from spyder_okvim.utils.jump_dialog import JumpListDialog
-from spyder_okvim.utils.mark_dialog import MarkListDialog
+from spyder_okvim.utils.jump_dialog import (
+    JumpListDialog,
+    JumpRow,
+    JumpSnapshot,
+    build_jump_snapshot,
+    read_jump_location,
+)
 from spyder_okvim.utils.jump_list import JumpList
-
-
-class DummyVimStatus:
-    """Simple stand-in for VimStatus used in dialogs."""
-
-    def __init__(self, jump_list):
-        self.jump_list = jump_list
-        self.focused = False
-
-    def jump_backward(self):
-        self.jump_list.back()
-
-    def jump_forward(self):
-        self.jump_list.forward()
-
-    def set_focus_to_vim(self):
-        self.focused = True
+from spyder_okvim.utils.list_dialog import PopupListDialog, PopupTableDialog
+from spyder_okvim.utils.mark_dialog import MarkListDialog, MarkRow, build_mark_rows
 
 
 def test_popup_list_dialog_navigation(qtbot):
@@ -106,52 +95,66 @@ def test_popup_table_dialog_escape(qtbot):
     assert dlg.result() == QDialog.Rejected
 
 
-def test_jump_list_dialog_navigation(qtbot, tmpdir):
-    file1 = tmpdir.join("a.txt")
-    file1.write("alpha\nbeta\n")
-    file2 = tmpdir.join("b.txt")
-    file2.write("gamma\n")
+def test_jump_list_dialog_navigation(qtbot):
+    jump_list = JumpList()
+    jump_list.push("a.txt", 0)
+    jump_list.push("b.txt", 0)
+    metadata = {"a.txt": (1, 1, "alpha"), "b.txt": (1, 1, "gamma")}
+    focused = []
 
-    jl = JumpList()
-    jl.push(str(file1), 0)
-    jl.push(str(file2), 0)
-    vs = DummyVimStatus(jl)
+    def snapshot():
+        return build_jump_snapshot(
+            jump_list, read_location=lambda path, position: metadata[path]
+        )
 
-    dlg = JumpListDialog(vs)
+    def backward():
+        jump_list.back()
+        return snapshot()
+
+    def forward():
+        jump_list.forward()
+        return snapshot()
+
+    dlg = JumpListDialog(
+        snapshot(),
+        on_back=backward,
+        on_forward=forward,
+        on_finished=lambda: focused.append(True),
+    )
     qtbot.addWidget(dlg)
     dlg.show()
     qtbot.waitExposed(dlg)
 
     assert dlg.list_model.rowCount() == 2
     assert dlg.list_model.item(1, 0).text().startswith(">")
+    assert dlg.list_model.item(0, 4).text() == "alpha"
 
     qtbot.keyPress(dlg.list_viewer, Qt.Key_O, modifier=Qt.ControlModifier)
-    assert vs.jump_list.index == 1
+    assert jump_list.index == 1
+    assert dlg.list_viewer.currentIndex().row() == 0
 
     qtbot.keyPress(dlg.list_viewer, Qt.Key_I, modifier=Qt.ControlModifier)
-    assert vs.jump_list.index == 2
+    assert jump_list.index == 2
+    assert dlg.list_viewer.currentIndex().row() == 1
 
-    idx_before = vs.jump_list.index
+    index_before = jump_list.index
     qtbot.keyPress(dlg.list_viewer, Qt.Key_N, modifier=Qt.ControlModifier)
-    assert vs.jump_list.index == idx_before
+    assert jump_list.index == index_before
 
     dlg.reject()
-    assert vs.focused
+    assert focused
 
 
-def test_mark_list_dialog_accept_reject(qtbot, tmpdir):
-    file1 = tmpdir.join("c.txt")
-    file1.write("line1\nline2\n")
-    marks = [("a", {"file": str(file1), "line": 1, "col": 0})]
-
-    dlg = MarkListDialog(marks)
+def test_mark_list_dialog_accept_reject(qtbot):
+    rows = (MarkRow("a", 2, 1, "c.txt", "line2"),)
+    dlg = MarkListDialog(rows)
     qtbot.addWidget(dlg)
     dlg.show()
     qtbot.waitExposed(dlg)
 
     assert dlg.list_model.rowCount() == 1
-    row = dlg.list_model.item(0, 0).text()
-    assert row == "a"
+    assert dlg.list_model.item(0, 0).text() == "a"
+    assert dlg.list_model.item(0, 4).text() == "line2"
 
     dlg.accept()
     assert dlg.get_selected_mark() == "a"
@@ -160,25 +163,51 @@ def test_mark_list_dialog_accept_reject(qtbot, tmpdir):
     assert dlg.get_selected_mark() == ""
 
 
-def test_jump_list_get_line_info(tmpdir):
+def test_read_jump_location(tmpdir):
     file1 = tmpdir.join("eof.txt")
     file1.write("foo")
-    jl = JumpList()
-    vs = DummyVimStatus(jl)
-    dlg = JumpListDialog(vs)
-    line, col, text = dlg._get_line_info(str(file1), 1)
-    assert (line, col, text) == (1, 2, "foo")
-
+    assert read_jump_location(str(file1), 1) == (1, 2, "foo")
     missing = tmpdir.join("missing.txt")
-    line, col, text = dlg._get_line_info(str(missing), 0)
-    assert (line, col, text) == (1, 1, "")
+    assert read_jump_location(str(missing), 0) == (1, 1, "")
 
 
-def test_mark_list_dialog_invalid_accept_and_populate(tmpdir):
-    bad_file = tmpdir.join("missing.txt")
-    marks = [("a", {"file": str(bad_file), "line": 0, "col": 0})]
-    dlg = MarkListDialog(marks)
+def test_mark_list_dialog_invalid_accept_and_populate(qtbot):
+    marks = [("a", {"file": "missing.txt", "line": 0, "col": 0})]
+    rows = build_mark_rows(marks, read_line=lambda path, block: "")
+    dlg = MarkListDialog(rows)
+    qtbot.addWidget(dlg)
     dlg.list_viewer.setCurrentIndex(dlg.list_model.index(1, 0))
     dlg.accept()
     assert dlg.get_selected_mark() == ""
     assert dlg.list_model.item(0, 4).text() == ""
+
+
+def test_prepared_rows_render_without_file_or_host_access(qtbot, monkeypatch):
+    """Display consumes supplied rows even when no filesystem access is allowed."""
+
+    def unexpected_open(*args, **kwargs):
+        raise AssertionError("Rendering prepared rows must not read files")
+
+    monkeypatch.setattr("builtins.open", unexpected_open)
+    marks = MarkListDialog((MarkRow("A", 8, 4, "prepared.py", "source"),))
+    jumps = JumpListDialog(
+        JumpSnapshot((JumpRow(1, 8, 4, "prepared.py", "source"),), 1)
+    )
+    qtbot.addWidget(marks)
+    qtbot.addWidget(jumps)
+    assert marks.list_model.item(0, 4).text() == "source"
+    assert jumps.list_model.item(0, 4).text() == "source"
+
+
+def test_mark_row_preparation_can_use_in_memory_metadata():
+    marks = [("b", {"file": "project/source.py", "line": 3, "col": 2})]
+    lookups = []
+
+    def read_line(path, block):
+        lookups.append((path, block))
+        return "prepared source"
+
+    assert build_mark_rows(marks, read_line=read_line) == (
+        MarkRow("b", 4, 3, "source.py", "prepared source"),
+    )
+    assert lookups == [("project/source.py", 3)]

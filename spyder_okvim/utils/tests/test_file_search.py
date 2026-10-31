@@ -8,6 +8,7 @@ from qtpy.QtGui import QKeyEvent
 # Project Libraries
 from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.jump_list import Jump
+from tests.qt_support import reset_vim_state
 
 
 def test_open_file_search(vim_bot, monkeypatch, tmpdir):
@@ -24,7 +25,7 @@ def test_open_file_search(vim_bot, monkeypatch, tmpdir):
 
     vs = vim.vim_cmd.vim_status
     vs.cursor.set_cursor_pos(0)
-    vs.reset_for_test()
+    reset_vim_state(vs)
     current = stack.get_current_filename()
 
     event = QKeyEvent(QEvent.KeyPress, Qt.Key_P, Qt.ControlModifier)

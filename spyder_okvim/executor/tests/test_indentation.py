@@ -4,6 +4,8 @@
 import pytest
 from qtpy.QtCore import Qt
 
+# Project Libraries
+from tests.qt_support import reset_vim_state
 
 INDENT_SETTINGS = [
     pytest.param("  ", 4, id="two-spaces"),
@@ -23,7 +25,7 @@ def indentation_bot(vim_bot):
     commandline.esc_pressed()
     status.disconnect_from_editor()
     stack.set_stack_index(0)
-    status.reset_for_test()
+    reset_vim_state(status)
     editor = stack.get_current_editor()
     commandline.clear()
     commandline.setFocus()

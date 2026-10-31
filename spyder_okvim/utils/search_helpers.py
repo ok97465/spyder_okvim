@@ -1,23 +1,37 @@
+"""Explicit search-case policy and Qt matching with UTF-16 offsets."""
+
 from __future__ import annotations
 
-from qtpy.QtCore import QRegularExpression
+# Standard Libraries
+from typing import TYPE_CHECKING
 
-from spyder.config.manager import CONF
+if TYPE_CHECKING:
+    # Third Party Libraries
+    from qtpy.QtCore import QRegularExpression
 
-from spyder_okvim.spyder.config import CONF_SECTION
 
+def resolve_ignorecase(
+    text: str,
+    override: bool | None = None,
+    *,
+    ignorecase: bool = True,
+    smartcase: bool = True,
+) -> bool:
+    """Resolve explicit case options without reading global configuration.
 
-def resolve_ignorecase(text: str, override: bool | None = None) -> bool:
-    """Resolve search case settings without modifying global configuration."""
+    A substitution's final i/I flag overrides both options. Otherwise smartcase
+    disables ignorecase when the pattern contains an uppercase character.
+    """
     if override is not None:
         return override
-    ignorecase = CONF.get(CONF_SECTION, "ignorecase")
-    smartcase = CONF.get(CONF_SECTION, "smartcase")
     return ignorecase and not (smartcase and text.lower() != text)
 
 
 def compile_pattern(text: str, ignorecase: bool) -> QRegularExpression:
     """Create the expression shared by search and Ex substitution."""
+    # Third Party Libraries
+    from qtpy.QtCore import QRegularExpression
+
     pattern = QRegularExpression(text)
     if ignorecase:
         pattern.setPatternOptions(QRegularExpression.CaseInsensitiveOption)

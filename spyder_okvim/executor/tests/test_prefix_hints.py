@@ -8,7 +8,7 @@ import pytest
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import CommandSpec, ExecutorSubBase
-from spyder_okvim.executor.executor_sub import ExecutorSubCmd_alnum
+from spyder_okvim.executor.prefixes import MarkNameExecutor
 from spyder_okvim.vim.state import InputCmdInfo
 
 
@@ -20,8 +20,8 @@ def test_declared_command_supports_custom_method_and_special_key(vim_bot):
     class PrefixExecutor(ExecutorSubBase):
         command_specs = (CommandSpec("]", "perform_action", "Custom action"),)
 
-        def perform_action(self, num=1, num_str=""):
-            calls.append((num, num_str))
+        def perform_action(self, count=1, count_text=""):
+            calls.append((count, count_text))
 
     executor = PrefixExecutor(vim.vim_cmd.vim_status)
 
@@ -35,11 +35,11 @@ def test_declared_command_supports_custom_method_and_special_key(vim_bot):
 
 
 @pytest.mark.parametrize(
-    "command, parent_num, cross_file",
+    "command, parent_counts, cross_file",
     [("'", [12], True), ("d'", [1, 1], False), ("gu'", [2, 3, 4], False)],
 )
 def test_mark_hints_respect_operator_file_boundary(
-    vim_bot, monkeypatch, command, parent_num, cross_file
+    vim_bot, monkeypatch, command, parent_counts, cross_file
 ):
     """A direct counted jump can cross files, while an operator motion cannot."""
     _, stack, _, vim, _ = vim_bot
@@ -57,8 +57,8 @@ def test_mark_hints_respect_operator_file_boundary(
         {"A": same_file_global, "B": other_file_global},
     )
     monkeypatch.setattr(status, "input_cmd", InputCmdInfo("", command))
-    executor = ExecutorSubCmd_alnum(status)
-    executor.parent_num = parent_num
+    executor = MarkNameExecutor(status)
+    executor.parent_counts = parent_counts
 
     candidates = executor.get_hint_candidates()
 

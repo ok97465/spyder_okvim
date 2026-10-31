@@ -12,8 +12,8 @@ from qtpy.QtGui import QTextCursor, QTextDocument
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import (
-    RETURN_EXECUTOR_METHOD_INFO,
     ExecutorSubBase,
+    ExecutorTransition,
 )
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 
@@ -126,7 +126,7 @@ class ExecutorSearchCharEasymotion(ExecutorSubBase):
                 self.func_list_deferred, self.return_deferred
             )
             self.vim_status.set_marker_for_easymotion(positions, motion_type)
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
 
     def forwards_find_char(self, characters: str):
         """Find characters forwards."""
@@ -194,17 +194,17 @@ class ExecutorEasymotion(ExecutorSubBase):
     def __call__(self, txt: str):
         if txt.isdigit():
             return False
-        num = 1
-        num_str = ""
+        count = 1
+        count_text = ""
         if len(txt) > 1:
-            num_str = txt[:-1]
-            num = int(num_str)
+            count_text = txt[:-1]
+            count = int(count_text)
 
         method = self.dispatcher.get(txt[-1], None)
 
         ret = None
         if method:
-            ret = method(num, num_str)
+            ret = method(count, count_text)
 
         if ret:
             self.vim_status.sub_mode = ret.sub_mode
@@ -233,9 +233,9 @@ class ExecutorEasymotion(ExecutorSubBase):
                 self.return_deferred,
             )
             self.vim_status.set_marker_for_easymotion(positions, motion_type)
-            return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+            return ExecutorTransition(executor_sub, True)
 
-    def forward_words(self, num=1, num_str=""):
+    def forward_words(self, count=1, count_text=""):
         """Easymotion-w."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
@@ -261,7 +261,7 @@ class ExecutorEasymotion(ExecutorSubBase):
 
         return self.set_position_result_to_vim_status(positions, MotionType.CharWise)
 
-    def backward_words(self, num=1, num_str=""):
+    def backward_words(self, count=1, count_text=""):
         """Easymotion-b."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
@@ -288,7 +288,7 @@ class ExecutorEasymotion(ExecutorSubBase):
 
         return self.set_position_result_to_vim_status(positions, MotionType.CharWise)
 
-    def forward_start_of_line(self, num=1, num_str=""):
+    def forward_start_of_line(self, count=1, count_text=""):
         """Easymotion-j."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
@@ -314,7 +314,7 @@ class ExecutorEasymotion(ExecutorSubBase):
 
         return self.set_position_result_to_vim_status(positions, MotionType.LineWise)
 
-    def backward_start_of_line(self, num=1, num_str=""):
+    def backward_start_of_line(self, count=1, count_text=""):
         """Easymotion-j."""
         editor = self.vim_status.get_editor()
         cur_pos = editor.textCursor().position()
@@ -340,22 +340,22 @@ class ExecutorEasymotion(ExecutorSubBase):
 
         return self.set_position_result_to_vim_status(positions, MotionType.LineWise)
 
-    def forwards_find_char(self, num=1, num_str=""):
+    def forwards_find_char(self, count=1, count_text=""):
         """Find characters forwards."""
         executor_sub = self.executor_search_char
         executor_sub.set_search_method("ch_forwards")
-        executor_sub.n_input_required = num
+        executor_sub.n_input_required = count
         executor_sub.set_func_list_deferred(
             self.func_list_deferred, self.return_deferred
         )
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
 
-    def backwards_find_char(self, num=1, num_str=""):
+    def backwards_find_char(self, count=1, count_text=""):
         """Find characters forwards."""
         executor_sub = self.executor_search_char
         executor_sub.set_search_method("ch_backwards")
-        executor_sub.n_input_required = num
+        executor_sub.n_input_required = count
         executor_sub.set_func_list_deferred(
             self.func_list_deferred, self.return_deferred
         )
-        return RETURN_EXECUTOR_METHOD_INFO(executor_sub, True)
+        return ExecutorTransition(executor_sub, True)
