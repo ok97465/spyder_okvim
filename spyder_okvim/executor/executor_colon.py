@@ -321,7 +321,7 @@ class ExecutorColon(ExecutorSubBase):
         status = self.vim_status
         marks = status.bookmark_manager.list_bookmarks()
 
-        dlg = MarkListDialog(build_mark_rows(marks), status.get_editor().window())
+        dlg = MarkListDialog(build_mark_rows(marks), status.get_editor())
         result = exec_dialog(dlg)
         # Tests patch ``exec_`` to return ``None``; ``exec_dialog`` keeps that
         # behaviour so only an explicit ``QDialog.Rejected`` (0) cancels.
@@ -350,9 +350,10 @@ class ExecutorColon(ExecutorSubBase):
 
         dlg = JumpListDialog(
             build_jump_snapshot(status.jump_list),
-            status.get_editor().window(),
+            status.get_editor(),
             on_back=lambda: navigate(True),
             on_forward=lambda: navigate(False),
+            on_select=status.jump_to_index,
             on_finished=status.set_focus_to_vim,
         )
         exec_dialog(dlg)

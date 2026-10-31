@@ -5,11 +5,12 @@ sender and queue with those keys; the GUI owner keeps playback active until
 both queued delivery and recursive input handling have finished.
 """
 
+from __future__ import annotations
+
 # Standard Libraries
 import sys
 import threading
 import weakref
-from functools import wraps
 
 # Third Party Libraries
 from qtpy.QtCore import QObject, QThread, Signal, Slot
@@ -17,20 +18,6 @@ from qtpy.QtCore import QObject, QThread, Signal, Slot
 # Project Libraries
 from spyder_okvim.utils.qtcompat import live_widget
 from spyder_okvim.vim.state import InputSource, KeyInfo
-
-running_coverage = "coverage" in sys.modules
-
-
-def enable_coverage_tracing(function):
-    """Continue an existing coverage trace in a worker thread, when available."""
-
-    @wraps(function)
-    def wrapped(*args, **kwargs):
-        if running_coverage:
-            sys.settrace(threading._trace_hook)
-        return function(*args, **kwargs)
-
-    return wrapped
 
 
 class MacroPlaybackWorker(QThread):
@@ -52,9 +39,10 @@ class MacroPlaybackWorker(QThread):
         self.key_infos = tuple(key_infos)
         self.repeat_count = count
 
-    @enable_coverage_tracing
     def run(self) -> None:
         """Emit keys and completion in order; interruption discards remaining keys."""
+        if "coverage" in sys.modules:
+            sys.settrace(getattr(threading, "_trace_hook", None))
         generation = self.generation
         commandline_has_focus = True
         for _ in range(self.repeat_count):

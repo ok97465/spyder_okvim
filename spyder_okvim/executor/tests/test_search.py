@@ -379,3 +379,101 @@ def test_zero_width_incremental_search_terminates(search_bot, prompt, expected):
     assert editor.textCursor().position() == expected
     qtbot.keyPress(commandline, Qt.Key_Return)
     assert editor.textCursor().position() == expected
+
+
+def test_search_feedback_distinguishes_invalid_patterns_and_missing_results(search_bot):
+    editor, status, commandline, qtbot = search_bot
+    qtbot.keyClicks(commandline, "/[")
+    qtbot.waitUntil(lambda: "Regex error at" in status.msg_label.text())
+    assert "No results" not in status.msg_label.text()
+    qtbot.keyPress(commandline, Qt.Key_Return)
+    assert "Regex error at" in status.msg_label.text()
+    assert editor.textCursor().position() == 0
+
+    qtbot.keyClicks(commandline, "/missing")
+    qtbot.waitUntil(lambda: "No results" in status.msg_label.text())
+    assert "Regex error" not in status.msg_label.text()
+    qtbot.keyPress(commandline, Qt.Key_Return)
+    qtbot.keyClicks(commandline, "n")
+    assert "No results" in status.msg_label.text()
+    assert editor.textCursor().position() == 0
+
+
+def test_counted_search_reports_target_index_and_wrap_direction(search_bot):
+    editor, status, commandline, qtbot = search_bot
+    qtbot.keyClicks(commandline, "2/foo")
+    qtbot.keyPress(commandline, Qt.Key_Return)
+    assert editor.textCursor().position() == 12
+    assert status.msg_label.text().startswith("3/3")
+    assert "Wrapped" not in status.msg_label.text()
+
+    qtbot.keyClicks(commandline, "n")
+    assert editor.textCursor().position() == 0
+    assert status.msg_label.text().startswith("1/3")
+    assert "Wrapped to top" in status.msg_label.text()
+    qtbot.keyClicks(commandline, "N")
+    assert editor.textCursor().position() == 12
+    assert status.msg_label.text().startswith("3/3")
+    assert "Wrapped to bottom" in status.msg_label.text()
+    qtbot.keyClicks(commandline, "4n")
+    assert editor.textCursor().position() == 0
+    assert status.msg_label.text().startswith("1/3")
+    assert "Wrapped to top" in status.msg_label.text()
+
+
+@pytest.mark.parametrize("pattern, count", [("foo", 3), ("Foo", 1)])
+def test_search_count_reflects_smartcase_policy(search_bot, pattern, count):
+    editor, status, commandline, qtbot = search_bot
+    editor.set_text("foo Foo FOO")
+    qtbot.keyClicks(commandline, "/" + pattern)
+    qtbot.keyPress(commandline, Qt.Key_Return)
+    assert f"/{count} · /{pattern}" in status.msg_label.text()
+
+
+def test_search_guide_examples_toggle_without_changing_input_or_focus(
+    search_bot, vim_bot
+):
+    _, status, commandline, qtbot = search_bot
+    _, _, _, vim, _ = vim_bot
+    controller = vim.vim_cmd.commandline_popup
+    qtbot.keyClicks(commandline, "/foo")
+    qtbot.waitUntil(lambda: controller.guide_popup is not None)
+    guide = controller.guide_popup
+    assert guide.isVisible()
+    assert "Qt regex" in guide.header.text()
+    assert "Ignore case" in guide.header.text()
+    assert guide.description.isHidden()
+    qtbot.keyPress(commandline, Qt.Key_F1)
+    assert not guide.description.isHidden()
+    assert "whole word" in guide.description.text()
+    assert commandline.text() == "/foo"
+    assert commandline.hasFocus()
+    qtbot.keyPress(commandline, Qt.Key_F1)
+    assert guide.description.isHidden()
+
+    commandline.setText("/Foo")
+    assert "Match case" in guide.header.text()
+    qtbot.keyPress(commandline, Qt.Key_Escape)
+    assert not controller.host.isVisible()
+    assert status.search.txt_searched == ""
+
+
+def test_search_guide_follows_delayed_preview_and_editor_scroll(search_bot, vim_bot):
+    editor, status, commandline, qtbot = search_bot
+    _, _, _, vim, _ = vim_bot
+    editor.set_text("\n".join(["filler"] * 120 + ["needle"] + ["filler"] * 20))
+    status.cursor.set_cursor_pos(0)
+    editor.verticalScrollBar().setValue(0)
+    qtbot.keyClicks(commandline, "/needle")
+    controller = vim.vim_cmd.commandline_popup
+    initial_geometry = controller.host.geometry()
+    qtbot.waitUntil(lambda: editor.textCursor().blockNumber() == 120)
+    host = controller.host
+    assert host.isVisible()
+    assert host.geometry() != initial_geometry
+    assert not host.geometry().intersects(editor.cursorRect())
+
+    scrollbar = editor.verticalScrollBar()
+    scrollbar.setValue(max(scrollbar.minimum(), scrollbar.value() - 3))
+    assert not host.geometry().intersects(editor.cursorRect())
+    assert commandline.hasFocus()

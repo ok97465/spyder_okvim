@@ -8,7 +8,7 @@ from spyder.utils.palette import SpyderPalette
 from spyder.utils.stylesheet import APP_STYLESHEET
 
 from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
-from spyder_okvim.spyder.substitute_guide import SUBSTITUTION_OPTIONS
+from spyder_okvim.spyder.prompt_guide import SUBSTITUTION_OPTIONS
 from spyder_okvim.utils.ex_parser import (
     ExError,
     SubstituteGuideContext,

@@ -33,6 +33,18 @@ class OkvimConfigPage(PluginConfigPage):
             "Search Bg": ("search_bg_color", 2, 2),
             "Highlight after yank Fg": ("yank_fg_color", 3, 0),
             "Highlight after yank Bg": ("yank_bg_color", 3, 2),
+            "Jump label Fg (empty: theme)": ("annotation_fg_color", 4, 0),
+            "Jump label Bg (empty: theme)": ("annotation_bg_color", 4, 2),
+            "Jump label border (empty: theme)": ("annotation_border_color", 5, 0),
+            "Mode Fg (empty: theme)": ("mode_fg_color", 6, 0),
+            "Mode Bg (empty: theme)": ("mode_bg_color", 6, 2),
+        }
+        theme_color_options = {
+            "annotation_fg_color",
+            "annotation_bg_color",
+            "annotation_border_color",
+            "mode_fg_color",
+            "mode_bg_color",
         }
 
         for name, (option_name, idx_row, idx_col) in conf_color_info.items():
@@ -40,7 +52,11 @@ class OkvimConfigPage(PluginConfigPage):
             label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             clayout.lineedit.setValidator(
                 QRegularExpressionValidator(
-                    QRegularExpression(r"#[0-9abcdefABCDEF]{6}")
+                    QRegularExpression(
+                        r"(?:#[0-9abcdefABCDEF]{6})?"
+                        if option_name in theme_color_options
+                        else r"#[0-9abcdefABCDEF]{6}"
+                    )
                 )
             )
             color_layout.addWidget(label, idx_row, idx_col)

@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Callable
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, Qt, QTimer
+from qtpy.QtCore import Qt, QTimer
 from qtpy.QtGui import QStandardItem
 from qtpy.QtWidgets import QAbstractItemView, QDialog, QHeaderView
 
@@ -34,6 +34,7 @@ class YankHistoryDialog(PopupTableDialog):
         )
         self.entries = tuple(entries)
         self.selected_entry = None
+        self.set_navigation_help("paste selected entry")
         self.list_viewer.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # Previews are bounded, and only the small metadata columns autosize.
         header = self.list_viewer.horizontalHeader()
@@ -42,7 +43,6 @@ class YankHistoryDialog(PopupTableDialog):
         if self.entries:
             self.list_viewer.setCurrentIndex(self.list_model.index(0, 0))
             self.list_viewer.selectRow(0)
-        self.list_viewer.installEventFilter(self)
         self.list_viewer.setFocus()
 
     @classmethod
@@ -66,44 +66,6 @@ class YankHistoryDialog(PopupTableDialog):
                 item.setData(entry, Qt.UserRole)
             row[1].setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.list_model.appendRow(row)
-
-    @staticmethod
-    def _handles_key(event):
-        key, modifiers = event.key(), event.modifiers()
-        return (modifiers == Qt.ControlModifier and key in (Qt.Key_P, Qt.Key_N)) or (
-            modifiers == Qt.NoModifier
-            and key
-            in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape)
-        )
-
-    def eventFilter(self, obj, event):
-        """Reserve navigation shortcuts, and edit only on the KeyPress event."""
-        if (
-            obj is self.list_viewer
-            and event.type()
-            in (
-                QEvent.ShortcutOverride,
-                QEvent.KeyPress,
-            )
-            and self._handles_key(event)
-        ):
-            event.accept()
-            if event.type() == QEvent.KeyPress:
-                self.keyPressEvent(event)
-            return True
-        return super().eventFilter(obj, event)
-
-    def keyPressEvent(self, event):
-        if event.modifiers() == Qt.NoModifier:
-            if event.key() == Qt.Key_Up:
-                self.prev_row()
-                event.accept()
-                return
-            if event.key() == Qt.Key_Down:
-                self.next_row()
-                event.accept()
-                return
-        super().keyPressEvent(event)
 
     def accept(self):
         index = self.list_viewer.currentIndex()
@@ -145,7 +107,7 @@ class YankHistoryPicker:
         self.cursor = (cursor.anchor(), cursor.position())
         self.selection = self._selection(editor)
         # Keep the wrapper alive until the Qt popup has finished.
-        self.dialog = YankHistoryDialog(entries, editor.window())
+        self.dialog = YankHistoryDialog(entries, editor)
         self.entry = None
         self._connections = []
         self._finishing = False

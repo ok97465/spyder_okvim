@@ -4,11 +4,11 @@ from __future__ import annotations
 
 # Standard Libraries
 from collections import OrderedDict
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 
 # Third Party Libraries
 from qtpy.QtCore import QPoint
-from qtpy.QtGui import QTextDocument
+from qtpy.QtGui import QTextCursor, QTextDocument
 
 # Project Libraries
 from spyder_okvim.utils.motion import MotionInfo, MotionType
@@ -19,10 +19,9 @@ class LeapHelper:
 
     _LABEL_BASE = "sfnjklhodweimbuyvrgtaqpcxzSFNJKLHODWEIMBUYVRGTAQPCXZ"
 
-    def __init__(self, vim_status, set_motion_info: Callable[..., MotionInfo]):
+    def __init__(self, vim_status):
         self.vim_status = vim_status
         self.get_editor = vim_status.get_editor
-        self._set_motion_info = set_motion_info
         self._preview_labels_by_pos: OrderedDict[int, str] = OrderedDict()
 
     # ------------------------------------------------------------------
@@ -61,14 +60,18 @@ class LeapHelper:
             )
             if cursor.isNull():
                 break
-            match_end = cursor.position()
-            match_start = match_end - len(text)
+            match_start = cursor.selectionStart()
             if match_start > view_end:
                 break
             if match_start >= view_start:
-                positions.append(match_start)
-            # Advance search cursor to avoid infinite loops on zero-width matches
-            start_pos = max(match_end, match_start + 1)
+                target = QTextCursor(doc)
+                target.setPosition(match_start)
+                if editor.cursorRect(target).intersects(editor.viewport().rect()):
+                    positions.append(match_start)
+            # Keep overlapping targets, advancing by one complete Qt character.
+            cursor.setPosition(match_start)
+            cursor.movePosition(QTextCursor.NextCharacter)
+            start_pos = cursor.position()
 
         return sorted(positions)
 
@@ -132,17 +135,17 @@ class LeapHelper:
 
     def preview_first_char(
         self, char: str, reverse: bool, *, full_view: bool = False
-    ) -> None:
+    ) -> tuple[int, int]:
         """Show preview markers for the first typed character."""
         if not char:
-            return
+            return 0, 0
         positions = self.search_in_view(char, reverse=reverse, full_view=full_view)
         max_annotations = self.vim_status.n_annotate_max
         limited_positions = positions[:max_annotations]
         if not limited_positions:
             self._preview_labels_by_pos.clear()
             self.vim_status.hide_annotate_on_txt()
-            return
+            return len(positions), 0
 
         doc = self.get_editor().document()
         preview_mapping = self._build_preview_label_map(limited_positions, doc)
@@ -153,9 +156,11 @@ class LeapHelper:
             for pos, label in preview_mapping.items()
         }
         if info_group:
-            self.vim_status.annotate_on_txt(info_group)
+            displayed = self.vim_status.annotate_on_txt(info_group)
         else:
             self.vim_status.hide_annotate_on_txt()
+            displayed = set()
+        return len(positions), len(displayed)
 
     def _build_preview_label_map(
         self, positions: list[int], doc: QTextDocument
@@ -172,9 +177,11 @@ class LeapHelper:
     def _label_stream(self) -> Iterator[str]:
         """Yield label strings in the same order as ``leap.nvim``."""
         base = self._LABEL_BASE
-        for ch in base:
+        # Reserve uppercase prefixes for two-key labels. No complete label is
+        # a prefix of another, so every displayed target can be selected.
+        for ch in base.lower()[: len(base) // 2]:
             yield ch
-        for first in base:
+        for first in base[len(base) // 2 :]:
             for second in base:
                 yield f"{first}{second}"
 
@@ -199,33 +206,24 @@ class LeapHelper:
 
     def _get_pair_key(self, doc: QTextDocument, pos: int) -> str:
         """Return the two-character key starting at ``pos``."""
-        first = self._char_from_doc(doc, pos)
-        advance = max(len(first), 1)
-        second = self._char_from_doc(doc, pos + advance)
+        first, next_pos = self._character_at(doc, pos)
+        second, _ = self._character_at(doc, next_pos)
         return f"{first}{second}"
 
-    def _char_from_doc(self, doc: QTextDocument, pos: int) -> str:
-        """Return the character at ``pos`` or empty string."""
-        if pos < 0:
-            return ""
-        char = doc.characterAt(pos)
-        if char is None:
-            return ""
-        text = str(char)
-        if not text or text == "\x00":
-            return ""
-        return "\n" if text == "\u2029" else text
+    def _character_at(self, doc: QTextDocument, pos: int) -> tuple[str, int]:
+        """Read one character without splitting a UTF-16 surrogate pair."""
+        if pos < 0 or pos >= doc.characterCount() - 1:
+            return "", pos
+        cursor = QTextCursor(doc)
+        cursor.setPosition(pos)
+        cursor.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
+        return cursor.selectedText().replace("\u2029", "\n"), cursor.position()
 
     def _label_anchor_position(self, doc: QTextDocument, pos: int) -> int:
         """Return the position where the label should be displayed."""
-        first = self._char_from_doc(doc, pos)
-        advance = max(len(first), 1)
-        second = self._char_from_doc(doc, pos + advance)
-        if second:
-            advance += len(second)
-        anchor = pos + advance
-        char_count = max(doc.characterCount() - 1, 0)
-        return min(anchor, char_count)
+        _, next_pos = self._character_at(doc, pos)
+        _, anchor = self._character_at(doc, next_pos)
+        return min(anchor, max(doc.characterCount() - 1, 0))
 
     def build_label_map(self, positions: list[int]) -> OrderedDict[str, int]:
         """Assign label strings to the given target positions."""
@@ -243,17 +241,27 @@ class LeapHelper:
             mapping[label] = pos
         return mapping
 
-    def show_label_map(self, label_map: OrderedDict[str, int]) -> None:
-        """Display labels near targets."""
+    def show_label_map(
+        self, label_map: OrderedDict[str, int], *, preserve_positions=False
+    ) -> OrderedDict[str, int]:
+        """Display nearby labels and return only the targets that actually fit."""
         doc = self.get_editor().document()
         info_group = {
             self._label_anchor_position(doc, pos): label
             for label, pos in label_map.items()
         }
         if info_group:
-            self.vim_status.annotate_on_txt(info_group)
+            displayed = self.vim_status.annotate_on_txt(
+                info_group, preserve_positions=preserve_positions
+            )
+            return OrderedDict(
+                (label, pos)
+                for label, pos in label_map.items()
+                if self._label_anchor_position(doc, pos) in displayed
+            )
         else:
             self.vim_status.hide_annotate_on_txt()
+            return OrderedDict()
 
     # ------------------------------------------------------------------
     # Leap motions
@@ -275,7 +283,7 @@ class LeapHelper:
         pos = None
         if positions:
             pos = positions[(count - 1) % len(positions)]
-        return self._set_motion_info(pos, motion_type=MotionType.CharWise)
+        return MotionInfo(pos, motion_type=MotionType.CharWise)
 
     def display_additional_leap_targets(self) -> None:
         """Show annotations for additional Leap targets."""
@@ -284,7 +292,9 @@ class LeapHelper:
             self.vim_status.find_info.ch, full_view=full_view
         )
         info_group = {
-            pos + 1: f"{idx};" if idx != 1 else ";"
+            self._label_anchor_position(self.get_editor().document(), pos): (
+                f"{idx};" if idx != 1 else ";"
+            )
             for idx, pos in enumerate(positions, 1)
         }
         self.vim_status.annotate_on_txt(info_group)
@@ -306,7 +316,7 @@ class LeapHelper:
         pos = None
         if positions:
             pos = positions[(count - 1) % len(positions)]
-        return self._set_motion_info(pos, motion_type=MotionType.CharWise)
+        return MotionInfo(pos, motion_type=MotionType.CharWise)
 
     def display_additional_reverse_leap_targets(self) -> None:
         """Show annotations for additional reverse Leap targets."""
@@ -315,7 +325,9 @@ class LeapHelper:
             self.vim_status.find_info.ch, reverse=True, full_view=full_view
         )
         info_group = {
-            pos + 1: f"{idx};" if idx != 1 else ";"
+            self._label_anchor_position(self.get_editor().document(), pos): (
+                f"{idx};" if idx != 1 else ";"
+            )
             for idx, pos in enumerate(positions, 1)
         }
         self.vim_status.annotate_on_txt(info_group)

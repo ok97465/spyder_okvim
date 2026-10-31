@@ -20,27 +20,12 @@ class DeferredAction(NamedTuple):
     callback: Callable
     accepts_argument: bool
 
-    @property
-    def func(self):
-        """Historical callback field alias."""
-        return self.callback
-
-    @property
-    def has_arg(self):
-        """Historical argument-policy field alias."""
-        return self.accepts_argument
-
 
 class ExecutorTransition(NamedTuple):
     """Enter a submode and state whether the displayed input must be cleared."""
 
     sub_mode: Any
     clear_command_line: bool
-
-
-# Preserve historical public imports while internal code uses role-based names.
-FUNC_INFO = DeferredAction
-RETURN_EXECUTOR_METHOD_INFO = ExecutorTransition
 
 
 @dataclass(frozen=True)

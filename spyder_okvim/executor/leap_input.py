@@ -19,6 +19,12 @@ class LeapInputExecutor(ExecutorSubBase):
         self.selector = LeapLabelExecutor(vim_status, self)
         self._base_cmd: str | None = None
 
+    def begin(self):
+        """Start a fresh two-character request with its first input hint."""
+        self.motions.leap_helper.clear_overlays()
+        self.reset_base_cmd()
+        self.vim_status.set_message("Leap: first character · Esc cancel")
+
     def __call__(self, ch2: str):
         """Jump to the matching two-character sequence and execute."""
         if not ch2:
@@ -44,9 +50,10 @@ class LeapInputExecutor(ExecutorSubBase):
 
         if len(ch2) == 1:
             reverse = base_cmd in "LSZ"
-            self.motions.leap_helper.preview_first_char(
+            total, shown = self.motions.leap_helper.preview_first_char(
                 ch2, reverse, full_view=full_view
             )
+            self.show_stage("second character", total, shown)
             return False
 
         self.motions.leap_helper.clear_overlays(preserve_preview=True)
@@ -71,35 +78,38 @@ class LeapInputExecutor(ExecutorSubBase):
         else:
             self.vim_status.find_info.set("l", ch2)
 
-        def _dispatch_motion():
+        if not positions:
+            self._clear_state()
+            self.vim_status.set_message("Leap: no matching target in this view")
+            return True
+
+        if len(positions) == 1:
             if base_cmd in "sS":
                 leap_method = (
                     self.motions.leap_helper.reverse_leap
                     if reverse
                     else self.motions.leap_helper.leap
                 )
-                return leap_method(ch2, count, full_view=full_view, cmd_name=base_cmd)
-            return method(ch2, count)
-
-        if not positions:
-            motion_info = _dispatch_motion()
-            result = self.process_return(self.execute_func_deferred(motion_info))
+                motion_info = leap_method(
+                    ch2, count, full_view=full_view, cmd_name=base_cmd
+                )
+            else:
+                motion_info = method(ch2, count)
+            # Finish Leap before callbacks can start another prompt (such as
+            # the delimiter input after ys), preserving its state and feedback.
             self._clear_state()
-            return result
-
-        if len(positions) == 1:
-            motion_info = _dispatch_motion()
-            result = self.process_return(self.execute_func_deferred(motion_info))
-            self._clear_state()
-            return result
+            return self.process_return(self.execute_func_deferred(motion_info))
 
         label_map = self.motions.leap_helper.build_label_map(positions)
-        self.motions.leap_helper.show_label_map(label_map)
+        label_map = self.motions.leap_helper.show_label_map(label_map)
+        if not label_map:
+            self._clear_state()
+            self.vim_status.set_message("Leap: no room for labels; scroll and retry")
+            return True
+        self.show_stage("select label", len(positions), len(label_map))
 
         motion_map = {
-            label: self.motions.leap_helper._set_motion_info(
-                pos, motion_type=MotionType.CharWise
-            )
+            label: MotionInfo(pos, motion_type=MotionType.CharWise)
             for label, pos in label_map.items()
         }
 
@@ -118,6 +128,13 @@ class LeapInputExecutor(ExecutorSubBase):
         """Forget the command that initiated the current Leap sequence."""
         self._base_cmd = None
 
+    def show_stage(self, stage, total, shown=None):
+        """Describe the next input without moving focus from the command line."""
+        message = f"Leap: {stage} · {total} candidates"
+        if shown is not None and shown < total:
+            message += f" · showing {shown}; refine characters or scroll and retry"
+        self.vim_status.set_message(message + " · Esc cancel")
+
     def on_escape(self) -> None:
         """Handle escape by clearing Leap overlays."""
         self._clear_state(clear_input=True, clear_cmd_line=True)
@@ -126,6 +143,7 @@ class LeapInputExecutor(ExecutorSubBase):
         """Reset Leap overlays and optionally clear command state."""
         self.motions.leap_helper.clear_overlays()
         self.reset_base_cmd()
+        self.vim_status.set_message("")
         if clear_input:
             self.vim_status.input_cmd.clear()
         self.vim_status.sub_mode = None
@@ -169,7 +187,8 @@ class LeapLabelExecutor(ExecutorSubBase):
 
         if ch == "\b":  # Backspace
             self._partial = self._partial[:-1]
-            return False
+            self._refresh_targets()
+            return True
 
         self._partial += ch
 
@@ -179,11 +198,28 @@ class LeapLabelExecutor(ExecutorSubBase):
 
         if not matching_labels:
             self.cleanup()
+            self.vim_status.set_message("Leap: no target for that label")
             return True
 
         if self._partial not in self._label_to_motion:
-            return False
+            self._refresh_targets()
+            return True
 
         motion_info = self._label_to_motion[self._partial]
         self.cleanup()
         return self.process_return(self.execute_func_deferred(motion_info))
+
+    def _refresh_targets(self):
+        """Hide filtered targets and restore them when a prefix is erased."""
+        matches = {
+            label: motion.cursor_pos
+            for label, motion in self._label_to_motion.items()
+            if label.startswith(self._partial)
+        }
+        displayed = self.motions.leap_helper.show_label_map(
+            matches, preserve_positions=True
+        )
+        stage = "select label"
+        if self._partial:
+            stage += f" ({self._partial}…)"
+        self._parent_executor.show_stage(stage, len(matches), len(displayed))

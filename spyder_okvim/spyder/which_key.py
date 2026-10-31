@@ -35,6 +35,7 @@ class WhichKeyController(QObject):
         self._vim = weakref.ref(vim_widget)
         self._editor = None
         self._viewport = None
+        self._editor_geometry_signals = ()
         self._context = None
         self._closed = False
         self.popup = None
@@ -77,6 +78,7 @@ class WhichKeyController(QObject):
             self._editor = weakref.ref(editor) if editor is not None else None
             return
         self.cancel()
+        self._disconnect_editor_geometry()
         previous = live_widget(self._viewport)
         if previous is not None:
             previous.removeEventFilter(self)
@@ -94,9 +96,31 @@ class WhichKeyController(QObject):
         if viewport is not None:
             viewport.installEventFilter(self)
             viewport.destroyed.connect(self._viewport_destroyed)
+            self._editor_geometry_signals = (
+                editor.cursorPositionChanged,
+                editor.verticalScrollBar().valueChanged,
+                editor.horizontalScrollBar().valueChanged,
+            )
+            for signal in self._editor_geometry_signals:
+                signal.connect(self._update_geometry)
+
+    def _disconnect_editor_geometry(self):
+        """Release observers before changing or destroying the viewport."""
+        for signal in self._editor_geometry_signals:
+            try:
+                signal.disconnect(self._update_geometry)
+            except (TypeError, RuntimeError):
+                pass
+        self._editor_geometry_signals = ()
+
+    def _update_geometry(self, *args):
+        popup = self.popup
+        if popup is not None and not widget_is_deleted(popup) and popup.isVisible():
+            popup.update_geometry()
 
     def _viewport_destroyed(self, *args):
         self.cancel()
+        self._disconnect_editor_geometry()
         self._editor = None
         self._viewport = None
         self.popup = None
@@ -188,6 +212,12 @@ class WhichKeyController(QObject):
                 popup = self.popup
                 if popup is not None and not widget_is_deleted(popup):
                     popup.update_geometry()
+            elif event.type() in (
+                QEvent.PaletteChange,
+                QEvent.StyleChange,
+                QEvent.FontChange,
+            ):
+                self.sync()
         return super().eventFilter(watched, event)
 
     def cleanup(self):

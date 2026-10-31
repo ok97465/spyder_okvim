@@ -618,7 +618,7 @@ def test_easymotion_transition_hides_leader_hints(which_key):
 
 
 @pytest.mark.parametrize("size", [(360, 260), (700, 400)])
-def test_compact_popup_shows_every_candidate_without_scrolling(which_key, size):
+def test_compact_popup_keeps_every_candidate_reachable(which_key, size):
     state = which_key
     popup = _show(state)
     viewport = state.editor.viewport()
@@ -634,16 +634,16 @@ def test_compact_popup_shows_every_candidate_without_scrolling(which_key, size):
         QCoreApplication.processEvents()
         assert viewport.size() == QSize(*size)
         assert viewport.rect().contains(popup.geometry())
-        assert popup.column_count >= 2
+        assert popup.column_count == (1 if size[0] == 360 else 2)
         scroll = popup.findChild(QAbstractScrollArea)
-        assert not scroll.verticalScrollBar().isVisible()
-        assert scroll.verticalScrollBar().maximum() == 0
         assert popup.font().pointSizeF() < state.commandline.font().pointSizeF()
         assert len(popup.candidate_labels) == len(
             state.widget.executor_leader_key.get_hint_candidates()
         )
         for labels in popup.candidate_labels:
             for label in labels:
+                scroll.ensureWidgetVisible(label, 0, 0)
+                QCoreApplication.processEvents()
                 bounds = QRect(label.mapTo(popup, QPoint(0, 0)), label.size())
                 assert label.isVisible()
                 assert popup.contentsRect().contains(bounds)

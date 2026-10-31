@@ -1,4 +1,7 @@
-"""Read-only help for the field under the cursor in a substitution command."""
+"""Passive search and substitution help in one scrollable prompt panel."""
+
+# Standard Libraries
+from dataclasses import dataclass
 
 # Third Party Libraries
 from qtpy.QtCore import QSize, Qt
@@ -15,6 +18,9 @@ from qtpy.QtWidgets import (
 )
 from spyder.utils.palette import SpyderPalette
 
+# Project Libraries
+from spyder_okvim.utils.search_helpers import resolve_ignorecase
+
 SUBSTITUTION_OPTIONS = (
     ("g", "Replace all"),
     ("c", "Confirm"),
@@ -24,7 +30,17 @@ SUBSTITUTION_OPTIONS = (
 )
 
 
-class SubstituteGuidePopup(QFrame):
+@dataclass(frozen=True)
+class SearchGuideContext:
+    """The effective search policy and the user's help expansion choice."""
+
+    pattern: str
+    ignorecase: bool
+    smartcase: bool
+    expanded: bool = False
+
+
+class PromptGuidePopup(QFrame):
     """Explain input without selecting rows or changing command-line focus."""
 
     MAX_WIDTH = 640
@@ -110,6 +126,65 @@ class SubstituteGuidePopup(QFrame):
 
     def set_context(self, context):
         """Update changed help text, returning whether its layout needs fitting."""
+        if isinstance(context, SearchGuideContext):
+            self.setAccessibleName("Search pattern guide")
+            self.setAccessibleDescription(
+                "Qt regular expressions and the current case policy. "
+                "Press F1 in the search input to expand or collapse examples."
+            )
+            content = self._search_content(context)
+        else:
+            self.setAccessibleName("Substitution guide")
+            self.setAccessibleDescription("Help for the current substitution field.")
+            content = self._substitute_content(context)
+        if content == self._content:
+            return False
+        self._content = content
+        title, explanation, range_text, show_options, effective_text, note = content
+        for label, text in (
+            (self.header, title),
+            (self.description, explanation),
+            (self.range_label, range_text),
+            (self.effective_label, effective_text),
+            (self.note, note),
+        ):
+            if label.text() != text:
+                label.setText(text)
+            label.setVisible(bool(text))
+        self.options_widget.setVisible(show_options)
+        self.scroll_area.verticalScrollBar().setValue(0)
+        return True
+
+    @staticmethod
+    def _search_content(context):
+        ignorecase = resolve_ignorecase(
+            context.pattern,
+            ignorecase=context.ignorecase,
+            smartcase=context.smartcase,
+        )
+        case = "Ignore case" if ignorecase else "Match case"
+        if context.ignorecase and context.smartcase:
+            case += " (smartcase: uppercase patterns match case)"
+        title = f"Qt regex · {case}"
+        description = ""
+        if context.expanded:
+            description = (
+                r". any character; \d digit; \w word; \s whitespace"
+                "\n"
+                r"^ line start; $ line end; \b word boundary"
+                "\n"
+                r"[abc] one of a/b/c; a|b either; (...) capture group"
+                "\n"
+                r"* zero or more; + one or more; ? optional; {n,m} repetitions"
+                "\n"
+                r"Examples: \bfoo\b = whole word; foo\d+ = foo followed by digits"
+                "\nMatches are evaluated one line at a time."
+            )
+        note = "F1: hide examples" if context.expanded else "F1: regex examples"
+        return title, description, "", False, "", note
+
+    @staticmethod
+    def _substitute_content(context):
         delimiter = context.delimiter
         if context.stage == "pattern":
             title = "Search pattern"
@@ -179,23 +254,7 @@ class SubstituteGuidePopup(QFrame):
             if "r" in context.raw_flags:
                 notes.append("r has no effect with an explicit pattern.")
         note = "\n".join(notes)
-        content = title, explanation, range_text, show_options, effective_text, note
-        if content == self._content:
-            return False
-        self._content = content
-        for label, text in (
-            (self.header, title),
-            (self.description, explanation),
-            (self.range_label, range_text),
-            (self.effective_label, effective_text),
-            (self.note, note),
-        ):
-            if label.text() != text:
-                label.setText(text)
-            label.setVisible(bool(text))
-        self.options_widget.setVisible(show_options)
-        self.scroll_area.verticalScrollBar().setValue(0)
-        return True
+        return title, explanation, range_text, show_options, effective_text, note
 
     def refresh_appearance(self, font):
         """Follow the command-line font and Spyder palette only when changed."""

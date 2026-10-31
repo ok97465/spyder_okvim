@@ -67,17 +67,17 @@ class InsertRepeatSession(QObject):
     def record_editor_key(self, event):
         """Record an editor key for dot replay unless a replay is already active."""
         self.handle_insert_key(event)
-        if self.status.running_dot_cmd:
+        if self.is_replaying:
             return
-        self.status.dot_cmd.key_list_from_editor.append(
+        self.dot_command.key_list_from_editor.append(
             KeyInfo(event.key(), event.text(), event.modifiers(), InputSource.EDITOR)
         )
 
     def disconnect_from_editor(self):
         """Disconnect from the editor."""
         # disconnect previous connection.
-        editor = self.status.dot_cmd.editor_connected
-        self.status.dot_cmd.editor_connected = None
+        editor = self.dot_command.editor_connected
+        self.dot_command.editor_connected = None
         if editor:
             try:
                 editor.sig_key_pressed.disconnect(self.record_editor_key)
@@ -193,9 +193,9 @@ class InsertRepeatSession(QObject):
         Replace prior replay keys and optionally observe subsequent Insert keys.
         Visual block numbers are zero-based; columns use Qt UTF-16 offsets.
         """
-        if self.status.running_dot_cmd is True:
+        if self.is_replaying:
             return
-        dot_cmd = self.status.dot_cmd
+        dot_cmd = self.dot_command
         dot_cmd.put_payload = None
         dot_cmd.vim_state = self.status.vim_state
         dot_cmd.count_text = self.status.input_cmd.count_text
@@ -209,7 +209,7 @@ class InsertRepeatSession(QObject):
         # For receiving key event from codeeditor
         if connect_editor:
             editor = self.status.get_editor()
-            self.status.dot_cmd.editor_connected = editor
+            dot_cmd.editor_connected = editor
             editor.sig_key_pressed.connect(self.record_editor_key)
 
         # Get selection region.

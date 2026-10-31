@@ -16,7 +16,7 @@ from dataclasses import dataclass
 # Third Party Libraries
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent
-from qtpy.QtWidgets import QApplication, QLineEdit, QStyle
+from qtpy.QtWidgets import QApplication, QLineEdit
 from spyder.config.manager import CONF
 
 # Project Libraries
@@ -32,7 +32,6 @@ from spyder_okvim.utils.key_helpers import latin_command_key
 from spyder_okvim.utils.qtcompat import (
     python_cursor_position,
     qt_cursor_position,
-    text_width,
 )
 
 
@@ -82,11 +81,6 @@ class VimLineEdit(QLineEdit):
         self._prompt_focus_window = None
         self.textChanged.connect(self.reset_navigation)
         self.cursorPositionChanged.connect(self._reset_completion)
-
-        # Set size
-        tw = text_width(self.fontMetrics(), " :%s/international/internationl/g ")
-        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
-        self.setFixedWidth(tw + (2 * fw) + 4)
 
         # Todo: Move setting shortcut to config file.
         vim_shortcut.signal_cmd.connect(self.setText)

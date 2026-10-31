@@ -17,6 +17,7 @@ from spyder_okvim.spyder.commandline_history import history_candidates
 from spyder_okvim.spyder.commandline_path_lookup import PathLookupService
 from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
 from spyder_okvim.spyder.config import CONF_SECTION
+from spyder_okvim.spyder.prompt_guide import SearchGuideContext
 from spyder_okvim.utils.commandline import (
     CompletionCandidate,
     command_candidates,
@@ -77,6 +78,7 @@ class CommandlinePopupController(QObject):
         self._editor = None
         self._viewport = None
         self._window = None
+        self._geometry_signals = ()
         self._session = None
         self._context = None
         self._suppressed = False
@@ -101,6 +103,7 @@ class CommandlinePopupController(QObject):
         self.guide_enabled = False
         self.host = None
         self._selection_applied = False
+        self._search_examples = False
         self.popup = None
         self.guide_popup = None
         self.candidates = []
@@ -151,6 +154,7 @@ class CommandlinePopupController(QObject):
             self._set_window(editor.window() if editor is not None else None)
             return
         self.cancel()
+        self._disconnect_editor_geometry()
         previous = live_widget(self._viewport)
         if previous is not None:
             previous.removeEventFilter(self)
@@ -169,6 +173,28 @@ class CommandlinePopupController(QObject):
         if viewport is not None:
             viewport.installEventFilter(self)
             viewport.destroyed.connect(self._viewport_destroyed)
+            self._geometry_signals = (
+                editor.cursorPositionChanged,
+                editor.horizontalScrollBar().valueChanged,
+                editor.verticalScrollBar().valueChanged,
+            )
+            for signal in self._geometry_signals:
+                signal.connect(self._update_geometry)
+
+    def _disconnect_editor_geometry(self):
+        """Release cursor/scroll observers before changing or closing editors."""
+        for signal in self._geometry_signals:
+            try:
+                signal.disconnect(self._update_geometry)
+            except (TypeError, RuntimeError):
+                pass
+        self._geometry_signals = ()
+
+    def _update_geometry(self, *args):
+        """Follow delayed previews and editor scrolling without rebuilding help."""
+        if self.host is not None and not widget_is_deleted(self.host):
+            if self.host.isVisible():
+                self.host.update_geometry()
 
     def _set_window(self, window):
         previous = live_widget(self._window)
@@ -186,6 +212,7 @@ class CommandlinePopupController(QObject):
 
     def _viewport_destroyed(self, *args):
         self.cancel()
+        self._disconnect_editor_geometry()
         self._set_window(None)
         self._editor = self._viewport = self._window = None
         self.host = None
@@ -484,6 +511,7 @@ class CommandlinePopupController(QObject):
         if session is not self._session:
             self.cancel()
             self._session = session
+            self._search_examples = False
         context = self._current_context()
         if context is None:
             self._invalidate_paths()
@@ -500,6 +528,14 @@ class CommandlinePopupController(QObject):
         if self.guide_enabled and context.kind == "ex":
             guide = scan_substitute_guide(
                 context.text, context.cursor, vim.vim_status.last_substitute
+            )
+        elif context.kind == "search":
+            settings = vim.vim_status.settings
+            guide = SearchGuideContext(
+                context.text[len(context.prompt) :] or context.session.previous_pattern,
+                settings.ignorecase,
+                settings.smartcase,
+                self._search_examples,
             )
         candidates, tab = self._candidate_list(context)
         if any(candidate.apply_scope == "path" for candidate in candidates):
@@ -634,6 +670,20 @@ class CommandlinePopupController(QObject):
     def eventFilter(self, watched, event):
         vim = live_widget(self._vim)
         event_type = event.type()
+        if (
+            vim is not None
+            and watched is vim.commandline
+            and event_type in (QEvent.ShortcutOverride, QEvent.KeyPress)
+            and event.key() == Qt.Key_F1
+            and event.modifiers() == Qt.NoModifier
+        ):
+            context = self._current_context()
+            if context is not None and context.kind == "search":
+                if event_type == QEvent.KeyPress:
+                    self._search_examples = not self._search_examples
+                    self.sync()
+                event.accept()
+                return True
         if event_type in (QEvent.Hide, QEvent.WindowDeactivate):
             self._invalidate_paths()
             self.clear_candidates()

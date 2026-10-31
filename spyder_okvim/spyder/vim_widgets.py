@@ -11,6 +11,8 @@ Small presentation classes stay with the widget that assembles them. Prompt
 input and queued macro playback have their own cohesive modules and lifetimes.
 """
 
+from __future__ import annotations
+
 # Standard Libraries
 import os.path as osp
 import re
@@ -18,9 +20,9 @@ import weakref
 from contextlib import contextmanager
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, QObject, Qt, Signal, Slot
-from qtpy.QtGui import QKeySequence, QTextCursor
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QStyle, QWidget
+from qtpy.QtCore import QEvent, QObject, QSize, Qt, Signal, Slot
+from qtpy.QtGui import QColor, QKeySequence, QPainter, QPalette, QTextCursor
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
@@ -42,7 +44,6 @@ from spyder_okvim.spyder.config import CONF_SECTION, KEYCODE2STR
 from spyder_okvim.spyder.macro_playback import (
     MacroPlayback,
     MacroPlaybackWorker,
-    enable_coverage_tracing,
 )
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
@@ -57,16 +58,6 @@ from spyder_okvim.utils.testing_env import running_in_pytest
 from spyder_okvim.utils.yank_dialog import YankHistoryPicker
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 from spyder_okvim.vim.state import InputSource
-
-
-def _command_services(status):
-    """Compose fresh motion/edit collaborators for one executor's lifetime."""
-    # Project Libraries
-    from spyder_okvim.utils.editing import EditingActions
-    from spyder_okvim.utils.motions import CursorMotions
-
-    motions = CursorMotions(status)
-    return motions, EditingActions(status, motions)
 
 
 class VimPane(PluginMainWidget):
@@ -267,7 +258,7 @@ class VimShortcut(QObject):
         """Open the file search dialog."""
         root_folder = self.main.projects.get_active_project_path()
 
-        dlg = FileSearchDialog(root_folder, self.get_editor().window())
+        dlg = FileSearchDialog(root_folder, self.get_editor())
         exec_dialog(dlg)
         path = dlg.get_selected_path()
 
@@ -318,35 +309,103 @@ class VimStateLabel(QLabel):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.change_state(VimState.INSERT)
-
+        self._applying_appearance = False
+        self.setObjectName("vimStateLabel")
+        self.setAccessibleName("Vim mode")
         self.setAlignment(Qt.AlignCenter)
-        tw = text_width(self.fontMetrics(), " NORMAL ")
-        fw = self.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
-        self.setFixedWidth(tw + (2 * fw) + 4)
+        self.change_state(VimState.INSERT)
+        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
 
     @Slot(int)
     def change_state(self, state):
         """Display the state of vim."""
+        if widget_is_deleted(self):
+            return
+        self._state = state
+        text = {
+            VimState.VISUAL: "VISUAL",
+            VimState.NORMAL: "NORMAL",
+            VimState.VLINE: "V-LINE",
+            VimState.INSERT: "INSERT",
+        }.get(state, "")
+        self.setText(text)
+        self.setAccessibleDescription(f"Current Vim mode: {text}")
+        self.refresh_appearance()
+
+    def refresh_appearance(self):
+        """Keep mode text legible using the host palette or explicit overrides."""
+        if self._applying_appearance:
+            return
+        self._applying_appearance = True
         try:
-            if widget_is_deleted(self):
-                return
-            self.setStyleSheet("QLabel { color: white }")
-            if state == VimState.VISUAL:
-                self.setText("VISUAL")
-                self.setStyleSheet("QLabel { background-color: #ff8000 }")
-            elif state == VimState.NORMAL:
-                self.setText("NORMAL")
-                self.setStyleSheet("QLabel { background-color: #29a329 }")
-            elif state == VimState.VLINE:
-                self.setText("V-LINE")
-                self.setStyleSheet("QLabel { background-color: #ff8000 }")
-            elif state == VimState.INSERT:
-                self.setText("INSERT")
-                self.setStyleSheet("QLabel { background-color: #3366ff }")
-        except RuntimeError:
-            # Ignore updates to deleted widgets
-            pass
+            self._apply_palette()
+        finally:
+            self._applying_appearance = False
+
+    def _apply_palette(self):
+        """Guard stylesheet-induced palette events during window reparenting."""
+        palette = self.palette()
+        colors = []
+        for option, role in (
+            ("mode_fg_color", QPalette.HighlightedText),
+            ("mode_bg_color", QPalette.Highlight),
+        ):
+            configured = QColor(CONF.get(CONF_SECTION, option, ""))
+            colors.append(configured if configured.isValid() else palette.color(role))
+        foreground, background = (color.name() for color in colors)
+        stylesheet = (
+            "QLabel#vimStateLabel {"
+            f"color: {foreground}; background-color: {background};"
+            "border: 1px solid palette(mid); border-radius: 3px;"
+            "padding: 1px 5px; font-weight: bold; }"
+        )
+        if stylesheet != self.styleSheet():
+            self.setStyleSheet(stylesheet)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
+            self.refresh_appearance()
+
+
+class VimMessageLabel(QLabel):
+    """Show bounded plain status text while retaining the full accessible message."""
+
+    def __init__(self, parent):
+        super().__init__("", parent)
+        self.setTextFormat(Qt.PlainText)
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.setAccessibleName("Vim status message")
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setMinimumWidth(0)
+
+    def setText(self, text):
+        super().setText(text)
+        self.setToolTip(text)
+        self.setAccessibleDescription(text)
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        hint.setWidth(min(hint.width(), text_width(self.fontMetrics(), "M" * 30)))
+        return hint
+
+    def minimumSizeHint(self):
+        return QSize(0, super().minimumSizeHint().height())
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        text = self.fontMetrics().elidedText(
+            self.text(), Qt.ElideRight, self.contentsRect().width()
+        )
+        self.style().drawItemText(
+            painter,
+            self.contentsRect(),
+            self.alignment(),
+            self.palette(),
+            self.isEnabled(),
+            text,
+            QPalette.WindowText,
+        )
 
 
 class VimWidget(QWidget):
@@ -365,19 +424,12 @@ class VimWidget(QWidget):
         self._closed = False
         self._yank_picker = None
         self.status_label = VimStateLabel(main)
-        self.msg_label = QLabel("", main)
-        self.msg_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        message_width = text_width(
-            self.msg_label.fontMetrics(), " recording @q... 0000 fewers lines "
-        )
-        frame_width = self.msg_label.style().pixelMetric(QStyle.PM_DefaultFrameWidth)
-        self.msg_label.setFixedWidth(message_width + (2 * frame_width) + 4)
+        self.msg_label = VimMessageLabel(main)
 
         self.vim_status = VimStatus(
             editor_widget,
             main,
             self.msg_label,
-            command_services_factory=_command_services,
         )
         self.sig_command_cancelled.connect(self.vim_status.input_cancelled.emit)
         self.put_controller = PutController(self.vim_status)
@@ -468,6 +520,7 @@ class VimWidget(QWidget):
         status.yank_history.resize(length)
         status.cursor.apply_settings(status.settings)
         status.search.apply_settings(status.settings)
+        self.status_label.refresh_appearance()
 
     @property
     def has_yank_picker(self):
@@ -723,5 +776,4 @@ __all__ = [
     "VimLineEdit",
     "VimWidget",
     "MacroPlaybackWorker",
-    "enable_coverage_tracing",
 ]

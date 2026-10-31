@@ -1,5 +1,7 @@
 """Manage the jump list for navigating positions."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 

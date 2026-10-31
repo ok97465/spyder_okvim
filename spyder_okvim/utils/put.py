@@ -108,7 +108,7 @@ class PutSession:
     edit_bytes: int = 0
 
 
-def plan_put(context, entry, count, after_cursor=True, *, is_lower=None):
+def plan_put(context, entry, count, after_cursor=True):
     """Return a replacement plan without changing the document or registers.
 
     ``count`` is the effective positive repetition count. ``after_cursor`` is
@@ -116,11 +116,8 @@ def plan_put(context, entry, count, after_cursor=True, *, is_lower=None):
     Normal characterwise put or before/after the current line for a linewise
     put. Visual puts replace the captured selection regardless of this flag.
     All positions in the context and resulting half-open range are Qt UTF-16
-    offsets; ``block_number`` is zero-based. ``is_lower`` accepts the former
-    keyword spelling for callers using the historical API.
+    offsets; ``block_number`` is zero-based.
     """
-    if is_lower is not None:
-        after_cursor = is_lower
     linewise = entry.kind == "linewise"
     content = entry.text
     if context.mode == VimState.VLINE:
@@ -339,20 +336,15 @@ class PutController:
         if self.status.yanky_enabled:
             self.status.cursor.highlight_put(result.plan.start, result.end)
 
-    def put(self, count=1, after_cursor=True, entry=None, *, num=None, is_lower=None):
+    def put(self, count=1, after_cursor=True, entry=None):
         """Insert a register or immutable entry and retain its reversible patch.
 
         ``after_cursor`` selects Vim p/P placement; Visual mode replaces the
         selection. Update dot state once, group the edit for undo, then retain
         a bounded candidate snapshot only while the exact patch remains valid.
         This GUI-thread operation can receive synchronous document callbacks;
-        edits outside its owned range invalidate the cycling session. Legacy
-        ``num`` and ``is_lower`` keywords remain accepted for external callers.
+        edits outside its owned range invalidate the cycling session.
         """
-        if num is not None:
-            count = num
-        if is_lower is not None:
-            after_cursor = is_lower
         editor = self.status.get_editor()
         if editor is None or editor.isReadOnly():
             self.cancel()

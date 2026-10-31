@@ -40,6 +40,11 @@ CONF_DEFAULTS = [
             "search_bg_color": "#30652F",
             "yank_fg_color": "#17172d",
             "yank_bg_color": "#5cacee",
+            "annotation_bg_color": "",
+            "annotation_fg_color": "",
+            "annotation_border_color": "",
+            "mode_fg_color": "",
+            "mode_bg_color": "",
             "leader_key": "Space",
             "which_key_enabled": True,
             "which_key_delay": 300,
@@ -76,6 +81,9 @@ class PluginSettings:
     search_bg_color: str = "#30652F"
     yank_fg_color: str = "#17172d"
     yank_bg_color: str = "#5cacee"
+    annotation_bg_color: str = ""
+    annotation_fg_color: str = ""
+    annotation_border_color: str = ""
 
 
 def read_settings():
@@ -107,9 +115,11 @@ def register_selection_layers():
     DRAW_ORDERS.update(
         {
             "vim_search": 6,
+            "vim_search_current": 7,
             "hl_put": 7,
             "hl_yank": 7,
             "vim_substitute_preview": 7,
+            "vim_surround_preview": 8,
             "vim_selection": 8,
             "vim_cursor": 9,
             "vim_substitute": 10,

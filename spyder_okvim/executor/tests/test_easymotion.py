@@ -10,6 +10,37 @@ from tests.qt_support import reset_vim_state
 
 
 @pytest.mark.parametrize(
+    "method_name, cursor_position",
+    [
+        ("forwards_find_char", 2),
+        ("backwards_find_char", 4),
+        ("forwards_find_char", 0),
+        ("backwards_find_char", 6),
+    ],
+)
+def test_easymotion_character_targets_stay_in_view(
+    vim_bot, monkeypatch, method_name, cursor_position
+):
+    """A document search may find a match beyond the visible search bounds."""
+    from spyder_okvim.executor import executor_easymotion
+
+    _, _, editor, vim, _ = vim_bot
+    status = vim.vim_cmd.vim_status
+    reset_vim_state(status)
+    editor.set_text("x--x--x")
+    status.cursor.set_cursor_pos(cursor_position)
+    search = vim.vim_cmd.executor_normal_cmd.submodes.easymotion.executor_search_char
+    monkeypatch.setattr(
+        executor_easymotion, "_viewport_positions", lambda editor: (2, 4)
+    )
+    monkeypatch.setattr(
+        search, "set_position_result_to_vim_status", lambda positions, _: positions
+    )
+
+    assert getattr(search, method_name)("x") == [3]
+
+
+@pytest.mark.parametrize(
     "text, cmd_list, cursor_pos",
     [
         ("", [Qt.Key_Space, Qt.Key_Space, "w"], 0),
@@ -588,7 +619,7 @@ def test_easymotion_F_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos
     [
         (
             "a a.a aa",
-            ["$", "y", Qt.Key_Space, Qt.Key_Space, "F", "a", "l"],
+            ["$", "y", Qt.Key_Space, Qt.Key_Space, "F", "a", "y"],
             0,
             "a a.a aa",
             '"',
@@ -596,7 +627,7 @@ def test_easymotion_F_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos
         ),
         (
             "a a.a aa",
-            ["$", "d", Qt.Key_Space, Qt.Key_Space, "F", "a", "l"],
+            ["$", "d", Qt.Key_Space, Qt.Key_Space, "F", "a", "y"],
             0,
             "a",
             '"',
@@ -604,7 +635,7 @@ def test_easymotion_F_cmd_in_visual(vim_bot, text, cmd_list, cursor_pos, sel_pos
         ),
         (
             "a a.a aa",
-            ["$", "c", Qt.Key_Space, Qt.Key_Space, "F", "a", "l"],
+            ["$", "c", Qt.Key_Space, Qt.Key_Space, "F", "a", "y"],
             0,
             "a",
             '"',
@@ -633,3 +664,60 @@ def test_easymotion_F_cmd_in_submotion(
     assert editor.toPlainText() == text_expected
     assert editor.textCursor().position() == cursor_pos
     assert reg.content == text_yanked
+
+
+def test_easymotion_backspace_restores_candidate_set():
+    """Erasing a two-key prefix restores the original marker assignments."""
+    from spyder_okvim.utils.easymotion import EasyMotionMarkerManager
+
+    manager = EasyMotionMarkerManager()
+    manager.set_positions(list(range(40)), 1)
+    original = (manager.position_list[:], manager.name_list[:])
+    manager.handle_user_input("r")
+    assert 1 < len(manager.position_list) < 40
+    manager.handle_user_input("\b")
+    assert (manager.position_list, manager.name_list) == original
+
+
+def test_easymotion_caps_positions_to_available_labels():
+    """Unlabelled positions must never become selectable hidden targets."""
+    from spyder_okvim.utils.easymotion import EasyMotionMarkerManager
+
+    manager = EasyMotionMarkerManager()
+    count = len(manager.marker_keys) + 10
+    manager.set_positions(list(range(count)), 1)
+    assert manager.total_count == count
+    assert (
+        len(manager.position_list) == len(manager.name_list) == len(manager.marker_keys)
+    )
+
+
+def test_leap_label_filter_and_backspace(vim_bot):
+    """Partial labels redraw only their candidates; Backspace restores them."""
+    from tests.qt_support import reset_vim_state
+
+    _, _, editor, vim, qtbot = vim_bot
+    status = vim.vim_cmd.vim_status
+    reset_vim_state(status)
+    editor.set_text("x\n" + ("ab " * 7 + "\n") * 5)
+    status.cursor.set_cursor_pos(0)
+    commandline = vim.vim_cmd.commandline
+    qtbot.keyClicks(commandline, "sab")
+    selector = status.sub_mode
+    labels = dict(selector._label_to_motion)
+    chosen = next(label for label in labels if len(label) == 2)
+    qtbot.keyClicks(commandline, chosen[0])
+    assert "select label" in status.msg_label.text()
+    visible = [
+        label.text() for label in status.labels_for_annotate if not label.isHidden()
+    ]
+    assert visible and all(label.startswith(chosen[0]) for label in visible)
+    qtbot.keyPress(commandline, Qt.Key_Backspace)
+    visible = [
+        label.text() for label in status.labels_for_annotate if not label.isHidden()
+    ]
+    assert set(visible) == set(labels)
+    qtbot.keyClicks(commandline, chosen)
+    assert editor.textCursor().position() == labels[chosen].cursor_pos
+    assert status.sub_mode is None
+    assert all(label.isHidden() for label in status.labels_for_annotate)

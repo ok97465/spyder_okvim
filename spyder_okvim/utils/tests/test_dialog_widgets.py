@@ -1,8 +1,8 @@
 # Third Party Libraries
 import pytest
-from qtpy.QtCore import QEvent, Qt
-from qtpy.QtGui import QKeyEvent, QStandardItem
-from qtpy.QtWidgets import QDialog
+from qtpy.QtCore import QCoreApplication, QEvent, QRect, Qt
+from qtpy.QtGui import QColor, QKeyEvent, QPalette, QStandardItem
+from qtpy.QtWidgets import QDialog, QWidget
 
 # Project Libraries
 from spyder_okvim.utils.jump_dialog import (
@@ -211,3 +211,138 @@ def test_mark_row_preparation_can_use_in_memory_metadata():
         MarkRow("b", 4, 3, "source.py", "prepared source"),
     )
     assert lookups == [("project/source.py", 3)]
+
+
+@pytest.mark.parametrize("key, expected", [(Qt.Key_O, 2), (Qt.Key_I, 4)])
+def test_jump_shortcut_moves_exactly_once_away_from_boundaries(qtbot, key, expected):
+    jumps = JumpList()
+    for position in range(5):
+        jumps.push("source.py", position)
+    jumps.index = 3
+    calls = []
+
+    def snapshot():
+        return build_jump_snapshot(jumps, read_location=lambda *_: (1, 1, "source"))
+
+    def navigate(backward):
+        calls.append(backward)
+        jumps.back() if backward else jumps.forward()
+        return snapshot()
+
+    dialog = JumpListDialog(
+        snapshot(), on_back=lambda: navigate(True), on_forward=lambda: navigate(False)
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    reserved = QKeyEvent(QEvent.ShortcutOverride, key, Qt.ControlModifier)
+    QCoreApplication.sendEvent(dialog.list_viewer, reserved)
+    assert reserved.isAccepted()
+    assert calls == []
+    assert jumps.index == 3
+
+    qtbot.keyClick(dialog.list_viewer, key, Qt.ControlModifier)
+    assert calls == [key == Qt.Key_O]
+    assert jumps.index == expected
+    assert dialog.list_viewer.currentIndex().row() == expected - 1
+
+
+@pytest.mark.parametrize("confirm", [True, False])
+def test_jump_selection_only_navigates_when_confirmed(qtbot, confirm):
+    rows = tuple(JumpRow(i, 1, 1, "source.py", "source") for i in range(1, 6))
+    applied, finished = [], []
+    dialog = JumpListDialog(
+        JumpSnapshot(rows, 3),
+        on_select=applied.append,
+        on_finished=lambda: finished.append(True),
+    )
+    dialog.setAttribute(Qt.WA_DeleteOnClose, False)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.keyClick(dialog.list_viewer, Qt.Key_N, Qt.ControlModifier)
+    assert dialog.list_viewer.currentIndex().row() == 3
+    assert applied == []
+    assert dialog.snapshot.current_index == 3
+    qtbot.keyClick(dialog.list_viewer, Qt.Key_Return if confirm else Qt.Key_Escape)
+    assert applied == ([4] if confirm else [])
+    assert finished == [True]
+
+
+def test_mark_mouse_selection_and_confirmation(qtbot):
+    dialog = MarkListDialog(
+        (MarkRow("a", 1, 1, "a.py", "first"), MarkRow("b", 2, 1, "b.py", "second"))
+    )
+    qtbot.addWidget(dialog)
+    dialog.show()
+    point = dialog.list_viewer.visualRect(dialog.list_model.index(1, 0)).center()
+    qtbot.mouseClick(dialog.list_viewer.viewport(), Qt.LeftButton, pos=point)
+    assert dialog.get_selected_mark() == ""
+    assert dialog.list_viewer.currentIndex().row() == 1
+    qtbot.mouseDClick(dialog.list_viewer.viewport(), Qt.LeftButton, pos=point)
+    assert dialog.get_selected_mark() == "b"
+
+
+@pytest.mark.parametrize("size", [(340, 240), (180, 150)])
+def test_picker_geometry_fits_small_parent_and_grows_with_rows(qtbot, size):
+    parent = QWidget()
+    parent.resize(*size)
+    qtbot.addWidget(parent)
+    parent.show()
+    dialog = PopupTableDialog("Small picker", parent, headers=["Path"], min_width=800)
+    qtbot.addWidget(dialog)
+    dialog.list_model.appendRow(QStandardItem("short"))
+    dialog.move(parent.mapToGlobal(parent.rect().bottomRight()))
+    dialog.show()
+    small_height = dialog.height()
+    assert dialog._available_geometry().contains(dialog.geometry())
+    for number in range(20):
+        dialog.list_model.appendRow(QStandardItem(f"row {number}"))
+    qtbot.waitUntil(lambda: dialog.height() > small_height)
+    assert dialog._available_geometry().contains(dialog.geometry())
+
+
+def test_picker_uses_owner_monitor_when_initial_position_is_elsewhere(
+    qtbot, monkeypatch
+):
+    """The initial default popup position must not select the primary monitor."""
+    from qtpy.QtWidgets import QApplication
+
+    class Screen:
+        def __init__(self, x):
+            self.x = x
+
+        def availableGeometry(self):
+            return QRect(self.x, 0, 800, 600)
+
+    primary, secondary = Screen(0), Screen(1000)
+    monkeypatch.setattr(
+        QApplication,
+        "screenAt",
+        lambda point: secondary if point.x() >= 1000 else primary,
+    )
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    parent.resize(340, 240)
+    parent.show()
+    parent.move(1100, 100)
+    dialog = PopupTableDialog("Secondary monitor", parent, headers=["Path"])
+    qtbot.addWidget(dialog)
+    dialog.move(0, 0)
+    dialog.show()
+    assert dialog.geometry().left() >= 1000
+    assert dialog._available_geometry().contains(dialog.geometry())
+
+
+def test_picker_uses_current_palette_and_accessible_help(qtbot):
+    dialog = PopupTableDialog("Themed picker", headers=["Path"])
+    qtbot.addWidget(dialog)
+    palette = dialog.palette()
+    palette.setColor(QPalette.Text, QColor("#123456"))
+    palette.setColor(QPalette.Base, QColor("#fefefe"))
+    dialog.setPalette(palette)
+    dialog.show()
+    assert dialog.list_viewer.palette().color(QPalette.Text) == QColor("#123456")
+    palette.setColor(QPalette.Text, QColor("#eeeeee"))
+    dialog.setPalette(palette)
+    assert dialog.list_viewer.palette().color(QPalette.Text) == QColor("#eeeeee")
+    assert dialog.list_viewer.accessibleName() == "Themed picker results"
+    assert "Enter" in dialog.help_label.text()

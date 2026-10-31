@@ -18,6 +18,7 @@ from qtpy.QtGui import QTextCursor
 
 # Project Libraries
 from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.utils.qtcompat import python_cursor_position, qt_cursor_position
 
 WHITE_SPACE = " \t"
 
@@ -64,7 +65,7 @@ class TextObjects:
         block = cursor.block()
         text = block.text()
 
-        cursor_pos = cursor.positionInBlock()
+        cursor_pos = python_cursor_position(text, cursor.positionInBlock())
         if self._character_at(cursor.position()) == quote:
             # When the cursor starts on a quote, Vim will figure out which
             # quote pairs form a string by searching from the start of the line
@@ -86,8 +87,8 @@ class TextObjects:
                 sel_end = text.find(quote, cursor_pos)
 
         if sel_start > -1 and sel_end > -1:
-            sel_start = sel_start + block.position() + 1
-            sel_end = sel_end + block.position()
+            sel_start = block.position() + qt_cursor_position(text, sel_start + 1)
+            sel_end = block.position() + qt_cursor_position(text, sel_end)
         else:
             sel_start = None
             sel_end = None
@@ -115,15 +116,25 @@ class TextObjects:
     def _include_leading_white(self, pos_start: int) -> int:
         """Extend the UTF-16 start over adjacent leading whitespace."""
         cursor = self._cursor()
-
         cursor.setPosition(pos_start)
-        block = cursor.block()
-        text = block.text()
-        text = text[: pos_start - block.position()]
-
-        pos_start -= len(text) - len(text.rstrip())
-
+        document = cursor.document()
+        block_start = cursor.block().position()
+        while (
+            pos_start > block_start
+            and document.characterAt(pos_start - 1) in WHITE_SPACE
+        ):
+            pos_start -= 1
         return pos_start
+
+    def _whitespace_range(self, cursor: QTextCursor) -> tuple[int, int]:
+        """Return the current horizontal whitespace run in document coordinates."""
+        start = self._include_leading_white(cursor.position())
+        end = cursor.position()
+        document = cursor.document()
+        block_end = cursor.block().position() + cursor.block().length() - 1
+        while end < block_end and document.characterAt(end) in WHITE_SPACE:
+            end += 1
+        return start, end
 
     def around_quote(self, quote: str) -> MotionInfo:
         """Include delimiters and adjacent space, preferring trailing space."""
@@ -309,16 +320,8 @@ class TextObjects:
         initial_selection_start = cursor.position()
 
         if self._character_at(cursor.position()) in WHITE_SPACE:
-            cursor_pos_in_block = cursor.positionInBlock()
-            text = cursor.block().text()
-            leading_text = text[:cursor_pos_in_block]
-            trailing_text = text[cursor_pos_in_block:]
-
-            n_leading_space = len(leading_text) - len(leading_text.rstrip())
-            n_trailing_space = len(trailing_text) - len(trailing_text.lstrip())
-            sel_start = cursor_pos_in_block - n_leading_space
-            sel_end = cursor_pos_in_block + n_trailing_space
-            cursor.setPosition(sel_end + cursor.block().position())
+            sel_start, sel_end = self._whitespace_range(cursor)
+            cursor.setPosition(sel_end)
             count -= 1
         else:
             cursor.movePosition(QTextCursor.EndOfWord)
@@ -350,16 +353,8 @@ class TextObjects:
         cursor = self._cursor()
 
         if self._character_at(cursor.position()) in WHITE_SPACE:
-            cursor_pos_in_block = cursor.positionInBlock()
-            text = cursor.block().text()
-            leading_text = text[:cursor_pos_in_block]
-            trailing_text = text[cursor_pos_in_block:]
-
-            n_leading_space = len(leading_text) - len(leading_text.rstrip())
-            n_trailing_space = len(trailing_text) - len(trailing_text.lstrip())
-            sel_start = cursor_pos_in_block - n_leading_space
-            sel_end = cursor_pos_in_block + n_trailing_space
-            cursor.setPosition(sel_end + cursor.block().position())
+            sel_start, sel_end = self._whitespace_range(cursor)
+            cursor.setPosition(sel_end)
             count -= 1
         else:
             cursor.movePosition(QTextCursor.EndOfWord)
@@ -407,12 +402,7 @@ class TextObjects:
         is_trailing_space = True
 
         if self._character_at(cursor.position()) in WHITE_SPACE:
-            cursor_pos_in_block = cursor.positionInBlock()
-            text = cursor.block().text()
-            leading_text = text[:cursor_pos_in_block]
-
-            n_leading_space = len(leading_text) - len(leading_text.rstrip())
-            sel_start = cursor_pos_in_block - n_leading_space
+            sel_start, _ = self._whitespace_range(cursor)
             cursor.movePosition(QTextCursor.NextWord)
             cursor.movePosition(QTextCursor.EndOfWord)
             is_trailing_space = False
@@ -439,7 +429,10 @@ class TextObjects:
             for idx in range(count):
                 block = cursor.block()
                 text = block.text()
-                if len(text.rstrip()) == cursor.position() - block.position():
+                if (
+                    qt_cursor_position(text, len(text.rstrip()))
+                    == cursor.positionInBlock()
+                ):
                     cursor.movePosition(QTextCursor.NextBlock)
                     cursor.movePosition(QTextCursor.StartOfLine)
                     if self._character_at(cursor.position()) in WHITE_SPACE:
@@ -471,6 +464,7 @@ class TextObjects:
         }
         opening, closing, bracket_pattern = bracket_patterns[bracket]
         text = self._cursor().document().toPlainText()
+        position = python_cursor_position(text, position)
 
         sel_start = None
         sel_end = None
@@ -478,7 +472,7 @@ class TextObjects:
         pattern = re.compile(bracket_pattern)
 
         # Find position of close bracket
-        if self._character_at(position) == closing:
+        if text[position : position + 1] == closing:
             sel_end = position + 1
         else:
             opening_depth = 0
@@ -496,7 +490,7 @@ class TextObjects:
         # Find position of open bracket
         if sel_end is None:
             return None, None
-        if self._character_at(position) == opening:
+        if text[position : position + 1] == opening:
             sel_start = position
         else:
             closing_depth = 0
@@ -511,10 +505,8 @@ class TextObjects:
                         break
 
         if sel_start is None or sel_end is None:
-            sel_start = None
-            sel_end = None
-
-        return sel_start, sel_end
+            return None, None
+        return qt_cursor_position(text, sel_start), qt_cursor_position(text, sel_end)
 
     def around_bracket(self, count: int, bracket: str) -> MotionInfo:
         """Return the surrounding bracket range, including both delimiters."""
@@ -531,9 +523,10 @@ class TextObjects:
             text = block.text()
             block_pos = block.position()
 
-            remaining_text = text[cursor_pos - block_pos :]
-            open_bracket_pos = remaining_text.find(open_bracket) + cursor_pos
-            if open_bracket_pos > cursor_pos:
+            position_in_block = python_cursor_position(text, cursor_pos - block_pos)
+            open_index = text.find(open_bracket, position_in_block)
+            if open_index >= 0:
+                open_bracket_pos = block_pos + qt_cursor_position(text, open_index)
                 sel_start, sel_end = self.bracket_range(
                     count, bracket, open_bracket_pos
                 )

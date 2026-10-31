@@ -24,6 +24,13 @@ def selected_text(document, motion):
         ("one.two   next", 2, "around_WORD", (1,), "one.two   "),
         ("first\nline\n\nsecond", 2, "inner_paragraph", (1,), "first\nline"),
         ("😀 `value` after", 5, "inner_quote", ("`",), "value"),
+        ('😀 "value😀" after', 6, "inner_quote", ('"',), "value😀"),
+        ("😀 'value😀' after", 6, "around_quote", ("'",), "'value😀' "),
+        ("😀 (outer (inner😀)) after", 15, "around_bracket", (1, "("), "(inner😀)"),
+        ("😀 before (inner😀) after", 3, "inner_bracket", (1, "("), "inner😀"),
+        ("first\n😀 word   next", 13, "inner_word", (1,), "   "),
+        ("first\n😀 word   next", 13, "inner_WORD", (1,), "   "),
+        ("first\n😀 word   next", 13, "around_word", (1,), "   next"),
     ],
 )
 def test_text_objects_leave_supplied_cursor_and_document_unchanged(
