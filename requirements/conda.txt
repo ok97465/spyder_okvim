@@ -1,2 +1,2 @@
 python >=3.9
-spyder >= 6.1.0
+spyder >=6.1.0,<6.2.0
