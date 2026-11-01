@@ -25,6 +25,8 @@ class MacroManager:
         self.editor_connected = None
         #: Register to execute
         self.reg_name_for_execute = ""
+        #: Last executed register, retained after pending playback is cleared
+        self.last_executed_register = ""
         #: Number of times to execute the macro
         self.num_execute = 0
 
@@ -32,11 +34,15 @@ class MacroManager:
         """Configure macro execution.
 
         Args:
-            register: Name of the register to execute.
+            register: Register to execute, ``@`` to repeat, or empty to clear.
             count: Number of times to repeat execution.
         """
+        if register == "@":
+            register = self.last_executed_register
         self.reg_name_for_execute = register
-        self.num_execute = count
+        self.num_execute = count if register else 0
+        if register:
+            self.last_executed_register = register
 
     def start_record(self, register):
         """Begin recording keystrokes.

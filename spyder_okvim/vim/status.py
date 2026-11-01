@@ -1,6 +1,7 @@
 """Coordinate Vim modes and the owners of editing, search and input sessions."""
 
 # Standard Libraries
+import weakref
 
 # Third Party Libraries
 from qtpy.QtCore import QObject, QTimer, Signal, Slot
@@ -60,6 +61,7 @@ class VimStatus(QObject):
         register_selection_layers()
         self.cursor: VimCursor = VimCursor(editor_widget, self.settings)
         self.main = main
+        self.pane_history = weakref.WeakKeyDictionary()
 
         # method mapping
         self.set_cursor = self.cursor.set_cursor
@@ -241,9 +243,6 @@ class VimStatus(QObject):
 
     def set_focus_to_vim_after_delay(self, delay=300):
         """Schedule input focus in milliseconds for the current editor only."""
-        # Standard Libraries
-        import weakref
-
         # Project Libraries
         from spyder_okvim.utils.qtcompat import widget_is_deleted
 

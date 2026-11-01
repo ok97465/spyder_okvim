@@ -17,7 +17,11 @@ from spyder_okvim.executor.executor_base import (
     ExecutorSubBase,
     ExecutorTransition,
 )
-from spyder_okvim.utils.editor_windows import focus_neighbor
+from spyder_okvim.utils.editor_windows import (
+    focus_cycle,
+    focus_neighbor,
+    focus_previous,
+)
 
 
 class OperatorGExecutor(ExecutorSubBase):
@@ -52,6 +56,7 @@ class GPrefixExecutor(ExecutorSubBase):
         CommandSpec("U", "U", "Uppercase"),
         CommandSpec("c", "c", "Toggle comment"),
         CommandSpec("~", "tilde", "Swap case"),
+        CommandSpec("J", "J", "Join without adding spaces"),
     )
 
     def __init__(self, vim_status):
@@ -83,6 +88,10 @@ class GPrefixExecutor(ExecutorSubBase):
         if editor:
             vs.start_definition_tracking(previous)
             editor.go_to_definition_from_cursor()
+
+    def J(self, count=1, count_text=""):
+        """Join counted lines or the selected rows without adding spaces."""
+        self.edits.join_lines(self.parent_counts[-1] * count, insert_spaces=False)
 
     def t(self, count=1, count_text=""):
         """Cycle to next file."""
@@ -283,7 +292,7 @@ class FileExitExecutor(ExecutorSubBase):
 
 
 class MarkNameExecutor(ExecutorSubBase):
-    """Accept an alphanumeric mark/register continuation without interpreting a motion."""
+    """Accept a mark/register name, or @ when repeating a macro."""
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
@@ -309,12 +318,12 @@ class MarkNameExecutor(ExecutorSubBase):
         ]
 
     def __call__(self, ch: str):
-        """Return deferred result when ``ch`` is alphanumeric."""
+        """Return the deferred result for an accepted mark/register name."""
         self.update_input_cmd_info(None, None, ch)
 
         self.vim_status.sub_mode = None
 
-        if ch.isalnum():
+        if ch.isalnum() or self.vim_status.input_cmd.cmd == "@@":
             return self.process_return(self.execute_func_deferred(ch))
 
         return True
@@ -427,7 +436,7 @@ class NextBlockExecutor(ExecutorSubBase):
 
 
 class WindowPrefixExecutor(ExecutorSubBase):
-    """Dispatch directional focus and close commands for the active editor pane."""
+    """Dispatch split navigation and close commands for the active editor pane."""
 
     hint_prefix = "Ctrl+w"
     command_specs = (
@@ -435,6 +444,8 @@ class WindowPrefixExecutor(ExecutorSubBase):
         CommandSpec("j", "move", "Focus split below"),
         CommandSpec("k", "move", "Focus split above"),
         CommandSpec("l", "move", "Focus right split"),
+        CommandSpec("w", "cycle", "Focus next split"),
+        CommandSpec("p", "previous", "Focus previous split"),
         CommandSpec("c", "close", "Close current split"),
     )
 
@@ -454,6 +465,16 @@ class WindowPrefixExecutor(ExecutorSubBase):
         stack = self.get_editorstack()
         if stack.is_closable:
             stack.close_split()
+
+    def cycle(self, count=1, count_text=""):
+        """Cycle splits, selecting an absolute split number for an explicit count."""
+        prefix_count = self.vim_status.input_cmd.count_text
+        number = count * self.parent_counts[0] if count_text or prefix_count else None
+        focus_cycle(self.vim_status, number)
+
+    def previous(self, count=1, count_text=""):
+        """Return to the last focused available split in the active host."""
+        focus_previous(self.vim_status)
 
 
 class ViewportPrefixExecutor(ExecutorSubBase):

@@ -75,7 +75,7 @@ The following actions are supported:
 - <{motion}, >{motion}
 - gu{motion}, gU{motion} g~{motion}, ~
 - u, ^R
-- J
+- J, gJ
 - .
 
 Use `==` to reindent the current line, `3==` for three lines, `=j` for the
@@ -123,7 +123,6 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 - :vs, :vsp, :vsplit: Splits the current editor into side-by-side views.
 - Ctrl+w then h/j/k/l: Moves to the left/down/up/right editor split in Normal mode.
   Disable Spyder's Ctrl+w shortcut to use this sequence.
-- Ctrl+w then c: Closes the current split if Spyder permits closing it.
 
 ## Jump list
 
@@ -160,6 +159,10 @@ Space then Shift+`d` to debug the visual selection (the current line when
 nothing is selected).
 
 ## Search and replace
+
+In search and Ex prompts, press Ctrl+r followed by a register name to insert its
+text at the cursor or replace selected prompt text. For example, Ctrl+r then `a`
+inserts register `a`, and Ctrl+r then `+` inserts the clipboard.
 
 Use `:s` or `:substitute` to replace
 matches in the current file. Each changing command is one undo step (`u`),
@@ -250,41 +253,3 @@ For operators use `z` because `s` belongs to vim-surround.
 
 When there are matches in another group, hints appear around the group.
 ![leap](https://github.com/ok97465/spyder_okvim/raw/main/doc/leap.gif)
-
-## Development and tests
-
-[Design notes](doc/design_patterns.md) describe command groups, state ownership,
-host operations and input lifetimes. Related handlers stay together in each
-module; the structure does not require one file per class.
-
-Run the normal suite, including the pure model/storage tests in root `tests/`:
-
-```sh
-python runtests.py
-```
-
-Set `QT_API` and `PYTEST_QT_API` to the same installed binding for GUI tests and
-test each binding in a separate process. Pure tests can run without Qt or Spyder:
-
-```sh
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests
-```
-
-Integration fixtures create the editor only for tests requesting `vim_bot`.
-Test setup/reset helpers live in `tests/qt_support.py`; tests that change plugin
-settings apply them through `VimWidget.apply_settings()` or the reset helper.
-Native IME tests must also run on the native platform (`cocoa` on macOS,
-`windows` on Windows), separately from offscreen checks.
-
-## Window integration tests
-
-The real-window matrix targets the paired Spyder fork, including its window and
-popup lifetime fixes. It is opt-in so the ordinary suite can also run against
-stock Spyder:
-
-```sh
-SPYDER_OKVIM_WINDOW_INTEGRATION=1 SPYDER_PYTEST=True \
-QT_QPA_PLATFORM=offscreen QT_API=pyqt5 PYTEST_QT_API=pyqt5 \
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -p pytestqt.plugin \
-  spyder_okvim/spyder/tests/test_editor_windows.py
-```

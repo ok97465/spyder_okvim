@@ -407,6 +407,9 @@ def test_undo_redo(vim_bot):
     assert editor.toPlainText() == "a"
     assert editor.textCursor().position() == 0
 
+    # Ctrl+r now waits for a register in the Visual search. Leave the search
+    # first, then leave its restored Visual selection before redoing changes.
+    qtbot.keyPress(cmd_line, Qt.Key_Escape)
     qtbot.keyPress(cmd_line, Qt.Key_Escape)
     qtbot.keyClicks(cmd_line, "2")
     qtbot.keyPress(cmd_line, Qt.Key_R, Qt.ControlModifier)

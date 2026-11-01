@@ -85,52 +85,65 @@ class EditingActions:
 
         return start, end, False
 
-    def join_lines(
-        self, cursor_pos_start: int, block_no_start: int, block_no_end: int
-    ) -> None:
-        """Join lines between two blocks.
+    def join_lines(self, count: int = 2, *, insert_spaces: bool = True) -> None:
+        """Join counted lines or the Visual selection, then finish in Normal mode.
 
-        Args:
-            cursor_pos_start: Cursor position at the start of the first line.
-            block_no_start: Number of the first block to join.
-            block_no_end: Number of the last block to join.
+        J strips indentation and adds spaces; gJ removes only block separators.
+        Both commands join at least two lines when the selection is one line.
         """
-        self.vim_status.update_dot_cmd(connect_editor=False)
+        status = self.vim_status
+        is_visual = not status.is_normal()
+        if is_visual:
+            block_start = status.get_block_no_start_in_selection()
+            block_end = status.get_block_no_end_in_selection()
+            if block_start is None:
+                status.to_normal()
+                return
+            block_end = max(block_start + 1, block_end)
+        else:
+            block_start = status.get_cursor().blockNumber()
+            block_end = block_start + max(2, count) - 1
 
-        editor = self.vim_status.get_editor()
-        cursor = editor.textCursor()
-        n_block = editor.blockCount()
-
-        if block_no_end >= n_block - 1:
-            block_no_end = n_block - 1
-
-        if block_no_start == block_no_end:
+        status.update_dot_cmd(connect_editor=False)
+        editor = status.get_editor()
+        block_end = min(block_end, editor.blockCount() - 1)
+        if block_start == block_end:
+            if is_visual:
+                status.to_normal()
             return
 
-        n_line = block_no_end - block_no_start + 1
-        text_list = [""]
-        cursor.setPosition(cursor_pos_start)
-        for _ in range(n_line - 1):
-            cursor.movePosition(QTextCursor.NextBlock)
-            text = cursor.block().text().lstrip()
-            if text:
-                text_list.append(text)
+        document = editor.document()
+        first = document.findBlockByNumber(block_start)
+        last = document.findBlockByNumber(block_end)
+        cursor = editor.textCursor()
+        cursor.setPosition(first.position() + first.length() - 1)
+        cursor.setPosition(last.position() + last.length() - 1, QTextCursor.KeepAnchor)
 
-        # Replace text
-        cursor.setPosition(cursor_pos_start)
-        cursor.movePosition(QTextCursor.EndOfLine)
-        cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor, n_line - 1)
-        cursor.movePosition(QTextCursor.EndOfLine, QTextCursor.KeepAnchor)
-        cursor.insertText(" ".join(text_list))
-
-        # Move position of cursor
-        cursor.movePosition(QTextCursor.EndOfBlock)
-        cursor.movePosition(QTextCursor.Left, n=len(text_list[-1]) + 1)
-        pos = cursor.position()
-
-        self.vim_status.cursor.set_cursor_pos(pos)
+        if insert_spaces:
+            text_list = [""]
+            for text in cursor.selectedText().split("\u2029")[1:]:
+                text = text.lstrip()
+                if text:
+                    text_list.append(text)
+            cursor.insertText(" ".join(text_list))
+            cursor.movePosition(QTextCursor.EndOfBlock)
+            cursor.movePosition(QTextCursor.Left, n=len(text_list[-1]) + 1)
+            status.cursor.set_cursor_pos(cursor.position())
+        else:
+            # Qt positions are UTF-16 offsets; only removed separators shift
+            # the last join boundary, even when the text contains non-BMP chars.
+            join_position = last.position() - (block_end - block_start)
+            replacement = cursor.selectedText().replace("\u2029", "")
+            cursor.beginEditBlock()
+            try:
+                cursor.insertText(replacement)
+            finally:
+                cursor.endEditBlock()
+            status.cursor.set_cursor_pos_without_end(join_position)
 
         editor.document_did_change()
+        if is_visual:
+            status.to_normal()
 
     def replace_with_character(self, start: int, end: int, character: str) -> None:
         """Replace selected text with a given character.

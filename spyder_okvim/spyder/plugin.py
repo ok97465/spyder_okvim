@@ -34,6 +34,7 @@ from spyder_okvim.spyder.config import CONF_DEFAULTS, CONF_SECTION, CONF_VERSION
 from spyder_okvim.spyder.confpage import OkvimConfigPage
 from spyder_okvim.spyder.switcher import SwitcherNavigation
 from spyder_okvim.spyder.vim_widgets import VimPane
+from spyder_okvim.utils.editor_windows import remember_pane
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
 from spyder_okvim.utils.testing_env import running_in_pytest
 
@@ -278,6 +279,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             self._reset_view()
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None
+        remember_pane(self.vim_cmd.vim_status, stack)
         self.vim_cmd.vim_status.cursor.set_editorstack(stack)
         self.vim_cmd.bind_editor(editor)
         if editor is not None and editor not in self._editors:

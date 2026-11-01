@@ -54,20 +54,8 @@ class VisualModeExecutor(SelectionMixin, MovementMixin, ExecutorBase):
         self.vim_status.to_visual_line()
 
     def J(self, count=1, count_text=""):
-        """Join lines, with a minimum of two lines."""
-        block_no_start = self.get_block_no_start_in_selection()
-        block_no_end = self.get_block_no_end_in_selection()
-
-        if block_no_start is None:
-            self.vim_status.to_normal()
-            return
-
-        if block_no_start == block_no_end:
-            block_no_end += 1
-
-        cursor_pos_start = self.get_pos_start_in_selection()
-        self.edits.join_lines(cursor_pos_start, block_no_start, block_no_end)
-        self.vim_status.to_normal()
+        """Join counted lines or the selected rows with spaces."""
+        self.edits.join_lines(count)
 
     def l(self, count=1, count_text=""):
         """Move cursor to right."""

@@ -79,6 +79,7 @@ class VimLineEdit(QLineEdit):
         self._updating_commandline = False
         self._is_composing = False
         self._prompt_focus_window = None
+        self._register_input_session = None
         self.textChanged.connect(self.reset_navigation)
         self.cursorPositionChanged.connect(self._reset_completion)
 
@@ -151,12 +152,14 @@ class VimLineEdit(QLineEdit):
         return None
 
     def snapshot(self) -> PromptSnapshot | None:
-        """Return immutable prompt input, or None outside Ex/search entry.
+        """Observe prompt text outside register selection, or return None.
 
         The cursor is a Python string index, not a Qt UTF-16 position. A
         snapshot can describe a transient replacement or IME composition;
         passive consumers must reject those states before scheduling work.
         """
+        if self._waiting_for_register():
+            return None
         text = self.text()
         context = self.history_context(text)
         if context is None:
@@ -299,6 +302,16 @@ class VimLineEdit(QLineEdit):
 
     def event(self, event) -> bool:
         """Keep Tab in the prompt instead of letting QWidget move focus."""
+        if event.type() == QEvent.ShortcutOverride and (
+            self._waiting_for_register()
+            or (
+                event.modifiers() == Qt.ControlModifier
+                and event.key() == Qt.Key_R
+                and self.history_context() is not None
+            )
+        ):
+            event.accept()
+            return True
         if (
             event.type() == QEvent.ShortcutOverride
             and self.vim_widget.commandline_popup.key_action(event) is not None
@@ -344,8 +357,13 @@ class VimLineEdit(QLineEdit):
 
     def sync_input_method(self) -> None:
         """Allow composition only while entering search or Ex text."""
+        sub_mode = self.vim_status.sub_mode
+        if self._register_input_session is not sub_mode:
+            self._register_input_session = None
         enabled = bool(
-            self.vim_status.sub_mode and self.vim_status.sub_mode.accepts_input_method
+            sub_mode
+            and sub_mode.accepts_input_method
+            and not self._waiting_for_register()
         )
         if enabled == self.testAttribute(Qt.WA_InputMethodEnabled):
             return
@@ -373,18 +391,47 @@ class VimLineEdit(QLineEdit):
 
     def to_normal(self) -> None:
         """Convert the state of vim to normal mode."""
+        self._register_input_session = None
         self.clear()
         self.vim_widget.vim_status.to_normal()
         self.vim_widget.vim_status.cursor.draw_vim_cursor()
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Dispatch one native key inside the outer input observation guard."""
-        history_action = self.vim_widget.commandline_popup.key_action(e)
+        register_selector = self._waiting_for_register()
+        register_input = register_selector or (
+            e.key() == Qt.Key_R
+            and e.modifiers() == Qt.ControlModifier
+            and self.history_context() is not None
+        )
+        session = self.vim_status.sub_mode
+        history_action = (
+            None if register_input else self.vim_widget.commandline_popup.key_action(e)
+        )
         with self.vim_widget.input_processing():
+            # Input-started observers can cancel the prompt. Consume its key
+            # here so a register selection cannot become a Normal command.
+            if register_input and (
+                session is not self.vim_status.sub_mode
+                or self.history_context() is None
+                or (register_selector and not self._waiting_for_register())
+            ):
+                self.sync_input_method()
+                e.accept()
+                return
             self._handle_key_press(e, history_action)
 
     def _handle_key_press(self, e: QKeyEvent, history_action=None) -> None:
         """Process a key before synchronizing hints at the outer input boundary."""
+        if e.key() in (
+            Qt.Key_Control,
+            Qt.Key_Shift,
+            Qt.Key_Alt,
+            Qt.Key_Meta,
+            Qt.Key_AltGr,
+        ):
+            e.accept()
+            return
         if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape):
             self.vim_widget.commandline_popup.cancel_pending_tab()
         if history_action is not None:
@@ -408,6 +455,9 @@ class VimLineEdit(QLineEdit):
 
         key = e.key()
         pressed_ctrl = e.modifiers() == Qt.ControlModifier
+        if self._waiting_for_register():
+            self._insert_prompt_register(e)
+            return
         if self.try_handle_yank_cycle(e):
             return
         if key == Qt.Key_Escape:
@@ -415,6 +465,18 @@ class VimLineEdit(QLineEdit):
         elif pressed_ctrl and key == Qt.Key_C and self._substitute_input():
             self.vim_shortcut.clear_tip_search()
             self.esc_pressed()
+        elif pressed_ctrl and key == Qt.Key_R and self.history_context() is not None:
+            session = self.vim_status.sub_mode
+            QApplication.inputMethod().commit()
+            if (
+                session is self.vim_status.sub_mode
+                and self.history_context() is not None
+            ):
+                self.vim_widget.commandline_popup.cancel_pending_tab()
+                self.vim_widget.commandline_popup.clear_candidates()
+                self._register_input_session = session
+                self.sync_input_method()
+            e.accept()
         elif pressed_ctrl and key in self.dispatcher:
             self.vim_widget.put_controller.cancel()
             self.dispatcher[key]()
@@ -438,6 +500,40 @@ class VimLineEdit(QLineEdit):
             self.setText(self.text() + KEYCODE2STR[key])
         else:
             super().keyPressEvent(e)
+
+    def _waiting_for_register(self):
+        """Tie the one-key selector to the prompt that requested it."""
+        return (
+            self._register_input_session is not None
+            and self._register_input_session is self.vim_status.sub_mode
+            and self.history_context() is not None
+        )
+
+    def _insert_prompt_register(self, event):
+        """Expand a recorded selector as one prompt edit, never as Return input."""
+        self._register_input_session = None
+        self.sync_input_method()
+        event.accept()
+        if event.key() == Qt.Key_Escape or (
+            event.key() == Qt.Key_C and event.modifiers() == Qt.ControlModifier
+        ):
+            self.esc_pressed()
+            return
+        name = event.text()
+        if (
+            event.modifiers() not in (Qt.NoModifier, Qt.ShiftModifier)
+            or len(name) != 1
+            or name
+            not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"-+_'
+        ):
+            self.vim_status.set_message("Invalid register")
+            return
+        content = self.vim_status.registers.get_register(name).content
+        # CR is an executor's submit sentinel. Clipboard line endings are text,
+        # so normalize them to LF rather than accidentally executing a draft.
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
+        if content:
+            self.insert(content)
 
     def _substitute_input(self):
         """Cancel substitute prompts with Ctrl+C even when preview is disabled."""
@@ -484,6 +580,7 @@ class VimLineEdit(QLineEdit):
 
     def esc_pressed(self) -> None:
         """Cancel pending input and return to Normal without undoing accepted edits."""
+        self._register_input_session = None
         self._prompt_focus_window = None
         self.vim_widget.cancel_substitute()
         self.vim_widget.put_controller.cancel()
@@ -532,6 +629,8 @@ class VimLineEdit(QLineEdit):
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
         """Override Qt method."""
+        self._register_input_session = None
+        self.sync_input_method()
         if self.transient_prompt_focus_loss(event):
             if self._prompt_focus_window is None:
                 self._prompt_focus_window = weakref.ref(self.window())

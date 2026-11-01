@@ -44,7 +44,7 @@ def test_ctrl_w_direction_and_count(
     pending = vim.vim_cmd.pending_hint()
     assert pending is not None
     assert pending.prefix == "Ctrl+w"
-    assert [key for key, _ in pending.executor.get_hint_candidates()] == list("hjklc")
+    assert [key for key, _ in pending.executor.get_hint_candidates()] == list("hjklwpc")
     qtbot.keyClicks(commandline, after + direction)
 
     assert move.call_count == count

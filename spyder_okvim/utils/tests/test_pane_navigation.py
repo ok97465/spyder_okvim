@@ -1,6 +1,7 @@
 """Directional pane navigation uses layout geometry within the active window."""
 
 # Standard Libraries
+import weakref
 from types import SimpleNamespace
 
 # Third Party Libraries
@@ -58,6 +59,7 @@ def panes(qtbot):
             ),
             set_focus_to_vim=restore_vim_input,
             selected=selected,
+            pane_history=weakref.WeakKeyDictionary(),
         )
 
     return SimpleNamespace(

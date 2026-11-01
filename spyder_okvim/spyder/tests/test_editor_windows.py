@@ -385,6 +385,52 @@ def test_control_w_navigates_nested_splits(editor_windows):
     assert target.textCursor().position() == 1
 
 
+@pytest.mark.parametrize("host", ["main", "window"])
+def test_control_w_cycles_and_returns_to_previous_split(editor_windows, host):
+    """Cycle and previous commands follow actual editor focus in each host."""
+    state = editor_windows
+    if host == "window":
+        state.widget.create_new_window()
+        _settle()
+    first = state.widget.editorstacks[-1]
+    _focus_stack(state, first)
+    status = state.vim.vim_cmd.vim_status
+    panes = [first]
+    for _ in range(2):
+        state.qtbot.keyClicks(state.commandline, ":vs")
+        state.qtbot.keyClick(state.commandline, Qt.Key_Return)
+        _settle()
+        panes.append(status.get_editorstack())
+    first, second, third = sorted(
+        panes, key=lambda stack: stack.mapTo(stack.window(), stack.rect().topLeft()).x()
+    )
+    _focus_stack(state, first)
+
+    def navigate(key, expected, prefix=""):
+        state.qtbot.keyClicks(state.commandline, prefix)
+        state.qtbot.keyClick(state.commandline, Qt.Key_W, Qt.ControlModifier)
+        state.qtbot.keyClicks(state.commandline, key)
+        _settle()
+        assert status.get_editorstack() is expected
+        assert status.is_normal()
+        assert status.sub_mode is None
+        assert state.commandline.hasFocus()
+        assert state.commandline.text() == ""
+        assert expected.window() is first.window()
+
+    navigate("w", second)
+    navigate("w", third)
+    navigate("w", first)
+    navigate("p", third)
+    navigate("p", first)
+    navigate("w", second, prefix="2")
+    navigate("3w", third)
+    # Direct editor focus must also update the previous split.
+    _focus_stack(state, second)
+    navigate("p", third)
+    navigate("p", second)
+
+
 @pytest.mark.parametrize("host", ["main", "undocked", "window"])
 def test_control_w_closes_current_split(editor_windows, host):
     """Close the selected split and keep the final pane and its files open."""

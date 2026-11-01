@@ -116,17 +116,8 @@ class NormalModeExecutor(MovementMixin, ExecutorBase):
         self.vim_status.to_visual_line()
 
     def J(self, count=1, count_text=""):
-        """Join lines, with a minimum of two lines."""
-        cursor = self.get_cursor()
-
-        if count > 1:
-            count -= 1
-
-        block_no_start = cursor.blockNumber()
-        block_no_end = cursor.blockNumber() + count
-        cursor_pos_start = cursor.position()
-
-        self.edits.join_lines(cursor_pos_start, block_no_start, block_no_end)
+        """Join counted lines or the selected rows with spaces."""
+        self.edits.join_lines(count)
 
     def o(self, count=1, count_text=""):
         """Begin a new line below the cursor and insert text."""
@@ -600,7 +591,7 @@ class NormalModeExecutor(MovementMixin, ExecutorBase):
             return ExecutorTransition(executor_sub, True)
 
     def at(self, count=1, count_text=""):
-        """Execute contents of register."""
+        """Execute a register, with ``@@`` repeating the last executed register."""
         if self.vim_status.is_recording_macro():
             self.vim_status.manager_macro.remove_last_key("@")
             return
@@ -608,14 +599,14 @@ class NormalModeExecutor(MovementMixin, ExecutorBase):
         executor_sub = self.submodes.mark_name
 
         manager_macro = self.vim_status.manager_macro
+
+        def execute(register):
+            manager_macro.set_info_for_execute(register, count)
+            if not manager_macro.reg_name_for_execute:
+                self.vim_status.set_message("No previously used register")
+
         self.set_parent_info_to_submode(executor_sub, count, count_text)
-        executor_sub.set_func_list_deferred(
-            [
-                DeferredAction(
-                    lambda x: manager_macro.set_info_for_execute(x, count), True
-                )
-            ]
-        )
+        executor_sub.set_func_list_deferred([DeferredAction(execute, True)])
 
         return ExecutorTransition(executor_sub, True)
 

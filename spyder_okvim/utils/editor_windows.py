@@ -1,10 +1,99 @@
-"""Move Vim input between neighboring editor panes."""
+"""Navigate live editor panes and retain per-window focus history."""
+
+# Standard Libraries
+import weakref
 
 # Third Party Libraries
 from qtpy.QtCore import QPoint, QRect
+from qtpy.QtWidgets import QSplitter
 
 # Project Libraries
-from spyder_okvim.utils.qtcompat import widget_is_deleted
+from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
+
+
+def remember_pane(vim_status, stack):
+    """Record focus changes without keeping closed panes or windows alive."""
+    if stack is None or widget_is_deleted(stack):
+        return
+    history = vim_status.pane_history.setdefault(stack.window(), [])
+    history[:] = [
+        reference
+        for reference in history
+        if live_widget(reference) is not None and reference() is not stack
+    ]
+    history.append(weakref.ref(stack))
+
+
+def _splitter_path(pane):
+    """Return child indices from the root splitter to this pane."""
+    path = []
+    parent = pane.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QSplitter):
+            path.append(parent.indexOf(pane))
+        pane, parent = parent, parent.parentWidget()
+    return tuple(reversed(path))
+
+
+def _visible_panes(vim_status):
+    """List usable panes within the active window."""
+    current = vim_status.get_editorstack()
+    if current is None or widget_is_deleted(current) or not current.isVisible():
+        return []
+    host = current.window()
+    widget = vim_status.editor_widget.get_widget()
+    panes = []
+    for stack in getattr(widget, "editorstacks", ()):
+        if (
+            stack is None
+            or widget_is_deleted(stack)
+            or not stack.isVisible()
+            or stack.window() is not host
+        ):
+            continue
+        editor = stack.get_current_editor()
+        if editor is not None and not widget_is_deleted(editor):
+            panes.append(stack)
+    return panes
+
+
+def _focus_pane(vim_status, stack):
+    """Select a usable pane and restore Vim input after the host rebinds it."""
+    remember_pane(vim_status, vim_status.get_editorstack())
+    stack.get_current_editor().setFocus()
+    remember_pane(vim_status, stack)
+    vim_status.set_focus_to_vim()
+    return True
+
+
+def focus_cycle(vim_status, number=None):
+    """Cycle to the next split, or select a one-based split number with a count."""
+    panes = _visible_panes(vim_status)
+    current = vim_status.get_editorstack()
+    if current not in panes:
+        return False
+    panes.sort(key=_splitter_path)
+    index = (
+        (panes.index(current) + 1) % len(panes)
+        if number is None
+        else min(max(number, 1), len(panes)) - 1
+    )
+    if panes[index] is current:
+        return False
+    return _focus_pane(vim_status, panes[index])
+
+
+def focus_previous(vim_status):
+    """Return to the previous available split in this host, without crossing windows."""
+    panes = _visible_panes(vim_status)
+    current = vim_status.get_editorstack()
+    if current not in panes:
+        return False
+    for reference in reversed(vim_status.pane_history.get(current.window(), ())):
+        target = live_widget(reference)
+        if target is not current and target in panes:
+            return _focus_pane(vim_status, target)
+    return False
 
 
 def _neighbor_score(source, target, direction):
@@ -40,34 +129,23 @@ def focus_neighbor(vim_status, direction: str) -> bool:
     if direction not in ("h", "j", "k", "l"):
         raise ValueError(f"Unknown editor direction: {direction!r}")
 
+    panes = _visible_panes(vim_status)
     current = vim_status.get_editorstack()
-    if current is None or widget_is_deleted(current) or not current.isVisible():
+    if not panes:
         return False
     host = current.window()
     source_rect = QRect(current.mapTo(host, QPoint()), current.size())
-    widget = vim_status.editor_widget.get_widget()
     best_score = None
-    target_editor = None
-    for stack in getattr(widget, "editorstacks", ()):
-        if (
-            stack is None
-            or stack is current
-            or widget_is_deleted(stack)
-            or not stack.isVisible()
-            or stack.window() is not host
-        ):
-            continue
-        editor = stack.get_current_editor()
-        if editor is None or widget_is_deleted(editor):
+    target_stack = None
+    for stack in panes:
+        if stack is current:
             continue
         rect = QRect(stack.mapTo(host, QPoint()), stack.size())
         score = _neighbor_score(source_rect, rect, direction)
         if score is not None and (best_score is None or score < best_score):
             best_score = score
-            target_editor = editor
+            target_stack = stack
 
-    if target_editor is None:
+    if target_stack is None:
         return False
-    target_editor.setFocus()
-    vim_status.set_focus_to_vim()
-    return True
+    return _focus_pane(vim_status, target_stack)

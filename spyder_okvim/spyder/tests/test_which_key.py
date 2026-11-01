@@ -152,7 +152,7 @@ def test_delayed_prefix_hints_preserve_mode_selection_and_focus(
     popup = state.controller.popup
     candidates = _candidate_texts(popup)
     if prefix == "g":
-        assert set(candidates) == set("gdtTuUc~")
+        assert set(candidates) == set("gdtTuUc~J")
     elif prefix == "z":
         assert set(candidates) == set("ztb")
     elif prefix == "'":
