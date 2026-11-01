@@ -101,7 +101,7 @@ class VimStatus(QObject):
         self.put_controller = None
 
         # search
-        self.search = SearchInfo(self.cursor, self, settings=self.settings)
+        self.search = SearchInfo(self.cursor, self)
         self.last_substitute = None
         self.substitute_confirm = None
 
@@ -417,7 +417,6 @@ class VimStatus(QObject):
         self.remove_marker_of_easymotion()
         editor = self.get_editor()
         self.painter_easymotion.editor = editor
-        self.painter_easymotion.settings = self.settings
         self.painter_easymotion.label_rects = self.manager_marker_easymotion.label_rects
         self.painter_easymotion.positions = self.manager_marker_easymotion.position_list
         self.painter_easymotion.names = self.manager_marker_easymotion.name_list
@@ -470,7 +469,7 @@ class VimStatus(QObject):
                 break
 
             label = self.labels_for_annotate[idx]
-            label.set_style(font.family(), font.pointSize(), editor, self.settings)
+            label.set_style(font.family(), font.pointSize(), editor)
             text_width_px = max(text_width(fm, data), ch_width)
             label_width = text_width_px + padding_h
             label_height = ch_height + padding_v

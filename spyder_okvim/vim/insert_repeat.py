@@ -5,12 +5,12 @@ only while inserting and disconnects the captured editor before cancellation.
 Pure replay values remain in state.py; no UI widget is traversed from here.
 """
 
-# Standard Libraries
-from contextlib import contextmanager
-
 # Third Party Libraries
 from qtpy.QtCore import QCoreApplication, QEvent, QObject, Qt
 from qtpy.QtGui import QKeySequence, QTextCursor
+
+# Project Libraries
+from spyder_okvim.utils.undo import UndoGroup, notify_document_change
 
 from .state import DotCmdInfo, InputSource, KeyInfo
 
@@ -23,26 +23,15 @@ class InsertEdit:
         self.command = command
         self.count = count
         self.edit_cursor = editor.textCursor()
-        self.has_edit = False
-        self.initial_revision = self.edit_cursor.document().revision()
+        self.undo_group = UndoGroup(editor, self.edit_cursor)
+        self.undo_group.start()
         self.start_cursor = QTextCursor(self.edit_cursor)
         self.start_cursor.setKeepPositionOnInsert(True)
         self.end_cursor = QTextCursor(self.edit_cursor)
 
-    @contextmanager
     def edit_block(self):
         """Join edits while delivering document signals after every event."""
-        document = self.edit_cursor.document()
-        revision = document.revision()
-        if self.has_edit or revision != self.initial_revision:
-            self.edit_cursor.joinPreviousEditBlock()
-        else:
-            self.edit_cursor.beginEditBlock()
-        try:
-            yield
-        finally:
-            self.edit_cursor.endEditBlock()
-            self.has_edit = self.has_edit or document.revision() != revision
+        return self.undo_group.edit_block()
 
 
 # Historical public name; the implementation now lives with its edit lifetime.
@@ -155,35 +144,38 @@ class InsertRepeatSession(QObject):
         info = self.insertion
         if info is None:
             return
-        self.insertion = None
-        self.disconnect_from_editor()
         try:
-            info.editor.removeEventFilter(self)
-        except RuntimeError:
-            return  # The editor has already been closed.
-        editor = info.editor
-        if not apply_count or editor is not self.status.get_editor():
-            return
-        cursor = editor.textCursor()
-        start = info.start_cursor.position()
-        end = cursor.position()
-        if end != info.end_cursor.position():
-            # Also guard cursor changes made with the mouse or editor APIs.
-            info.count = 1
-        if info.count > 1 and end >= start:
-            inserted = QTextCursor(cursor)
-            inserted.setPosition(start)
-            inserted.setPosition(end, QTextCursor.KeepAnchor)
-            text = inserted.selectedText().replace("\u2029", "\n")
-            if info.command in ("o", "O"):
-                text = "\n" + text
-            if text:
-                with info.edit_block():
-                    cursor.insertText(text * (info.count - 1))
-                editor.document_did_change()
-        if info.count > 1 and not cursor.atBlockStart():
-            cursor.movePosition(QTextCursor.PreviousCharacter)
-        editor.setTextCursor(cursor)
+            self.insertion = None
+            self.disconnect_from_editor()
+            try:
+                info.editor.removeEventFilter(self)
+            except RuntimeError:
+                return  # The editor has already been closed.
+            editor = info.editor
+            if not apply_count or editor is not self.status.get_editor():
+                return
+            cursor = editor.textCursor()
+            start = info.start_cursor.position()
+            end = cursor.position()
+            if end != info.end_cursor.position():
+                # Also guard cursor changes made with the mouse or editor APIs.
+                info.count = 1
+            if info.count > 1 and end >= start:
+                inserted = QTextCursor(cursor)
+                inserted.setPosition(start)
+                inserted.setPosition(end, QTextCursor.KeepAnchor)
+                text = inserted.selectedText().replace("\u2029", "\n")
+                if info.command in ("o", "O"):
+                    text = "\n" + text
+                if text:
+                    with info.edit_block():
+                        cursor.insertText(text * (info.count - 1))
+                    notify_document_change(editor)
+            if info.count > 1 and not cursor.atBlockStart():
+                cursor.movePosition(QTextCursor.PreviousCharacter)
+            editor.setTextCursor(cursor)
+        finally:
+            info.undo_group.finish()
 
     def update_dot_cmd(
         self, connect_editor, register_name=None, key_list_to_cmd_line=None

@@ -186,7 +186,7 @@ def test_external_changes_expire_session(vim_bot, action):
     elif action == "undo":
         editor.undo()
     elif action == "clear_undo":
-        editor.document().clearUndoRedoStacks()
+        editor.clear_undo_stack()
     else:
         editor.setReadOnly(True)
     try:

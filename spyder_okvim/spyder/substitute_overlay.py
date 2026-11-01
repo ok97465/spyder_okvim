@@ -21,6 +21,7 @@ from qtpy.QtWidgets import QWidget
 
 # Project Libraries
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
+from spyder_okvim.utils.theme import readable_color
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class SubstituteOverlay(QObject):
         self.clear()
         previous_editor = live_widget(self._editor)
         if previous_editor is not None:
+            previous_editor.removeEventFilter(self)
             previous_editor.viewport().removeEventFilter(self)
         for signal, slot in self._connections:
             try:
@@ -97,12 +99,16 @@ class SubstituteOverlay(QObject):
         self._widget.hide()
         self._widget.installEventFilter(self)
         viewport.installEventFilter(self)
+        editor.installEventFilter(self)
         self._connections = [
             (editor.updateRequest, self._view_changed),
             (editor.verticalScrollBar().valueChanged, self._view_changed),
             (editor.horizontalScrollBar().valueChanged, self._view_changed),
             (editor.destroyed, self._editor_destroyed),
         ]
+        signal = getattr(editor, "sig_theme_colors_changed", None)
+        if signal is not None:
+            self._connections.append((signal, self.refresh_appearance))
         for signal, slot in self._connections:
             signal.connect(slot)
         self.refresh_geometry()
@@ -155,6 +161,11 @@ class SubstituteOverlay(QObject):
         self._widget = None
         self._connections = []
 
+    def refresh_appearance(self, *args):
+        """Discard paint layouts without requesting another substitution scan."""
+        self._layouts.clear()
+        self.refresh_geometry()
+
     def eventFilter(self, watched, event):
         widget = self.widget
         if widget is not None and watched is widget and event.type() == QEvent.Paint:
@@ -162,13 +173,19 @@ class SubstituteOverlay(QObject):
                 painter.setClipRect(event.rect())
                 self._paint(painter)
             return True
-        if widget is not None and watched is widget.parentWidget():
+        if widget is not None and watched in (
+            widget.parentWidget(),
+            live_widget(self._editor),
+        ):
             if event.type() in (QEvent.Resize, QEvent.FontChange):
                 self._layouts.clear()
                 self._view_changed()
-            elif event.type() in (QEvent.PaletteChange, QEvent.StyleChange):
-                self._layouts.clear()
-                self.refresh_geometry()
+            elif event.type() in (
+                QEvent.PaletteChange,
+                QEvent.ApplicationPaletteChange,
+                QEvent.StyleChange,
+            ):
+                self.refresh_appearance()
         return super().eventFilter(watched, event)
 
     def _valid_editor(self):
@@ -181,8 +198,13 @@ class SubstituteOverlay(QObject):
     def _colors(editor):
         palette = editor.palette()
         background = palette.color(QPalette.Base)
-        foreground = palette.color(QPalette.Text)
-        accent = palette.color(QPalette.Highlight)
+        foreground = readable_color(palette.color(QPalette.Text), background)
+        accent = readable_color(
+            palette.color(QPalette.Highlight),
+            background,
+            foreground,
+            minimum_ratio=3.0,
+        )
         tint = QColor(
             round(background.red() * 0.75 + accent.red() * 0.25),
             round(background.green() * 0.75 + accent.green() * 0.25),
@@ -220,7 +242,7 @@ class SubstituteOverlay(QObject):
                 current += 1
         return formats
 
-    def _layout_row(self, editor, block, row):
+    def _layout_row(self, editor, block, row, foreground, tint):
         source_layout = block.layout()
         if source_layout is None or not source_layout.lineCount():
             return None
@@ -233,7 +255,6 @@ class SubstituteOverlay(QObject):
         option = QTextOption(source_layout.textOption())
         option.setTabStopDistance(editor.tabStopDistance())
         font = editor.font()
-        _background, foreground, _accent, tint = self._colors(editor)
         source_formats = source_layout.formats()
         key = (
             row,
@@ -257,10 +278,11 @@ class SubstituteOverlay(QObject):
         layout = QTextLayout(row.after, font)
         layout.setTextOption(option)
         formats = self._syntax_formats(source_formats, row.source_spans)
+        changed_foreground = readable_color(foreground, tint)
         for start, end in row.replacements:
             changed = QTextLayout.FormatRange()
             changed.start, changed.length = start, end - start
-            changed.format.setForeground(foreground)
+            changed.format.setForeground(changed_foreground)
             changed.format.setBackground(tint)
             formats.append(changed)
         layout.setFormats(formats)
@@ -288,6 +310,7 @@ class SubstituteOverlay(QObject):
         viewport = editor.viewport()
         visible = QRectF(viewport.rect())
         offset = editor.contentOffset()
+        _background, foreground, _accent, tint = self._colors(editor)
         rendered = []
         for row in self.rows:
             block = editor.document().findBlockByNumber(row.block_number)
@@ -304,7 +327,7 @@ class SubstituteOverlay(QObject):
             ).intersected(visible)
             if rect.isEmpty():
                 continue
-            calculated = self._layout_row(editor, block, row)
+            calculated = self._layout_row(editor, block, row, foreground, tint)
             if calculated is None:
                 continue
             layout, overflow = calculated
@@ -345,7 +368,7 @@ class SubstituteOverlay(QObject):
             )
             painter.setPen(foreground)
             row.layout.draw(painter, row.origin)
-            painter.setPen(QPen(QColor("#e76f51"), 2))
+            painter.setPen(QPen(accent, 2))
             for point in row.deletions:
                 bottom = point + QPointF(0, editor.fontMetrics().height() - 1)
                 painter.drawLine(point, bottom)

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QPoint, QRect, QSize, Qt
+from qtpy.QtGui import QFont
 from qtpy.QtWidgets import QAbstractScrollArea
 from spyder.config.manager import CONF
 
@@ -620,6 +621,11 @@ def test_easymotion_transition_hides_leader_hints(which_key):
 @pytest.mark.parametrize("size", [(360, 260), (700, 400)])
 def test_compact_popup_keeps_every_candidate_reachable(which_key, size):
     state = which_key
+    # Exercise narrow/wide layouts independently of the user's editor font.
+    previous_font = QFont(state.commandline.font())
+    font = QFont(previous_font)
+    font.setPointSize(12)
+    state.commandline.setFont(font)
     popup = _show(state)
     viewport = state.editor.viewport()
     editor = state.editor
@@ -652,6 +658,7 @@ def test_compact_popup_keeps_every_candidate_reachable(which_key, size):
         assert popup.focusPolicy() == Qt.NoFocus
         assert state.commandline.hasFocus()
     finally:
+        state.commandline.setFont(previous_font)
         editor.setMinimumSize(previous_minimum)
         editor.setMaximumSize(previous_maximum)
         editor.resize(previous_size)

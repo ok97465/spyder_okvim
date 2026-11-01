@@ -1,13 +1,31 @@
 """Overflow hint menus keep every row reachable without taking focus."""
 
+# Standard Libraries
+from importlib import import_module
+from pkgutil import iter_modules
+from types import SimpleNamespace
+
 # Third Party Libraries
 import pytest
+import spyder_themes
 from qtpy.QtCore import QCoreApplication, QPoint, QRect, Qt
-from qtpy.QtGui import QFont
+from qtpy.QtGui import QColor, QFont, QPalette
 from qtpy.QtWidgets import QScrollArea, QWidget
 
 # Project Libraries
+from spyder_okvim.spyder import which_key_popup
 from spyder_okvim.spyder.which_key_popup import WhichKeyPopup
+from spyder_okvim.utils.theme import contrast_ratio
+
+
+def installed_palettes():
+    """Include newly installed themes without maintaining a list of names."""
+    for info in iter_modules(spyder_themes.__path__):
+        module = import_module(f"spyder_themes.{info.name}")
+        for mode in ("Dark", "Light"):
+            palette = getattr(module, f"SpyderPalette{mode}", None)
+            if palette is not None:
+                yield pytest.param(palette, id=f"{info.name}/{mode.lower()}")
 
 
 @pytest.fixture
@@ -104,3 +122,62 @@ def test_resizing_restores_scrollable_and_compact_layouts(popup):
             last_description.size(),
         )
         assert scroll.viewport().rect().contains(bounds)
+
+
+@pytest.mark.parametrize("palette", list(installed_palettes()))
+def test_key_labels_are_readable_in_every_installed_theme(popup, monkeypatch, palette):
+    """Check the polished widget colors, including bright accents on light UI."""
+    _, panel = popup
+    monkeypatch.setattr(which_key_popup, "SpyderPalette", palette)
+    panel.set_candidates("g", [("g", "Go to line")])
+    panel.refresh_appearance(QFont("Courier New", 10))
+    panel.ensurePolished()
+    key_label, description_label = panel.candidate_labels[0]
+    for label in (key_label, description_label):
+        label.ensurePolished()
+        assert (
+            contrast_ratio(
+                label.palette().color(QPalette.WindowText),
+                panel.palette().color(QPalette.Window),
+            )
+            >= 4.5
+        )
+
+
+def test_new_palette_refreshes_existing_labels_and_preserves_readable_accent(
+    popup, monkeypatch
+):
+    _, panel = popup
+    panel.set_candidates("g", [("g", "Go to line")])
+    key_label, description_label = panel.candidate_labels[0]
+    palettes = (
+        # Both supplied text colors are too faint: use a readable fallback.
+        SimpleNamespace(
+            COLOR_BACKGROUND_1="#ffffff",
+            COLOR_BACKGROUND_4="#eeeeee",
+            COLOR_TEXT_1="#dddddd",
+            COLOR_ACCENT_4="#eeeeee",
+        ),
+        # A distinctive accent with sufficient contrast must survive unchanged.
+        SimpleNamespace(
+            COLOR_BACKGROUND_1="#101010",
+            COLOR_BACKGROUND_4="#222222",
+            COLOR_TEXT_1="#eeeeee",
+            COLOR_ACCENT_4="#78d7e8",
+        ),
+    )
+    for palette in palettes:
+        monkeypatch.setattr(which_key_popup, "SpyderPalette", palette)
+        panel.refresh_appearance(QFont("Courier New", 10))
+        panel.ensurePolished()
+        for label in (key_label, description_label):
+            label.ensurePolished()
+            assert (
+                contrast_ratio(
+                    label.palette().color(QPalette.WindowText),
+                    panel.palette().color(QPalette.Window),
+                )
+                >= 4.5
+            )
+        assert panel.candidate_labels[0] == (key_label, description_label)
+    assert key_label.palette().color(QPalette.WindowText) == QColor("#78d7e8")

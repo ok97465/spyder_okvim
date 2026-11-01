@@ -17,7 +17,7 @@ from qtpy.QtWidgets import (
     QTableView,
     QVBoxLayout,
 )
-from spyder.config.gui import get_font
+from spyder.utils.fonts import get_font
 from spyder.utils.palette import SpyderPalette
 
 

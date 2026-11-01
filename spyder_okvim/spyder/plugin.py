@@ -20,13 +20,14 @@ import qtawesome as qta
 from qtpy.QtCore import QCoreApplication, QEvent, QSize, Qt, Signal
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut, QSizePolicy
+from spyder.api.fonts import SpyderFontType
 from spyder.api.plugin_registration.decorators import (
     on_plugin_available,
     on_plugin_teardown,
 )
 from spyder.api.plugins import Plugins, SpyderDockablePlugin
 from spyder.api.widgets.status import StatusBarWidget
-from spyder.utils.icon_manager import MAIN_FG_COLOR
+from spyder.utils.icon_manager import ima
 
 # Project Libraries
 from spyder_okvim.spyder.api import CustomLayout
@@ -148,7 +149,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     CONF_SECTION = CONF_SECTION
     CONF_WIDGET_CLASS = OkvimConfigPage
     CONF_DEFAULTS = CONF_DEFAULTS
-    CONF_ = CONF_VERSION
+    CONF_VERSION = CONF_VERSION
     CUSTOM_LAYOUTS = [CustomLayout]
     CAN_BE_DISABLED = True
     RAISE_AND_FOCUS = True
@@ -173,11 +174,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     @classmethod
     def get_icon(cls):
         """Return widget icon."""
-        return qta.icon("mdi.vimeo", color=MAIN_FG_COLOR)
+        return qta.icon("mdi.vimeo", color=ima.MAIN_FG_COLOR)
 
     def on_initialize(self) -> None:
         """Perform plugin initialization after it is added to Spyder."""
         vim_cmd = self.get_widget().vim_cmd
+        self.update_font()
 
         status_bar_widget = StatusBarVimWidget(
             self._main,
@@ -189,6 +191,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         statusbar = self.get_plugin(Plugins.StatusBar)
         statusbar.add_status_widget(status_bar_widget)
         self._status_bar_widget = status_bar_widget
+        self._statusbar_attached = True
         self._main_statusbar = status_bar_widget.parentWidget()
 
         self._editor_widget = vim_cmd.editor_widget.get_widget()
@@ -340,6 +343,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _move_statusbar(self, statusbar):
         """Reparent the same status widget without changing its registration."""
+        if not self._statusbar_attached:
+            return
         widget = self._status_bar_widget
         if widget.parentWidget() is not statusbar:
             widget.parentWidget().removeWidget(widget)
@@ -373,6 +378,22 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         preferences = self.get_plugin(Plugins.Preferences)
         preferences.register_plugin_preferences(self)
 
+    @on_plugin_teardown(plugin=Plugins.Preferences)
+    def on_preferences_teardown(self) -> None:
+        """Remove the preference page when this plugin or Preferences stops."""
+        preferences = self.get_plugin(Plugins.Preferences)
+        preferences.deregister_plugin_preferences(self)
+
+    @on_plugin_teardown(plugin=Plugins.StatusBar)
+    def on_statusbar_teardown(self) -> None:
+        """Release the status ID so disabling and re-enabling OkVim is safe."""
+        if getattr(self, "_statusbar_attached", False):
+            self._move_statusbar(self._main_statusbar)
+            statusbar = self.get_plugin(Plugins.StatusBar)
+            statusbar.remove_status_widget(StatusBarVimWidget.ID)
+            self._status_bar_widget.hide()
+            self._statusbar_attached = False
+
     @on_plugin_available(plugin=Plugins.Switcher)
     def on_switcher_available(self) -> None:
         """Add Vim navigation to Spyder's shared file and symbol switcher."""
@@ -392,6 +413,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         valid = True
         message = ""  # Note: Remember to use _("") to localize the string
         return valid, message
+
+    def update_font(self) -> None:
+        """Follow Spyder's editor font for commands and their popup contents."""
+        widget = self.get_widget()
+        if widget is not None:
+            widget.vim_cmd.commandline.setFont(self.get_font(SpyderFontType.Monospace))
 
     def on_close(self, cancellable: bool = True) -> bool:
         """Handle plugin shutdown."""
@@ -425,6 +452,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             # it is deleted after the plugin has stopped tracking reparenting.
             self._move_statusbar(self._main_statusbar)
             self._move_labels(self._editor_widget)
+        self.on_statusbar_teardown()
         widget = self.get_widget()
         if widget is not None:
             try:

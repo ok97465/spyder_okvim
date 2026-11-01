@@ -1,2 +1,2 @@
-python >=3.9
-spyder >= 6.1.0
+python >=3.11
+# Spyder's target prerelease is installed from PyPI by the test workflow.

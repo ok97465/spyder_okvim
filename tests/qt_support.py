@@ -67,9 +67,14 @@ class StatusBarMock(QStatusBar):
 
     def __init__(self):
         super().__init__(None)
+        self.STATUS_WIDGETS = {}
 
     def add_status_widget(self, widget):
+        self.STATUS_WIDGETS[widget.ID] = widget
         self.insertPermanentWidget(0, widget)
+
+    def remove_status_widget(self, id_):
+        self.removeWidget(self.STATUS_WIDGETS.pop(id_))
 
 
 class MainMock(QWidget):
@@ -205,7 +210,7 @@ def reset_vim_state(status):
     status.register_dict = defaultdict(RegisterInfo)
     status.search.close()
     status.search.deleteLater()
-    status.search = SearchInfo(status.cursor, status, settings=status.settings)
+    status.search = SearchInfo(status.cursor, status)
     status.last_substitute = None
     status.manager_macro = MacroManager()
     status.msg_prefix = ""

@@ -1,304 +1,197 @@
-# Command dispatch, input and editor lifetimes
+# Architecture and maintenance
 
-Command execution, input observation, and hint rendering have separate owners.
-Executors update Vim state; which-key observes completed input and displays
-available continuations without executing commands or taking keyboard focus.
+This guide describes the boundaries to preserve when changing commands, editor
+integration or passive UI. See the [user guide](../README.md) for supported keys.
+Source paths below are relative to `spyder_okvim/`.
 
-## Module grouping and state ownership
+## Ownership
 
-The existing packages stay in place. Related handlers and small collaborators
-share a file; separate files represent distinct behavior or lifetimes rather
-than one class each.
-
-| Location | Responsibility |
+| Area | Owner and responsibility |
 | --- | --- |
-| `executor/executor_normal.py`, `executor_visual.py`, `executor_vline.py` | `NormalModeExecutor`, `VisualModeExecutor` and `VisualLineModeExecutor` interpret their mode's input and apply its selection policy. |
-| `executor/operators.py` | Pending d/c/y operators and inner/around text-object input stay together so count and word-rule differences can be read side by side. |
-| `executor/prefixes.py` | Small g/register/character/structure/window handlers and `ModeSubmodes` share the continuation contract. Every mode receives its own instances. |
-| `executor/search_prompt.py`, `executor/leap_input.py` | Search preview/confirmation and Leap target selection have independent input sessions. |
-| `utils/motions.py`, `utils/text_objects.py`, `utils/editing.py` | Motion computation, read-only text-object ranges and document edits have explicit collaborators. Basic, line and word motions remain together. |
-| `vim/insert_repeat.py`, `vim/registers.py` | Insert/count/undo and dot recording have one owner; register rules and bounded yank history have another. |
-| `spyder/commandline_input.py`, `spyder/macro_playback.py` | Prompt/IME/navigation state and queued macro playback each have a cohesive owner. |
-| `spyder/vim_widgets.py`, `spyder/editor.py` | Small pane/label/shortcut classes stay with screen assembly; host file, IDE and language-aware editor operations go through `EditorCommands`. |
+| Spyder integration | [spyder/plugin.py](../spyder_okvim/spyder/plugin.py) binds the active editor stack and moves the shared Vim UI between host windows. [spyder/editor.py](../spyder_okvim/spyder/editor.py) supplies file, IDE and language-aware editor operations. |
+| Command dispatch | [spyder/vim_widgets.py](../spyder_okvim/spyder/vim_widgets.py) assembles services and guards input dispatch. [vim/status.py](../spyder_okvim/vim/status.py) coordinates modes and creates per-executor services. |
+| Vim grammar | [executor/](../spyder_okvim/executor) contains mode, operator and prefix executors. Commands use `CursorMotions`, `TextObjects` and `EditingActions` for ranges and edits. |
+| Prompt and passive UI | [spyder/commandline_input.py](../spyder_okvim/spyder/commandline_input.py) owns input, IME and applied completion. Popup, which-key and preview controllers observe stable input and manage their own timers and views. |
+| Editing state | [vim/insert_repeat.py](../spyder_okvim/vim/insert_repeat.py), [vim/registers.py](../spyder_okvim/vim/registers.py) and [utils/put.py](../spyder_okvim/utils/put.py) own insertion/repeat, registers and reversible put sessions. |
+| Navigation | [utils/bookmark_manager.py](../spyder_okvim/utils/bookmark_manager.py) owns marks and persistence callbacks; [utils/jump_list.py](../spyder_okvim/utils/jump_list.py) owns jump navigation. Dialogs consume prepared rows or snapshots. |
 
-`VimStatus` coordinates modes and exposes the feature owners. Its legacy accessors
-delegate to those owners rather than maintain duplicate register or insertion
-state. `VimStatus.create_command_services()` is the single assembly point for
-command services. Each executor receives its own
-`CursorMotions` and `EditingActions(status, motions)` as `motions` and `edits`;
-stateful Leap/search continuations are never global singletons.
+`vim/state.py`, register rules and yank values remain importable without Qt or
+Spyder. `vim/__init__.py` resolves exports lazily. Keep model imports independent
+of editor services and import features from their owning modules.
 
-`CursorMotions.text_objects` is a `TextObjects` calculator bound to a cursor
-provider. Both operators and edits use its named methods such as `inner_word()`
-and `around_bracket()`. Editing actions receive session state directly instead
-of obtaining it indirectly through a motion helper. Search motions still live
-with cursor motions, while `utils/search_helpers.py` supplies explicit case
-policy and Qt matching shared with substitution.
+## Commands and ranges
 
-Document offsets and Visual columns use Qt UTF-16 units, and block numbers are
-zero-based. Ex line addresses and dialog display coordinates are one-based.
-Character text-object ranges are half-open. Linewise ranges can end at the last
-block's content end, with the applying policy adding its separator as needed.
-`MotionType` determines how endpoints expand for an edit or selection. Keep
-these contracts in value and API docstrings when adding a range calculation.
-
-`vim/state.py`, register rules and yank values can be imported without Qt or
-Spyder. `vim/__init__.py` resolves its public exports lazily; importing a model
-must not eagerly load editor services. `KeyInfo.source` uses the named
-`InputSource.COMMAND_LINE`/`EDITOR` routes while preserving recorded key values.
-`KeyInfo.to_event()` performs Qt conversion only when replay needs it.
-
-## Declaring commands
-
-`executor/executor_base.py` defines `CommandSpec(key, method_name, description)`.
-Discrete prefix executors declare an ordered `command_specs` tuple of raw
-single-character keys. The base executor derives accepted keys, method dispatch,
-and hint descriptions from it.
-The `g`, operator-`g`, `z`, and leader executors use this mechanism.
-
-For example, `GPrefixExecutor` in `executor/prefixes.py` includes:
+Discrete prefix executors declare ordered `CommandSpec` values in
+[executor_base.py](../spyder_okvim/executor/executor_base.py). Accepted keys,
+dispatch and default hints come from that declaration:
 
 ```python
 command_specs = (
     CommandSpec("g", "g", "Go to line"),
     CommandSpec("d", "d", "Go to definition"),
     CommandSpec("~", "tilde", "Swap case"),
-    # Add another CommandSpec here when implementing a new g command.
 )
 ```
 
-To add a command, implement its named method with the usual
-`(self, count=1, count_text="")` signature and add its specification. `count`
-is the effective number and `count_text` retains the original typed prefix:
-an absent count and an explicit `1` differ for commands such as `gg` and dot.
-There is no separate hint list or key expression to update. Raw keys preserve case and can
-use method names such as `tilde` for punctuation. Tuple order controls hint order.
+Add the specification and its method with `(self, count=1, count_text="")`.
+`count` is the effective number; `count_text` preserves the typed prefix, since
+an implicit count and an explicit `1` can have different repeat semantics.
+Tuple order determines hint order. Commands with count, text or motion grammar
+use their executor's parser instead of the discrete-key table.
 
-Leader commands follow the same declaration. For example,
-`CommandSpec("f", "formatting", "Format document or selection")` binds the
-existing `formatting` method. `ExecutorLeaderKey.set_easymotion_key()` rebuilds
-the effective commands from the defaults and adds the configured leader as the
-EasyMotion continuation. A collision replaces that key's default command;
-changing the leader restores the previous default binding.
+Each mode gets its own stateful continuations. `DeferredAction` describes work
+waiting for a motion; `ExecutorTransition` selects the next executor and whether
+to clear the displayed input. Execute deferred edits only after the motion is
+confirmed. Hint providers return key/description pairs and must remain read-only:
+no register creation, clipboard access, cursor movement or document edits.
 
-Other executors retain their existing parsers where counts, text input, or motion
-grammar require them. The `submode` decorator carries parent counts and prepares
-deferred actions without executing them. `DeferredAction` describes the callback
-and whether it consumes a motion; `ExecutorTransition` selects the next executor
-and whether to clear the displayed command line. That flag does not indicate
-whether an edit succeeded. A pending operator's actions run after its motion is
-confirmed, not during search or hint preview.
+Range calculations use these units:
 
-## Applied settings and host operations
+- Document offsets and Visual columns: Qt UTF-16 units; block numbers: zero-based.
+- Ex line addresses and displayed line/column numbers: one-based.
+- Prompt snapshots and `VimLineEdit.replace_input()`: Python string indices,
+  converted at the QLineEdit boundary.
+- Character text-object ranges: half-open. `MotionType` controls endpoint
+  expansion for selection or editing, including linewise separators.
 
-`spyder/config.py` reads a `PluginSettings` snapshot at the configuration boundary.
-Search, Leap and cursor code use the applied values rather than reading global
-configuration during a calculation. `resolve_ignorecase()` receives explicit
-ignorecase/smartcase values and an optional substitution i/I override.
+Keep conversions at API boundaries, especially for non-BMP characters. Shared
+case policy and Qt matching live in `utils/search_helpers.py`.
 
-`VimWidget.apply_settings()` refreshes that snapshot and applies cursor/search,
-bindings, completion, preview and hint preferences. Tests that change `CONF`
-must apply settings explicitly; the integration reset helper also refreshes the
-session's applied values.
+## Stable input and view lifetimes
 
-`EditorCommands` handles save/close/new/open, run/debug, formatting, language-aware
-indentation/commenting and Python/cell metadata. Commands retain Vim parsing,
-range selection and register/dot policy. File commands recheck document identity
-after operations that can process events, preserving debugger close guards,
-autosave cleanup and Save As cancellation. Run actions restore the original
-selection and command-input focus after the host action.
-
-## Dynamic hints
-
-Every executor exposes `hint_prefix` and `get_hint_candidates()`. A `None` prefix
-opts out. The default provider returns `(raw_key, description)` pairs from the
-effective command specifications. Register and mark executors override it to
-describe current state; register range labels can describe groups of keys.
-
-Providers must be read-only: do not create registers, read the clipboard, move the
-cursor, modify selections, or execute commands. Register previews use existing
-dictionary entries. Mark hints reflect whether the pending motion can change
-files. Dynamic candidates are evaluated when hints are about to be displayed,
-after the wait has earned its display delay.
-
-## Observing stable input
-
-`VimWidget` in `spyder/vim_widgets.py` owns command dispatch and composes input
-services; `MacroPlayback` in `spyder/macro_playback.py` owns macro playback.
-The widget's `input_processing()` context encloses key events, text changes, and replayed
-keys. Nested calls emit `sig_input_started` once at the outer entry and
-`sig_input_finished` once after the outer exit, including exception paths.
-`sig_command_changed` reports changes outside dispatch; `sig_command_cancelled`
-invalidates pending hints on cancellation or focus loss.
-
-`pending_hint()` returns an immutable `PendingHint` containing a weak editor
-reference, the active executor, Vim mode, and prefix. It returns `None` during
-input dispatch, dot execution, macro playback, or a mode without prefix hints.
-Macro suppression lasts until the final queued GUI key finishes, even if the
-worker thread has already stopped. `is_playing_macro` exposes the playback
-owner's active generation. The worker emits captured key values and completion
-in order; the GUI owner validates generation/editor identity and waits for any
-outer input guard before releasing playback. Hint consumers do not inspect
-worker or widget private execution flags.
-
-## Prompt input and shared view lifetime
-
-`VimLineEdit` in `spyder/commandline_input.py` owns prompt drafts, history/caret
-navigation, applied Tab candidates and native IME handling. `snapshot()` returns
-an immutable `PromptSnapshot` tied to the active executor, with a Python string
-cursor index and composition/replacement flags. Passive consumers reject
+`VimWidget.input_processing()` emits `sig_input_started` at the outer entry and
+`sig_input_finished` after the outer exit, including exception paths. Passive
+controllers synchronize after this boundary. `PromptSnapshot` captures the
+executor, text, Python cursor index and composition/replacement state; reject
 transient snapshots before scheduling completion or regex work.
 
-Controllers use `history_context()`, `replace_input()`, `browse_history()`,
-`reset_navigation()` and `apply_path_completion()` instead of reading private
-line-edit state. `replace_input()` accepts a Python cursor index and converts it
-at the QLineEdit boundary; callers must not pass a Qt UTF-16 position.
+Use the input owner's `history_context()`, `replace_input()`, `browse_history()`
+and `apply_path_completion()` APIs. An applied Tab cycle and an unaccepted popup
+row are distinct states: preserve Tab/Shift-Tab cycling and two-Enter acceptance
+when changing suggestions. See [path completion](commandline_completion_performance.md)
+for worker ownership and cancellation.
 
-An applied Tab cycle and the popup's unaccepted highlighted row are separate
-states. `completion_result` exposes the input's immutable candidate tuple and
-applied index. Two-Enter acceptance, Tab/Shift-Tab cycling, suffix preservation
-and the need to reaccept a Ctrl+N/P selection after Tab remain input contracts.
+`pending_hint()` excludes input dispatch, dot execution and macro playback.
+Macro suppression lasts until the final queued GUI key completes, even after
+the worker stops. Queued results and replayed keys must validate their generation
+and editor context before taking effect.
 
-`VimWidget.handle_prompt_event()` distributes shared view/focus policy without
-popup and preview controllers controlling each other. App deactivation suspends
-preview while retaining its draft/origin; permanent focus loss and view changes
-invalidate the appropriate requests. External document edits end preview, while
-confirmation cancellation keeps replacements already accepted. Public
-`cancel_pending_input()` and `VimStatus.cancel_pending_work()` release view-bound
-work and timers before editor replacement or shutdown.
+The plugin binds commands to an explicit editor stack before restoring input
+focus. Switching views cancels old requests; the same Vim widget and status UI
+move between the main window, undocked editor and editor windows. Navigation
+between panes uses live panes in the current host window.
 
-## Display and Qt lifecycle
+Hiding or deactivating a window suspends substitution preview while retaining
+its draft and origin. Permanent focus loss, editor replacement and shutdown
+cancel the relevant work. `cancel_pending_input()` and
+`VimStatus.cancel_pending_work()` are the shared cleanup boundaries; controllers
+also release their timers, signals and viewport children in `cleanup()`.
 
-`WhichKeyController` in `spyder/which_key.py` subscribes to the input signals,
-checks focus and editor visibility, and schedules one timer for each pending
-snapshot. Repeated observations preserve the original deadline. Input hides
-stale rows immediately; a surviving wait can reuse its elapsed delay.
+Use `live_widget()` and `widget_is_deleted()` from `utils/qtcompat.py` when
+following weak Qt references. A live Python wrapper can refer to a deleted C++
+object. Async callbacks must also recheck document identity/revision where their
+result depends on captured text, and must not refocus an obsolete editor.
 
-The controller follows the active editor viewport through `set_editor()`.
-View changes, viewport destruction, and shutdown cancel pending work and release
-the old popup. `cleanup()` also disconnects input signals and the timer.
-`VimWidget.apply_settings()` explicitly refreshes command bindings and which-key
-preferences; `set_leader_key()` only updates bindings and reports a change.
+## Edits, undo and registers
 
-`WhichKeyPopup` in `spyder/which_key_popup.py` owns labels, readable key names,
-theme/font styling, and geometry. It wraps descriptions to fit the viewport and
-adds scrolling for overflow. It does not interpret Vim state or handle commands.
+[utils/undo.py](../spyder_okvim/utils/undo.py) provides `undo_block()` for
+synchronous changes and `UndoGroup` for one logical change spanning events.
+It handles Spyder's custom undo stack, native Qt undo and the actual undo owner
+of a document shared by cloned views. Use its `editor_undo()`, `editor_redo()`
+and `notify_document_change()` helpers rather than assuming the active view owns
+the history or issuing duplicate language-server notifications.
 
-`SwitcherNavigation` in `spyder/switcher.py` separately attaches Ctrl+P/N handling
-to Spyder's file/symbol switcher. Plugin availability hooks attach and detach the
-filter; the main plugin event filter remains responsible for editor lifecycle.
+`Registers.update_registers()` records each logical yank/deletion once.
+Individual register writes, puts and history reads do not add yank entries.
+Clipboard access is injected into `Registers`; bookmark persistence uses
+callbacks supplied to `BookmarkManager`. Stored entries and dialog snapshots
+contain values rather than Qt widgets.
 
-`utils/qtcompat.py` provides `widget_is_deleted()` and `live_widget()` for safe
-access to weak Qt references across PyQt/PySide bindings. A live Python wrapper
-can still refer to a deleted C++ widget, so weak references alone are insufficient.
+`PutController` captures the original mode, selection, placement and count.
+Cycling uses a fixed history snapshot and joins replacements to the initial
+put's undo group. It validates both document state and the exact reversible
+patch, since Qt can defer change notifications inside edit blocks. Preserve the
+session's size budget and invalidate it on unrelated edits, navigation or undo.
+Dot repetition retains the put payload and Visual selection shape separately.
 
-## Yank history and put sessions
+## Substitution preview and execution
 
-`VimStatus.registers` owns register values and one `YankHistory` for the plugin
-instance; the status's `yank_history` accessor delegates to it. Immutable
-`YankEntry` values contain text, explicit character/line type, source, and bounded
-payload metadata, with no Qt references. Record each logical yank or deletion
-once in `update_registers()` after the existing register updates; individual
-`set_register()` writes, puts, and history reads do not record entries. Clipboard
-read/write and message callbacks are supplied to `Registers`, keeping those
-rules independent of Qt.
+| Layer | Responsibility |
+| --- | --- |
+| `utils/ex_parser.py`, `utils/substitute.py` | Parse addresses/flags and share matching, replacement expansion and paragraph assembly. |
+| `executor/executor_colon.py`, `utils/substitute_confirm.py` | Execute against the current document; manage interactive approval and one logical undo change. |
+| `utils/substitute_preview.py` | Calculate bounded candidate spans and requested visible paragraph results. |
+| `spyder/substitute_preview.py` | Own the Ex preview session, debounce/chunk timers, result validation and publication. |
+| `spyder/substitute_overlay.py` | Lay out and paint a passive viewport child using editor geometry and syntax formats. |
 
-`VimWidget` owns the `PutController`; executors call it directly through
-`VimStatus.put_controller`, without mode-specific forwarding helpers. The
-controller plans puts from the original mode, selection, placement, and count,
-and retains a reversible local patch.
-Cycling joins replacements to the original put's undo group. It uses a fixed
-entry snapshot and never changes register values or history order. Document,
-view, cursor, command, and undo validity determine whether a session can cycle;
-syntax-highlighter revision changes alone do not imply text edits.
-Exact patch validation is still required because Qt can defer text-change
-notifications until an outer edit block ends. Reversible patch capture is
-skipped when cycling is disabled or the put exceeds the session budget. The
-`after_cursor` argument describes p/P placement; Visual puts replace the captured
-selection. Planning values, `plan_put()` and application/cycling remain together
-in `utils/put.py` so this feature can be followed without extra forwarding files.
+Preview preserves document text, cursor/selection, scrolling, undo history and
+confirmed Vim records. Enter executes the normal substitution path against the
+current document; it does not apply a cached preview. Cancelling confirmation
+keeps approved replacements in their undo group.
 
-The history picker receives immutable entries and returns a selected value.
-`YankHistoryDialog` handles bounded display previews and table navigation only;
-each row retains its original entry in `Qt.UserRole`. `YankHistoryPicker` reads
-the result during the dialog's `finished` signal, before Qt deletes it, and owns target validation,
-focus/mode restoration, and the eventual put. `VimWidget` holds only the current
-picker; `is_current(picker)` and `on_finished(picker)` callbacks validate and
-release that ownership without exposing its private field. An old completion
-cannot release a replacement picker.
-View changes and cleanup invalidate requests so callbacks cannot edit or refocus
-an old editor.
+The overlay stays inside each original paragraph's height. Longer or additionally
+wrapped results are clipped, with an ellipsis and **Partial preview** indicator.
+Unchanged fragments retain syntax formats. Omitted output leaves source text
+visible; paint callbacks never run regex matching or replacement expansion.
 
-Snapshot puts keep only their entry, direction, and count in `PutPayload`.
-The Visual selection shape remains in `DotCmdInfo`, whose
-`selection_to_cmd_string()` is shared by ordinary and snapshot dot repetition.
-`InsertRepeatSession` owns that snapshot and the active `InsertEdit`, including
-count expansion, event forwarding and shared undo grouping. Key delivery for
-dot/macro uses the same insertion contract as actual editor input.
+Count-only (`n`) input highlights candidates. Confirmation (`c`) previews the
+all-approved result before execution enters interactive approval. Read-only
+documents can show preview without permitting edits. Prompt guidance can coexist
+with the overlay. Scan/output budgets, viewport priority and the single-regex-call
+limit are documented in [preview performance](substitute_preview_performance.md).
 
-`VimLineEdit` owns an immutable tuple of Tab candidates, the selected row, and
-the working directory. Observers reuse that tuple instead of copying the list.
-The applied text and whether a unique directory needs another lookup are
-derived from that row. `utils/commandline.py` supplies candidates to both Tab
-completion and automatic suggestions; substitution fields reuse one cached,
-immutable history snapshot without a separate history object.
+## Settings, themes and geometry
 
-Path completion uses one debounce timer connected for the controller's lifetime.
-Its current request is cleared on invalidation; worker generations reject stale
-results. The background runnable carries its request and cancellation event
-directly, without a second job object.
+`spyder/config.py` reads an immutable `PluginSettings` snapshot;
+`VimWidget.apply_settings()` distributes it to feature owners. Calculations use
+the applied values. Tests that change `CONF` must apply settings explicitly.
 
-Command-line popups own their content and appearance caches. Their setters
-report changes so the controller can invalidate `CommandlinePopupHost` geometry.
-The host alone positions both sections; the sections only measure their content.
-`PromptGuidePopup` in `spyder/prompt_guide.py` renders search and substitution
-help through one content update path, without separate popup subclasses.
-The status-bar layout uses stable message/input proportions while focus and
-prompt text change. Its width follows host resizing and font changes.
-`SubstituteOverlay` paints its passive viewport child through its existing event
-filter.
+Editor highlights and jump labels use the editor's palette; the mode indicator
+follows its parent/app palette. Which-key, history and guide panels use Spyder's
+UI palette. [utils/theme.py](../spyder_okvim/utils/theme.py) prefers theme colors
+and repairs low foreground contrast: 4.5:1 for its text and 3:1 for deletion
+markers. Appearance changes recolor existing ranges or invalidate paint layouts
+without recalculating matches, moving the cursor or restarting highlight timers.
 
-## Navigation data and persistence
+`CommandlinePopupHost` positions completion/history and guide sections; sections
+measure content and report changes. Which-key wraps and scrolls its own rows.
+Passive popups keep keyboard focus in the command input. Theme regressions cover
+discovered installed variants and synthetic low-contrast palettes.
 
-Bookmark callers use `vim_status.bookmark_manager` directly. The manager owns
-local/global mark lookup and uses supplied load/persist callbacks. Default
-`load_bookmarks()`/`save_bookmarks()` functions stay in the same feature module
-and preserve existing paths and JSON keys. Tests can replace storage with an
-in-memory implementation without changing mark rules or editor callbacks.
+## Verification
 
-`build_mark_rows()` and `build_jump_snapshot()` prepare immutable display data
-before constructing their dialogs. `MarkListDialog` returns a selected name;
-`JumpListDialog` requests navigation through callbacks that return a fresh
-snapshot. Neither dialog reads source files or knows `VimStatus`. Metadata
-preparation stays near its feature rather than adding separate row/provider
-modules. The existing jump metadata offset calculation is preserved; changing
-its non-BMP display behavior is a separate fix.
+Run commands from the repository root in a development environment with the
+package and [test requirements](../requirements/tests.txt) installed. The
+[CI workflow](../.github/workflows/tests.yml) defines the dependency/Qt setup.
+Use a separate process for each binding:
 
-## Compatibility and verification
+```sh
+SPYDER_PYTEST=True QT_QPA_PLATFORM=offscreen \
+QT_API=pyqt5 PYTEST_QT_API=pyqt5 python runtests.py
 
-New code imports each feature from its owning module. Historical mode class
-names remain import aliases; the unused `executor/executor_sub.py` re-export
-module has been removed.
-The unused `utils/motion_helpers.py` and `utils/action_helpers.py` compatibility
-wrappers have been removed; callers use `CursorMotions` and `EditingActions`
-from their owning modules. `VimLineEdit` and macro worker imports from
-`spyder/vim_widgets.py` still resolve through its assembly imports.
-Internal code uses `DeferredAction`, `ExecutorTransition`, `count` and
-`count_text`. Legacy imports do not guarantee every former internal NamedTuple
-keyword constructor.
+SPYDER_PYTEST=True QT_QPA_PLATFORM=offscreen \
+QT_API=pyside6 PYTEST_QT_API=pyside6 python runtests.py
+```
 
-`python runtests.py` collects both existing feature tests under `spyder_okvim/`
-and the pure model/storage tests under root `tests/`. Root `conftest.py`
-imports GUI support lazily and creates the shared editor only when a test
-requests `vim_bot`. Integration setup/reset lives in `tests/qt_support.py`;
-product objects no longer expose a test-only reset method.
-
-Pure boundary checks can run without loading Qt or Spyder:
+For a focused change, replace `python runtests.py` with `python -m pytest -q`
+and the relevant test paths. Pure model/storage checks can run without loading
+Qt or Spyder:
 
 ```sh
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests
 ```
 
-Run existing feature regressions for the changed area and use a separate process
-for each Qt binding. Native IME and opt-in paired-Spyder window tests cover
-different environments from offscreen widget tests; see the README commands.
+Native IME checks require a desktop backend (`cocoa` on macOS, `windows` on
+Windows) instead of `offscreen`. Run `spyder/tests/test_commandline_ime.py` and
+`utils/tests/test_key_helpers.py` under `spyder_okvim/` with that backend.
+Real editor-window integration is opt-in and requires the paired Spyder fork:
+
+```sh
+SPYDER_PYTEST=True SPYDER_OKVIM_WINDOW_INTEGRATION=1 \
+QT_QPA_PLATFORM=offscreen QT_API=pyside6 PYTEST_QT_API=pyside6 \
+python -m pytest -q spyder_okvim/spyder/tests/test_editor_windows.py
+```
+
+Use the two linked performance guides for opt-in benchmarks. Record environment
+and timing output with the run or review rather than accumulating dated results
+in these design documents.

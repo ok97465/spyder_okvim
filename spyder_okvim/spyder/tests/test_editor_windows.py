@@ -55,6 +55,9 @@ class _StatusBarPlugin:
         self.STATUS_WIDGETS[widget.ID] = widget
         self.main.statusBar().insertPermanentWidget(0, widget)
 
+    def remove_status_widget(self, id_):
+        self.main.statusBar().removeWidget(self.STATUS_WIDGETS.pop(id_))
+
 
 class _TestVim(OkVim):
     CONF_FILE = False

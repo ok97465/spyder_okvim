@@ -7,13 +7,13 @@ from dataclasses import dataclass
 
 # Third Party Libraries
 from qtpy.QtCore import QEvent, QObject, QRegularExpression, QTimer, Signal
-from qtpy.QtGui import QBrush, QColor, QFont, QPalette, QTextCharFormat, QTextCursor
-from qtpy.QtWidgets import QTextEdit
+from qtpy.QtGui import QBrush, QFont, QTextCharFormat, QTextCursor
+from qtpy.QtWidgets import QApplication, QTextEdit
 
 # Project Libraries
-from spyder_okvim.spyder.config import PluginSettings
 from spyder_okvim.utils.qtcompat import python_cursor_position
 from spyder_okvim.utils.search_helpers import compile_pattern, iter_block_matches
+from spyder_okvim.utils.theme import occurrence_colors, selection_colors
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class SearchInfo(QObject):
 
     closed = Signal()
 
-    def __init__(self, vim_cursor, parent=None, *, settings=None):
+    def __init__(self, vim_cursor, parent=None):
         """Initialize the search state.
 
         Args:
@@ -39,8 +39,6 @@ class SearchInfo(QObject):
             parent: QObject that owns this search state.
         """
         super().__init__(parent)
-        self.color_fg = QBrush(QColor("#A9B7C6"))
-        self.color_bg = QBrush(QColor("#30652F"))
         self.txt_searched = ""
         self.selection_list = []
         self._match_starts = []
@@ -60,7 +58,7 @@ class SearchInfo(QObject):
         self._refresh_timer.setInterval(150)
         self._refresh_timer.timeout.connect(self.refresh)
 
-        self.apply_settings(settings or PluginSettings())
+        self.refresh_appearance()
         source = vim_cursor.editor_widget.get_widget()
         if not hasattr(source, "sig_codeeditor_changed"):
             source = vim_cursor.get_editorstack()
@@ -70,21 +68,17 @@ class SearchInfo(QObject):
                 signal.connect(self.refresh)
                 self._editor_signals.append(signal)
 
-    def apply_settings(self, settings):
-        """Apply explicit colors to cached matches without recompiling a search."""
-        self.color_fg = QBrush(QColor(settings.search_fg_color))
-        self.color_bg = QBrush(QColor(settings.search_bg_color))
+    def refresh_appearance(self, *args):
+        """Recolor cached matches after palette or syntax theme changes."""
+        editor = self._editor or self.vim_cursor.get_editor()
+        source = editor if editor is not None else QApplication.instance()
+        foreground, background = occurrence_colors(source)
+        self.color_fg = QBrush(foreground)
+        self.color_bg = QBrush(background)
         for selection in self.selection_list:
             selection.format.setForeground(self.color_fg)
             selection.format.setBackground(self.color_bg)
         self._display_selections()
-
-    def set_color(self):
-        """Compatibility refresh; plugin code passes an explicit snapshot."""
-        # Project Libraries
-        from spyder_okvim.spyder.config import read_settings
-
-        self.apply_settings(read_settings())
 
     def search(self, text, ignorecase=True, forward=True, pattern=None):
         """Start a search using one compiled expression for all matches."""
@@ -148,11 +142,9 @@ class SearchInfo(QObject):
                 if start == position or start < position < end:
                     current = QTextEdit.ExtraSelection()
                     current.cursor = QTextCursor(match.cursor)
-                    palette = self._editor.palette()
-                    current.format.setBackground(palette.brush(QPalette.Highlight))
-                    current.format.setForeground(
-                        palette.brush(QPalette.HighlightedText)
-                    )
+                    foreground, background = selection_colors(self._editor)
+                    current.format.setBackground(background)
+                    current.format.setForeground(foreground)
                     current.format.setFontWeight(QFont.Bold)
                     current.format.setUnderlineStyle(QTextCharFormat.SingleUnderline)
                     selections.append(current)
@@ -185,9 +177,10 @@ class SearchInfo(QObject):
         """Refresh the current target's palette without recompiling the pattern."""
         if watched is self._editor and event.type() in (
             QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
             QEvent.StyleChange,
         ):
-            self._display_current_match()
+            self.refresh_appearance()
         return super().eventFilter(watched, event)
 
     def _disconnect_document(self):
@@ -203,6 +196,9 @@ class SearchInfo(QObject):
                 self._editor.cursorPositionChanged.disconnect(
                     self._display_current_match
                 )
+                signal = getattr(self._editor, "sig_theme_colors_changed", None)
+                if signal is not None:
+                    signal.disconnect(self.refresh_appearance)
                 self._editor.removeEventFilter(self)
                 self._editor.clear_extra_selections("vim_search")
                 self._editor.clear_extra_selections("vim_search_current")
@@ -243,7 +239,11 @@ class SearchInfo(QObject):
                 document.contentsChanged.connect(self._document_changed)
                 editor.destroyed.connect(self._editor_destroyed)
                 editor.cursorPositionChanged.connect(self._display_current_match)
+                signal = getattr(editor, "sig_theme_colors_changed", None)
+                if signal is not None:
+                    signal.connect(self.refresh_appearance)
                 editor.installEventFilter(self)
+            self.refresh_appearance()
         if document is None or self._revision == document.revision():
             return
 

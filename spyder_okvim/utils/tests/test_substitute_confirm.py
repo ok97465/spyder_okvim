@@ -181,7 +181,8 @@ def test_edit_exception_cleans_up_session(confirmation_bot, monkeypatch):
     editor.skip_rstrip = False
     session, callback = start_session(confirmation_bot)
     monkeypatch.setattr(
-        editor, "document_did_change", Mock(side_effect=RuntimeError("notification"))
+        "spyder_okvim.utils.substitute_confirm.notify_document_change",
+        Mock(side_effect=RuntimeError("notification")),
     )
     with pytest.raises(RuntimeError, match="notification"):
         session("y")

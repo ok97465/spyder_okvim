@@ -47,8 +47,8 @@ jobs:
           conda install --name test --yes --override-channels --channel conda-forge
           --file requirements/conda.txt --file requirements/tests.txt
           "python=${{ matrix.python-version }}" pip
-      - name: Install PySide6
-        run: python -m pip install "PySide6==6.8.3"
+      - name: Install Spyder and PySide6
+        run: python -m pip install "spyder==6.2.0a3" "PySide6==6.8.3"
       - name: Install package
         run: python -m pip install --no-deps -e .
       - name: Show environment information

@@ -1,94 +1,64 @@
-# Command-line path completion: implementation and measurements
+# Path completion performance
 
-Measured on 2026-10-31, macOS 27.0.1 arm64, Python 3.13.9, PyQt5 / Qt 5.15.2.
+Path lookup separates filesystem work from GUI publication. The relevant code is
+[the scanner](../spyder_okvim/utils/commandline.py),
+[the worker service](../spyder_okvim/spyder/commandline_path_lookup.py) and
+[the popup controller](../spyder_okvim/spyder/commandline_popup_controller.py).
 
-## Structure
+## Work and cancellation
 
-`utils/commandline.py` keeps path parsing separate from directory enumeration.
-`PathCompletionRequest` is immutable; the scanner only reads one directory and
-filters file extensions without opening file contents. The extension allowlist
-is `PATH_COMPLETION_EXTENSIONS`.
+- The scanner enumerates one directory, filters names and supported extensions,
+  then sorts candidates. It does not open file contents. The extension allowlist
+  is `PATH_COMPLETION_EXTENSIONS`.
+- Automatic lookup has a 100 ms debounce. Explicit Tab submits immediately and
+  reuses completed results, including an empty result. Candidate reads and
+  request validation do not enumerate directories.
+- `PathLookupService` keeps one active worker and the latest pending request.
+  Workers receive immutable request data; queued delivery and popup updates run
+  on the GUI thread.
+- The controller validates the input session, editor, text, caret, working
+  directory and generation before applying a result. Input or context changes
+  discard stale work. Results arriving during input processing wait until that
+  input has finished.
+- Cancellation is cooperative between filesystem entries and around sorting.
+  One blocked filesystem call can delay the next lookup. Widget cleanup
+  disconnects delivery without waiting; application thread-pool shutdown can
+  still wait for outstanding I/O.
 
-`CommandlinePopupController` owns the debounce timer, request generation, and
-one completed-result cache. Its key includes the prompt session, editor,
-complete input, Python cursor position, and working directory. An empty tuple
-is a completed empty result; `None` means no completed lookup. Candidate reads
-and key validation never enumerate directories.
+The candidate list has no fixed size cap. Filtering in a worker keeps input
+responsive during enumeration, but building and laying out a large popup still
+costs GUI time. Measure scan and display separately when investigating latency.
 
-`PathLookupService` runs filesystem work through `QThreadPool`. The application
-owns the service, so it survives input-widget cleanup. It keeps at most one
-running job and the latest pending job. Cancellation uses an event checked
-between entries and around sorting. The worker reads immutable request data;
-a queued QObject slot delivers its result on the GUI thread. This follows
-[Qt's QObject and thread rules](https://doc.qt.io/qt-6/threads-qobject.html).
+## Run the benchmark
 
-Automatic lookups wait 100ms after input settles. A missing Tab result uses the
-same worker immediately and applies only if the original context is current.
-Further pending Tab / Shift-Tab presses accumulate their direction and count.
-Input changes, Enter, Esc, focus/session changes, and cleanup cancel application.
-Once applied, the original cycle belongs to `VimLineEdit`; no automatic lookup
-is scheduled for its replacement text. A single directory descends only on the
-next explicit Tab. Accepting an `:e` directory with popup Enter instead clears
-its old cycle and automatically queries children with no selected row. Existing
-suffix separators are reused, including when the cursor is in an intermediate
-component; file acceptance and history recall remain quiet until edited.
-Completed empty Tab results are also reused for explicit-only
-commands and while automatic suggestions are disabled.
-
-When a timeout fires inside `input_processing()`, final-input synchronization
-rearms it. When a worker result arrives there, the controller holds the result
-until the outer input finishes and validates its generation/context again.
-It does not repeat the lookup. `QTimer` only schedules submissions; it does not
-perform filesystem work on the GUI thread. The timer remains in its owning
-thread, as required by the [QTimer documentation](https://doc.qt.io/qtforpython-6/PySide6/QtCore/QTimer.html).
-
-## Reproduce
+From the repository root, with the test dependencies installed:
 
 ```sh
+SPYDER_PYTEST=True QT_QPA_PLATFORM=offscreen \
+QT_API=pyside6 PYTEST_QT_API=pyside6 \
 python -m pytest -q -s spyder_okvim/spyder/tests/benchmark_commandline_completion.py
 ```
 
-The benchmark creates 100, 1,000, 10,000, and 30,000 entries, mixing supported
-and excluded extensions with directories. It warms the listing and popup once,
-then records seven repetitions. Directory enumeration and filter/build/sort
-phases use a diagnostic pass over the same entries; their medians do not need
-to sum exactly to the separately measured production scanner. Popup timing
-includes controller merging, row replacement, and geometry; event processing
-is measured separately. These are warm local-disk measurements, not guarantees.
+Use `pyqt5` for both Qt variables to compare bindings. This opt-in benchmark
+creates temporary directories with 100, 1,000, 10,000 and 30,000 entries. Each
+mixes supported and excluded extensions with subdirectories. It warms each
+listing and popup, then reports seven repetitions as JSON.
 
-| Entries | Candidates | Scan total | Enumeration | Filter/build | Sort | Popup sync | Events |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 100 | 60 | 0.113ms | 0.049ms | 0.053ms | 0.005ms | 0.265ms | 0.367ms |
-| 1,000 | 600 | 1.010ms | 0.363ms | 0.509ms | 0.068ms | 1.809ms | 0.411ms |
-| 10,000 | 6,000 | 10.899ms | 3.654ms | 5.242ms | 1.310ms | 17.596ms | 0.576ms |
-| 30,000 | 18,000 | 32.874ms | 11.298ms | 16.192ms | 4.391ms | 52.326ms | 0.647ms |
+| JSON field | Interpretation |
+| --- | --- |
+| `scan_total_ms`, `max_scan_total_ms` | Production scanner cost and its slowest observed repetition. |
+| `enumeration_ms`, `filter_build_ms`, `sort_ms` | Diagnostic phases measured separately over the same directory entries. Their medians need not sum to the production scan median. |
+| `popup_sync_ms` | Controller merging, row publication and popup geometry on the GUI thread. |
+| `event_processing_ms` | Event processing after publication, reported separately from synchronous popup work. |
+| `observed_debounce_ms` | Input-to-worker-start delay, separate from scan and display costs. |
 
-Maximum scan times were 0.125ms, 1.080ms, 41.607ms, and 73.758ms respectively.
-The configured debounce was 100ms; observed time until worker scan start was
-96.193ms. Qt's default coarse timer may fire slightly early. Debounce latency
-is separate from the scan and popup costs above.
+Compare runs with the same directory sizes, candidate counts, Qt binding and
+platform. Warm local-disk results do not predict cold-cache or network I/O.
+Record the emitted environment with measurements; avoid treating one machine's
+latency as a fixed performance guarantee.
 
-The ordinary small-directory case is below the initial 16ms target. The
-30,000-entry scanner repeatedly exceeded 30ms, so the final implementation
-includes the conditional worker stage from `todo.md`. The scan-total column
-measures the scanner's own work; production executes that work in the worker.
-
-## Limits and verification
-
-Popup construction remains GUI work: 18,000 suggestions took about 52ms to
-publish. Moving enumeration to a worker does not remove that display cost.
-A future large-list model can address it separately without changing the
-path request/cache boundary. Network and external-volume paths were not measured in this environment;
-slow I/O behavior was tested with controlled worker barriers.
-
-An individual filesystem call cannot be interrupted. A blocked old lookup can
-delay the newest queued lookup, even though input and cancellation remain
-responsive. Cleanup disconnects result delivery and never waits for the pool.
-The application owns the service until the active job returns; global-pool
-shutdown may still wait for uninterruptible I/O. Tests cover queued replacement,
-cooperative cancellation, thread affinity, cleanup while blocked, and actual
-application quit in an isolated process with a controlled I/O release.
-
-Integration tests also cover no-selection automatic display, two-Enter
-acceptance, generation invalidation, IME/Unicode, nested event loops, settings,
-working-directory changes, empty-cache reuse, and the existing Tab cycle.
+For correctness regressions, run
+[`test_commandline_path_lookup.py`](../spyder_okvim/spyder/tests/test_commandline_path_lookup.py)
+and [`test_commandline_completion.py`](../spyder_okvim/spyder/tests/test_commandline_completion.py).
+These cover pending-request replacement, cancellation, blocked-I/O cleanup,
+late delivery and Tab-cycle context checks.

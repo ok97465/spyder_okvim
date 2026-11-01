@@ -21,8 +21,8 @@ from contextlib import contextmanager
 
 # Third Party Libraries
 from qtpy.QtCore import QEvent, QObject, QSize, Qt, Signal, Slot
-from qtpy.QtGui import QColor, QKeySequence, QPainter, QPalette, QTextCursor
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
+from qtpy.QtGui import QKeySequence, QPainter, QPalette, QTextCursor
+from qtpy.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QWidget
 from spyder.api.config.decorators import on_conf_change
 from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
@@ -51,10 +51,13 @@ from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.put import PutController
 from spyder_okvim.utils.qtcompat import (
     exec_dialog,
+    live_widget,
     text_width,
     widget_is_deleted,
 )
 from spyder_okvim.utils.testing_env import running_in_pytest
+from spyder_okvim.utils.theme import selection_colors
+from spyder_okvim.utils.undo import editor_redo
 from spyder_okvim.utils.yank_dialog import YankHistoryPicker
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 from spyder_okvim.vim.state import InputSource
@@ -239,9 +242,8 @@ class VimShortcut(QObject):
         count_text = self.cmd_line.text()
         count = 1 if not count_text else int(count_text)
 
-        editor = self.get_editor()
         for _ in range(count):
-            editor.redo()
+            editor_redo(editor)
 
         n_block_new = editor.blockCount()
         if n_block_new != n_block_old:
@@ -310,6 +312,8 @@ class VimStateLabel(QLabel):
     def __init__(self, parent):
         super().__init__(parent)
         self._applying_appearance = False
+        self._palette_parent_ref = None
+        QApplication.instance().paletteChanged.connect(self.refresh_appearance)
         self.setObjectName("vimStateLabel")
         self.setAccessibleName("Vim mode")
         self.setAlignment(Qt.AlignCenter)
@@ -321,7 +325,6 @@ class VimStateLabel(QLabel):
         """Display the state of vim."""
         if widget_is_deleted(self):
             return
-        self._state = state
         text = {
             VimState.VISUAL: "VISUAL",
             VimState.NORMAL: "NORMAL",
@@ -332,39 +335,59 @@ class VimStateLabel(QLabel):
         self.setAccessibleDescription(f"Current Vim mode: {text}")
         self.refresh_appearance()
 
-    def refresh_appearance(self):
-        """Keep mode text legible using the host palette or explicit overrides."""
+    def refresh_appearance(self, *args):
+        """Keep mode text legible using the host palette."""
         if self._applying_appearance:
             return
         self._applying_appearance = True
         try:
-            self._apply_palette()
+            # A styled widget can retain Qt's saved palette during repolishing.
+            # Read the host instead of fixing the label's inherited palette.
+            parent = self.parentWidget()
+            previous = live_widget(self._palette_parent_ref)
+            if previous is not parent:
+                if previous is not None:
+                    previous.removeEventFilter(self)
+                self._palette_parent_ref = (
+                    weakref.ref(parent) if parent is not None else None
+                )
+                if parent is not None:
+                    parent.installEventFilter(self)
+            source = parent if parent is not None else QApplication.instance()
+            foreground, background = selection_colors(source)
+            stylesheet = (
+                "QLabel#vimStateLabel {"
+                f"color: {foreground.name()}; background-color: {background.name()};"
+                "border: 1px solid palette(mid); border-radius: 3px;"
+                "padding: 1px 5px; font-weight: bold; }"
+            )
+            if stylesheet != self.styleSheet():
+                self.setStyleSheet(stylesheet)
         finally:
             self._applying_appearance = False
 
-    def _apply_palette(self):
-        """Guard stylesheet-induced palette events during window reparenting."""
-        palette = self.palette()
-        colors = []
-        for option, role in (
-            ("mode_fg_color", QPalette.HighlightedText),
-            ("mode_bg_color", QPalette.Highlight),
+    def event(self, event):
+        result = super().event(event)
+        if event.type() == QEvent.ParentChange and hasattr(self, "_palette_parent_ref"):
+            self.refresh_appearance()
+        return result
+
+    def eventFilter(self, watched, event):
+        if watched is live_widget(self._palette_parent_ref) and event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
         ):
-            configured = QColor(CONF.get(CONF_SECTION, option, ""))
-            colors.append(configured if configured.isValid() else palette.color(role))
-        foreground, background = (color.name() for color in colors)
-        stylesheet = (
-            "QLabel#vimStateLabel {"
-            f"color: {foreground}; background-color: {background};"
-            "border: 1px solid palette(mid); border-radius: 3px;"
-            "padding: 1px 5px; font-weight: bold; }"
-        )
-        if stylesheet != self.styleSheet():
-            self.setStyleSheet(stylesheet)
+            self.refresh_appearance()
+        return super().eventFilter(watched, event)
 
     def changeEvent(self, event):
         super().changeEvent(event)
-        if event.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
+        if event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
+        ):
             self.refresh_appearance()
 
 
@@ -519,7 +542,6 @@ class VimWidget(QWidget):
         status.yanky_enabled = enabled
         status.yank_history.resize(length)
         status.cursor.apply_settings(status.settings)
-        status.search.apply_settings(status.settings)
         self.status_label.refresh_appearance()
 
     @property
@@ -749,6 +771,7 @@ class VimWidget(QWidget):
             return
         self._closed = True
         self.vim_status.cancel_pending_work()
+        self.vim_status.cursor.close()
         self.substitute_preview.cleanup()
         self.put_controller.cleanup()
         self.which_key.cleanup()

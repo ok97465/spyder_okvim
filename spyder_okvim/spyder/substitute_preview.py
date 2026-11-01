@@ -6,8 +6,8 @@ from dataclasses import dataclass, replace
 from math import ceil
 
 # Third Party Libraries
-from qtpy.QtCore import QObject, QPoint, QTimer, Signal
-from qtpy.QtGui import QColor, QTextCursor, QTextFormat
+from qtpy.QtCore import QEvent, QObject, QPoint, QTimer, Signal
+from qtpy.QtGui import QTextCursor, QTextFormat
 from qtpy.QtWidgets import QTextEdit
 from spyder.config.manager import CONF
 
@@ -27,6 +27,7 @@ from spyder_okvim.utils.substitute_preview import (
     PreviewResult,
     SubstitutePreview,
 )
+from spyder_okvim.utils.theme import occurrence_colors
 
 
 @dataclass(frozen=True)
@@ -128,8 +129,33 @@ class SubstitutePreviewController(QObject):
             (editor.destroyed, self.cancel),
             (editor.textChanged, self._check_document),
         ]
+        signal = getattr(editor, "sig_theme_colors_changed", None)
+        if signal is not None:
+            self._document_connections.append((signal, self.refresh_appearance))
         for signal, slot in self._document_connections:
             signal.connect(slot)
+        editor.installEventFilter(self)
+
+    def refresh_appearance(self, *args):
+        """Recolor existing ranges while retaining the calculated result."""
+        editor = live_widget(self._editor)
+        if self._closed or self.result is None or editor is None:
+            return
+        foreground, background = occurrence_colors(editor)
+        selections = editor.get_extra_selections("vim_substitute_preview")
+        for selection in selections:
+            selection.format.setForeground(foreground)
+            selection.format.setBackground(background)
+        editor.set_extra_selections("vim_substitute_preview", selections)
+
+    def eventFilter(self, watched, event):
+        if watched is live_widget(self._editor) and event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
+        ):
+            self.refresh_appearance()
+        return super().eventFilter(watched, event)
 
     def _check_document(self):
         editor = live_widget(self._editor)
@@ -157,6 +183,9 @@ class SubstitutePreviewController(QObject):
 
     def cancel(self, *args):
         """End this session and disconnect all document lifetime observers."""
+        editor = live_widget(self._editor)
+        if editor is not None:
+            editor.removeEventFilter(self)
         self._invalidate(clear_cache=True)
         self._session = None
         self._document = None
@@ -437,14 +466,15 @@ class SubstitutePreviewController(QObject):
         editor = live_widget(self._editor)
         document = live_widget(self._document)
         selections = []
+        foreground, background = occurrence_colors(editor)
         for start, end in result.spans:
             cursor = QTextCursor(document)
             cursor.setPosition(start)
             cursor.setPosition(end, QTextCursor.KeepAnchor)
             selection = QTextEdit.ExtraSelection()
             selection.cursor = cursor
-            selection.format.setBackground(QColor("#9b6723"))
-            selection.format.setForeground(QColor("#ffffff"))
+            selection.format.setBackground(background)
+            selection.format.setForeground(foreground)
             if not cursor.hasSelection():
                 selection.format.setProperty(QTextFormat.FullWidthSelection, True)
             selections.append(selection)

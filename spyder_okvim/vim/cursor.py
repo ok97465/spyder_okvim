@@ -5,33 +5,30 @@
 import weakref
 
 # Third Party Libraries
-from qtpy.QtCore import QTimer
-from qtpy.QtGui import QBrush, QColor, QTextBlock, QTextCursor
-from qtpy.QtWidgets import QTextEdit
+from qtpy.QtCore import QEvent, QObject, QTimer
+from qtpy.QtGui import QBrush, QPalette, QTextBlock, QTextCursor
+from qtpy.QtWidgets import QApplication, QTextEdit
 
 # Project Libraries
 from spyder_okvim.spyder.config import PluginSettings
 from spyder_okvim.utils.motion import MotionInfo, MotionType
 from spyder_okvim.utils.qtcompat import live_widget
+from spyder_okvim.utils.theme import readable_color, selection_colors
 
 
-class VimCursor:
+class VimCursor(QObject):
     """Manage the Vim cursor."""
 
     def __init__(self, editor_widget, settings=None):
+        super().__init__(editor_widget if isinstance(editor_widget, QObject) else None)
         self.editor_widget = editor_widget
         self._editorstack = None
+        self._theme_editor = None
+        self._applying_appearance = False
+        self._closed = False
 
         self.vim_cursor = QTextEdit.ExtraSelection()
-        self.vim_cursor.format.setForeground(QBrush(QColor("#000000")))
-        self.vim_cursor.format.setBackground(QBrush(QColor("#BBBBBB")))
-
         self.selection = QTextEdit.ExtraSelection()
-        self.selection.format.setForeground(QBrush(QColor("#A9B7C6")))
-        self.selection.format.setBackground(QBrush(QColor("#214283")))
-
-        self.yank_fg_color = QBrush(QColor("#B9C7D6"))
-        self.yank_bg_color = QBrush(QColor("#7D7920"))
         self.hl_yank_dur = 400  # duration of highlight after yank
         self.hl_yank = True
         self.hl_put = True
@@ -41,12 +38,7 @@ class VimCursor:
 
     def apply_settings(self, settings):
         """Apply one cursor/highlight snapshot and stop disabled highlight jobs."""
-        self.vim_cursor.format.setForeground(QBrush(QColor(settings.cursor_fg_color)))
-        self.vim_cursor.format.setBackground(QBrush(QColor(settings.cursor_bg_color)))
-        self.selection.format.setForeground(QBrush(QColor(settings.select_fg_color)))
-        self.selection.format.setBackground(QBrush(QColor(settings.select_bg_color)))
-        self.yank_fg_color = QBrush(QColor(settings.yank_fg_color))
-        self.yank_bg_color = QBrush(QColor(settings.yank_bg_color))
+        self.refresh_appearance()
         self.hl_yank_dur = settings.highlight_yank_duration
         self.hl_yank = settings.highlight_yank
         self.hl_put = settings.highlight_put
@@ -55,17 +47,77 @@ class VimCursor:
         if not self.hl_put:
             self._clear_highlight("hl_put")
 
-    def set_config_from_conf(self):
-        """Compatibility refresh; plugin code passes an explicit snapshot."""
-        # Project Libraries
-        from spyder_okvim.spyder.config import read_settings
+    def refresh_appearance(self, editor=None):
+        """Refresh host colors and displayed selections without changing their ranges."""
+        if self._closed or self._applying_appearance:
+            return
+        self._applying_appearance = True
+        try:
+            if editor is None:
+                editor = self.get_editor()
+            source = editor if editor is not None else QApplication.instance()
+            palette = source.palette()
+            foreground, background = selection_colors(source)
+            cursor_background = palette.color(QPalette.Text)
+            cursor_foreground = readable_color(
+                palette.color(QPalette.Base),
+                cursor_background,
+                palette.color(QPalette.HighlightedText),
+                palette.color(QPalette.Highlight),
+            )
+            self.vim_cursor.format.setForeground(cursor_foreground)
+            self.vim_cursor.format.setBackground(cursor_background)
+            self.selection.format.setForeground(foreground)
+            self.selection.format.setBackground(background)
+            self.yank_fg_color = QBrush(foreground)
+            self.yank_bg_color = QBrush(background)
+            if editor is None:
+                return
+            for group in ("vim_cursor", "vim_selection", "hl_yank", "hl_put"):
+                text, fill = (
+                    (cursor_foreground, cursor_background)
+                    if group == "vim_cursor"
+                    else (foreground, background)
+                )
+                selections = editor.get_extra_selections(group)
+                if selections:
+                    for selection in selections:
+                        selection.format.setForeground(text)
+                        selection.format.setBackground(fill)
+                    editor.set_extra_selections(group, selections)
+        finally:
+            self._applying_appearance = False
 
-        self.apply_settings(read_settings())
+    def _bind_theme_editor(self, editor):
+        if self._closed:
+            return
+        previous = live_widget(self._theme_editor)
+        if previous is editor:
+            return
+        if previous is not None:
+            previous.removeEventFilter(self)
+        self._theme_editor = weakref.ref(editor) if editor is not None else None
+        if editor is not None:
+            editor.ensurePolished()
+            editor.installEventFilter(self)
+        self.refresh_appearance(editor)
+
+    def eventFilter(self, watched, event):
+        """Follow palette updates in the editor selected by the command input."""
+        if watched is live_widget(self._theme_editor) and event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
+        ):
+            self.refresh_appearance(watched)
+        return super().eventFilter(watched, event)
 
     def get_editor(self):
         """Get the editor focused."""
         editorstack = self.get_editorstack()
-        return editorstack.get_current_editor() if editorstack is not None else None
+        editor = editorstack.get_current_editor() if editorstack is not None else None
+        self._bind_theme_editor(editor)
+        return editor
 
     def set_editorstack(self, editorstack):
         """Keep commands on their view while the command line has focus."""
@@ -415,3 +467,14 @@ class VimCursor:
         """Stop callbacks before views or the plugin are destroyed."""
         for group in tuple(self._highlight_timers):
             self._clear_highlight(group)
+
+    def close(self):
+        """Release appearance observers and timers when the plugin is disabled."""
+        if self._closed:
+            return
+        self._closed = True
+        self.clear_highlights()
+        editor = live_widget(self._theme_editor)
+        if editor is not None:
+            editor.removeEventFilter(self)
+        self._theme_editor = None

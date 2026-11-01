@@ -32,19 +32,6 @@ CONF_DEFAULTS = [
             "yanky_enabled": True,
             "yank_history_length": 100,
             "highlight_put": True,
-            "cursor_fg_color": "#000000",
-            "cursor_bg_color": "#BBBBBB",
-            "select_fg_color": "#A9B7C6",
-            "select_bg_color": "#214283",
-            "search_fg_color": "#A9B7C6",
-            "search_bg_color": "#30652F",
-            "yank_fg_color": "#17172d",
-            "yank_bg_color": "#5cacee",
-            "annotation_bg_color": "",
-            "annotation_fg_color": "",
-            "annotation_border_color": "",
-            "mode_fg_color": "",
-            "mode_bg_color": "",
             "leader_key": "Space",
             "which_key_enabled": True,
             "which_key_delay": 300,
@@ -56,7 +43,9 @@ CONF_DEFAULTS = [
     )
 ]
 
-CONF_VERSION = "0.9"
+# Previous releases used Spyder's fallback version because CONF_ was misspelled.
+# Keep that version to preserve existing plugin options.
+CONF_VERSION = "0.0.0"
 
 
 @dataclass(frozen=True)
@@ -73,17 +62,6 @@ class PluginSettings:
     highlight_yank: bool = True
     highlight_yank_duration: int = 400
     highlight_put: bool = True
-    cursor_fg_color: str = "#000000"
-    cursor_bg_color: str = "#BBBBBB"
-    select_fg_color: str = "#A9B7C6"
-    select_bg_color: str = "#214283"
-    search_fg_color: str = "#A9B7C6"
-    search_bg_color: str = "#30652F"
-    yank_fg_color: str = "#17172d"
-    yank_bg_color: str = "#5cacee"
-    annotation_bg_color: str = ""
-    annotation_fg_color: str = ""
-    annotation_border_color: str = ""
 
 
 def read_settings():

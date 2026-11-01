@@ -4,14 +4,17 @@
 import weakref
 
 # Third Party Libraries
-from qtpy.QtGui import QColor, QTextCursor, QTextFormat
+from qtpy.QtCore import QEvent, QObject
+from qtpy.QtGui import QTextCursor, QTextFormat
 from qtpy.QtWidgets import QTextEdit
 
 # Project Libraries
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
+from spyder_okvim.utils.theme import selection_colors
+from spyder_okvim.utils.undo import notify_document_change, undo_block
 
 
-class SubstituteConfirm:
+class SubstituteConfirm(QObject):
     """Approve ordered original-document targets without holding an edit block."""
 
     accepts_input_method = False
@@ -20,6 +23,7 @@ class SubstituteConfirm:
     history_kind = None
 
     def __init__(self, vim_status, editor, targets, on_finish):
+        super().__init__()
         self.status = vim_status
         self._editor_ref = weakref.ref(editor)
         self.document = editor.document()
@@ -34,6 +38,7 @@ class SubstituteConfirm:
         self._revision = self.document.revision()
         self._editing = self._context_lost = False
         self._connections = []
+        self._selection = None
 
     @property
     def editor(self):
@@ -68,6 +73,11 @@ class SubstituteConfirm:
         ):
             signal.connect(callback)
             self._connections.append((signal, callback))
+        self.editor.installEventFilter(self)
+        signal = getattr(self.editor, "sig_theme_colors_changed", None)
+        if signal is not None:
+            signal.connect(self.refresh_appearance)
+            self._connections.append((signal, self.refresh_appearance))
         if not self.targets:
             self._finish()
         else:
@@ -117,13 +127,31 @@ class SubstituteConfirm:
         cursor.setPosition(end + self._delta, QTextCursor.KeepAnchor)
         selection = QTextEdit.ExtraSelection()
         selection.cursor = cursor
-        selection.format.setBackground(QColor("#c05b3d"))
-        selection.format.setForeground(QColor("#ffffff"))
         if not cursor.hasSelection():
             selection.format.setProperty(QTextFormat.FullWidthSelection, True)
-        self.editor.set_extra_selections("vim_substitute", [selection])
+        self._selection = selection
+        self.refresh_appearance()
         self.status.cursor.set_cursor_pos_without_end(start + self._delta)
         self.status.set_message("replace? (y/n/a/l/q)")
+
+    def refresh_appearance(self, *args):
+        """Recolor the current target without moving it or repeating the prompt."""
+        editor = self.editor
+        if not self.active or editor is None or self._selection is None:
+            return
+        foreground, background = selection_colors(editor)
+        self._selection.format.setForeground(foreground)
+        self._selection.format.setBackground(background)
+        editor.set_extra_selections("vim_substitute", [self._selection])
+
+    def eventFilter(self, watched, event):
+        if watched is self.editor and event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
+        ):
+            self.refresh_appearance()
+        return super().eventFilter(watched, event)
 
     def _replace_target(self):
         editor = self.editor
@@ -142,18 +170,12 @@ class SubstituteConfirm:
         editor.skip_rstrip = True
         self._editing = True
         try:
-            if self._edited:
-                cursor.joinPreviousEditBlock()
-            else:
-                cursor.beginEditBlock()
-            try:
+            with undo_block(editor, cursor, join_previous=self._edited):
                 cursor.insertText(replacement)
-            finally:
-                cursor.endEditBlock()
             self._edited = True
             self._delta += len(replacement.encode("utf-16-le")) // 2 - (end - start)
             self._revision = self.document.revision()
-            editor.document_did_change()
+            notify_document_change(editor)
         finally:
             self._editing = False
             editor.skip_rstrip = previous_skip_rstrip
@@ -185,7 +207,9 @@ class SubstituteConfirm:
                 pass
         self._connections.clear()
         if self.editor is not None:
+            self.editor.removeEventFilter(self)
             self.editor.clear_extra_selections("vim_substitute")
+        self._selection = None
         if self.status.sub_mode is self:
             self.status.sub_mode = None
         if self.status.substitute_confirm is self:

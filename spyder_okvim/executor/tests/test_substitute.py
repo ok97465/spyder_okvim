@@ -280,7 +280,7 @@ def test_skip_rstrip_and_change_notification(substitute_bot, monkeypatch):
     monkeypatch.setattr(editor, "document_did_change", changed)
     submit(substitute_bot, "%s/foo/x/g")
     assert editor.skip_rstrip is False
-    changed.assert_called_once_with()
+    changed.assert_called_once()
 
 
 def test_substitute_preserves_dot_repeat(substitute_bot):

@@ -16,6 +16,7 @@ from qtpy.QtGui import QTextCursor
 
 # Project Libraries
 from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.utils.undo import notify_document_change, undo_block
 from spyder_okvim.vim.state import VimState
 
 
@@ -134,14 +135,11 @@ class EditingActions:
             # the last join boundary, even when the text contains non-BMP chars.
             join_position = last.position() - (block_end - block_start)
             replacement = cursor.selectedText().replace("\u2029", "")
-            cursor.beginEditBlock()
-            try:
+            with undo_block(editor, cursor):
                 cursor.insertText(replacement)
-            finally:
-                cursor.endEditBlock()
             status.cursor.set_cursor_pos_without_end(join_position)
 
-        editor.document_did_change()
+        notify_document_change(editor)
         if is_visual:
             status.to_normal()
 
@@ -170,7 +168,7 @@ class EditingActions:
             self.vim_status.cursor.set_cursor_pos(end - 1)
 
         editor = self.vim_status.get_editor()
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def _add_surrounding(self, ch: str, text: str) -> str:
         """Return *text* wrapped by the given character."""
@@ -220,7 +218,7 @@ class EditingActions:
         cursor.insertText(text_sub)
 
         editor = self.vim_status.get_editor()
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def _delete_surrounding(self, ch: str, text: str) -> str:
         """Return ``text`` without its surrounding character."""
@@ -268,7 +266,7 @@ class EditingActions:
         cursor.insertText(text_sub)
 
         editor = self.vim_status.get_editor()
-        editor.document_did_change()
+        notify_document_change(editor)
 
         return motion_info
 
@@ -298,7 +296,7 @@ class EditingActions:
         cursor.insertText(text_sub)
 
         editor = self.vim_status.get_editor()
-        editor.document_did_change()
+        notify_document_change(editor)
 
         return motion_info
 
@@ -361,7 +359,7 @@ class EditingActions:
             cursor.insertText(text.upper())
 
         editor = self.vim_status.get_editor()
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def reindent(self, motion_info: MotionInfo) -> None:
         """Reindent the resolved block range using the host's language context.
@@ -433,7 +431,7 @@ class EditingActions:
         len_blank = len(block_start.text()) - len(block_start.text().lstrip())
 
         self.vim_status.cursor.set_cursor_pos(block_start.position() + len_blank)
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def yank(self, motion_info: MotionInfo, is_explicit: bool = False):
         """Copy text into the active register.
@@ -560,7 +558,7 @@ class EditingActions:
             else:
                 self.vim_status.cursor.set_cursor_pos_without_end(cursor_pos_new)
 
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def toggle_comment(self, motion_info: MotionInfo) -> None:
         """Toggle the host's comments and finish in Normal mode at the first line.
@@ -576,4 +574,4 @@ class EditingActions:
         position = self.vim_status.host.toggle_comments(start, end)
         self.vim_status.to_normal()
         self.vim_status.cursor.set_cursor_pos(position)
-        self.vim_status.get_editor().document_did_change()
+        notify_document_change(self.vim_status.get_editor())

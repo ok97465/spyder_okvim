@@ -116,7 +116,6 @@ class EasyMotionPainter(QObject):
         self.editor = editor
         self.positions = []
         self.names = []
-        self.settings = None
         self.label_rects = {}
 
     def eventFilter(self, viewport: QWidget, event: QEvent):
@@ -136,7 +135,7 @@ class EasyMotionPainter(QObject):
         border_width = ANNOTATION_STYLE["border_width"]
         radius = ANNOTATION_STYLE["radius"]
 
-        style = annotation_style(editor, self.settings)
+        style = annotation_style(editor)
         text_color = QColor(style["text"])
         border_color = QColor(style["border"])
         background_color = QColor(style["background"])

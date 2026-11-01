@@ -16,6 +16,7 @@ from spyder.utils.syntaxhighlighters import PythonSH
 
 # Project Libraries
 from spyder_okvim.utils.cell_helpers import CellRegion, get_document_cells
+from spyder_okvim.utils.undo import notify_document_change, undo_block
 
 
 class EditorCommands:
@@ -162,63 +163,62 @@ class EditorCommands:
         edit_cursor = self.cursor.get_cursor()
         previous_skip_rstrip = editor.skip_rstrip
         editor.skip_rstrip = True
-        edit_cursor.beginEditBlock()
         try:
-            for block_no in range(first_block, last_block + 1):
-                block = document.findBlockByNumber(block_no)
-                text = block.text()
-                if not text.strip():
-                    continue
+            with undo_block(editor, edit_cursor):
+                for block_no in range(first_block, last_block + 1):
+                    block = document.findBlockByNumber(block_no)
+                    text = block.text()
+                    if not text.strip():
+                        continue
 
-                prefix_length = len(text) - len(text.lstrip(" \t"))
-                cursor = QTextCursor(block)
-                if is_python:
-                    if TextBlockHelper.get_state(block.previous()) in (
-                        PythonSH.INSIDE_SQ3STRING,
-                        PythonSH.INSIDE_DQ3STRING,
-                        PythonSH.INSIDE_SQSTRING,
-                        PythonSH.INSIDE_DQSTRING,
-                    ):
-                        # Leading spaces in a multiline string are its content.
-                        continue
-                    # Use Spyder's indentation context without its directional
-                    # Tab/Backtab behavior or its mixed-whitespace replacement.
-                    editor.setTextCursor(cursor)
-                    current_width = len(text[:prefix_length].expandtabs(tab_width))
-                    if indent == "\t":
-                        # Spyder rounds dedents using len(indent_chars), which
-                        # is one for tabs rather than the configured tab width.
-                        current_width = -(-current_width // tab_width) * tab_width
-                    width = editor.find_indentation(cur_indent=current_width)
-                    if width < 0:
-                        continue
-                    if indent == "\t":
-                        prefix = "\t" * (width // tab_width) + " " * (width % tab_width)
+                    prefix_length = len(text) - len(text.lstrip(" \t"))
+                    cursor = QTextCursor(block)
+                    if is_python:
+                        if TextBlockHelper.get_state(block.previous()) in (
+                            PythonSH.INSIDE_SQ3STRING,
+                            PythonSH.INSIDE_DQ3STRING,
+                            PythonSH.INSIDE_SQSTRING,
+                            PythonSH.INSIDE_DQSTRING,
+                        ):
+                            # Leading spaces in a multiline string are its content.
+                            continue
+                        # Use Spyder's indentation context without its directional
+                        # Tab/Backtab behavior or its mixed-whitespace replacement.
+                        editor.setTextCursor(cursor)
+                        current_width = len(text[:prefix_length].expandtabs(tab_width))
+                        if indent == "\t":
+                            # Spyder rounds dedents using len(indent_chars), which
+                            # is one for tabs rather than the configured tab width.
+                            current_width = -(-current_width // tab_width) * tab_width
+                        width = editor.find_indentation(cur_indent=current_width)
+                        if width < 0:
+                            continue
+                        if indent == "\t":
+                            prefix = "\t" * (width // tab_width) + " " * (width % tab_width)
+                        else:
+                            prefix = " " * width
                     else:
-                        prefix = " " * width
-                else:
-                    # Match Spyder's simple indentation for other languages.
-                    previous_text = block.previous().text()
-                    prefix = previous_text[
-                        : len(previous_text) - len(previous_text.lstrip(" \t"))
-                    ]
+                        # Match Spyder's simple indentation for other languages.
+                        previous_text = block.previous().text()
+                        prefix = previous_text[
+                            : len(previous_text) - len(previous_text.lstrip(" \t"))
+                        ]
 
-                if prefix != text[:prefix_length]:
-                    cursor.setPosition(
-                        block.position() + prefix_length, QTextCursor.KeepAnchor
-                    )
-                    cursor.insertText(prefix)
+                    if prefix != text[:prefix_length]:
+                        cursor.setPosition(
+                            block.position() + prefix_length, QTextCursor.KeepAnchor
+                        )
+                        cursor.insertText(prefix)
 
-            block = document.findBlockByNumber(first_block)
-            text = block.text()
-            self.cursor.set_cursor_pos(
-                block.position() + len(text) - len(text.lstrip(" \t"))
-            )
+                block = document.findBlockByNumber(first_block)
+                text = block.text()
+                self.cursor.set_cursor_pos(
+                    block.position() + len(text) - len(text.lstrip(" \t"))
+                )
         finally:
-            edit_cursor.endEditBlock()
             editor.skip_rstrip = previous_skip_rstrip
 
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def toggle_comments(self, start: int, end: int) -> int:
         """Toggle comments over Qt UTF-16 endpoints and return the first block.

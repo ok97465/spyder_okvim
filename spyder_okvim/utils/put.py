@@ -10,6 +10,7 @@ from qtpy.QtGui import QTextCursor
 
 # Project Libraries
 from spyder_okvim.utils.qtcompat import live_widget
+from spyder_okvim.utils.undo import notify_document_change, undo_available, undo_block
 from spyder_okvim.vim.state import VimState
 from spyder_okvim.vim.yank_history import YankEntry
 
@@ -192,15 +193,8 @@ class PutController:
         self._pending_result = None
         self._internal += 1
         try:
-            if join_previous:
-                cursor.joinPreviousEditBlock()
-            else:
-                cursor.beginEditBlock()
-            try:
+            with undo_block(self.editor, cursor, join_previous=join_previous):
                 yield cursor
-            finally:
-                # contentsChange can arrive here, so keep the edit guard active.
-                cursor.endEditBlock()
         finally:
             self._expected_extent = None
             self._pending_result = None
@@ -412,7 +406,7 @@ class PutController:
             self.status.set_message("Put is too large to cycle")
         if old_blocks != editor.blockCount():
             self.status.set_message(f"{editor.blockCount() - old_blocks} more lines")
-        editor.document_did_change()
+        notify_document_change(editor)
         return result
 
     def can_cycle(self):
@@ -432,8 +426,7 @@ class PutController:
             return False
         if (
             editor.isReadOnly()
-            or not document.isUndoRedoEnabled()
-            or not document.isUndoAvailable()
+            or not undo_available(editor)
             or session.generation != self.text_generation
         ):
             return False
@@ -573,7 +566,7 @@ class PutController:
         session.generation = self.text_generation
         if not self.status.running_dot_cmd:
             self.status.dot_cmd.put_payload = payload
-        editor.document_did_change()
+        notify_document_change(editor)
         return True
 
     def repeat(self, count=1, count_text=""):

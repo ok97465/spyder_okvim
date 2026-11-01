@@ -16,8 +16,9 @@ from qtpy.QtWidgets import (
 from spyder.utils.palette import SpyderPalette
 
 # Project Libraries
-from spyder_okvim.utils.qtcompat import text_width
 from spyder_okvim.spyder.popup_geometry import popup_area
+from spyder_okvim.utils.qtcompat import text_width
+from spyder_okvim.utils.theme import readable_color
 
 
 def display_key(key):
@@ -143,18 +144,21 @@ class WhichKeyPopup(QFrame):
             compact_font.setPixelSize(max(10, round(font.pixelSize() * 0.85)))
             font_size = f"{compact_font.pixelSize()}px"
         self.setFont(compact_font)
+        background = SpyderPalette.COLOR_BACKGROUND_1
+        foreground = readable_color(SpyderPalette.COLOR_TEXT_1, background)
+        key_color = readable_color(SpyderPalette.COLOR_ACCENT_4, background, foreground)
         self.setStyleSheet(
             "QFrame#whichKeyPopup {"
-            f"background-color: {SpyderPalette.COLOR_BACKGROUND_1};"
+            f"background-color: {background};"
             f"border: 1px solid {SpyderPalette.COLOR_BACKGROUND_4};"
             f"font-size: {font_size}; border-radius: 4px; }}"
             "QFrame#whichKeyPopup QLabel {"
-            f"color: {SpyderPalette.COLOR_TEXT_1}; font-size: {font_size};"
+            f"color: {foreground.name()}; font-size: {font_size};"
             "background: transparent; border: none; padding: 0; margin: 0; }"
             "QFrame#whichKeyPopup QLabel#whichKeyKey {"
-            f"color: {SpyderPalette.COLOR_ACCENT_4}; font-weight: bold; }}"
+            f"color: {key_color.name()}; font-weight: bold; }}"
             "QWidget#whichKeyBody {"
-            f"background-color: {SpyderPalette.COLOR_BACKGROUND_1}; }}"
+            f"background-color: {background}; }}"
             "QScrollArea#whichKeyScroll { background: transparent; border: none; }"
         )
 

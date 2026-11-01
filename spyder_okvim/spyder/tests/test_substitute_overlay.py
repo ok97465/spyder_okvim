@@ -10,6 +10,7 @@ from qtpy.QtWidgets import QPlainTextEdit
 from spyder_okvim.spyder.substitute_overlay import SubstituteOverlay
 from spyder_okvim.utils.qtcompat import widget_is_deleted
 from spyder_okvim.utils.substitute_preview import PreviewRow
+from spyder_okvim.utils.theme import contrast_ratio
 
 
 @pytest.fixture
@@ -265,6 +266,38 @@ def test_clear_switch_and_cleanup_release_the_previous_viewport(overlay_editor, 
     overlay.cleanup()
     overlay.cleanup()
     assert overlay.widget is None
+
+
+def test_deletion_marker_follows_palette_and_stays_visible(overlay_editor):
+    editor, overlay = overlay_editor
+    row = PreviewRow(0, "first line", "line", (), (0,))
+    publish(overlay, row)
+    before = source_state(editor)
+    colors = []
+    for background, text, highlight in (
+        ("#faf0e8", "#243344", "#f8eee6"),
+        ("#172839", "#e6edf4", "#223344"),
+    ):
+        palette = QPalette(editor.palette())
+        palette.setColor(QPalette.Base, QColor(background))
+        palette.setColor(QPalette.Text, QColor(text))
+        palette.setColor(QPalette.Highlight, QColor(highlight))
+        editor.setPalette(palette)
+        rendered = overlay.render_rows()[0]
+        marker = rendered.deletions[0]
+        image = paint_image(editor, overlay)
+        _, _, accent, _ = overlay._colors(editor)
+        colors.append(accent)
+        assert contrast_ratio(accent, QColor(background)) >= 3.0
+        x, y = round(marker.x()), round(marker.y())
+        assert any(
+            image.pixelColor(px, py) == accent
+            for px in range(max(0, x - 2), x + 3)
+            for py in range(max(0, y), y + editor.fontMetrics().height())
+        )
+        assert overlay.rows == (row,)
+        assert source_state(editor) == before
+    assert colors[0] != colors[1]
 
 
 def test_output_omissions_keep_source_visible_but_show_partial_indicator(

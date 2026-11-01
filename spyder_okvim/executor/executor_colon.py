@@ -26,6 +26,7 @@ from spyder_okvim.utils.substitute import (
     prepare_substitution,
 )
 from spyder_okvim.utils.substitute_confirm import SubstituteConfirm
+from spyder_okvim.utils.undo import notify_document_change, undo_block
 from spyder_okvim.vim import VimState
 
 
@@ -249,17 +250,14 @@ class ExecutorColon(ExecutorSubBase):
         previous_skip_rstrip = editor.skip_rstrip
         editor.skip_rstrip = True
         try:
-            cursor.beginEditBlock()
-            try:
+            with undo_block(editor, cursor):
                 for start, end, replacement in reversed(edits):
                     cursor.setPosition(start)
                     cursor.setPosition(end, QTextCursor.KeepAnchor)
                     cursor.insertText(replacement)
-            finally:
-                cursor.endEditBlock()
         finally:
             editor.skip_rstrip = previous_skip_rstrip
-        editor.document_did_change()
+        notify_document_change(editor)
 
     def e(self, arg=""):
         """Open an existing path relative to the current working directory."""

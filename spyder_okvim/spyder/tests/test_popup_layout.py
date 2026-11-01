@@ -5,7 +5,6 @@ import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, QRect, Qt
 from qtpy.QtGui import QColor, QPalette
 from qtpy.QtWidgets import QLineEdit, QMainWindow, QWidget
-from spyder.config.manager import CONF
 
 # Project Libraries
 from spyder_okvim.spyder.commandline_popup import CommandlinePopupHost
@@ -63,30 +62,23 @@ def test_which_key_reflows_existing_candidates_on_resize(qtbot):
         assert popup.focusPolicy() == Qt.NoFocus
 
 
-def test_mode_palette_and_custom_colors(qtbot, monkeypatch):
+def test_mode_follows_palette(qtbot):
     parent = QWidget()
     qtbot.addWidget(parent)
     label = VimStateLabel(parent)
-    palette = QPalette(label.palette())
+    palette = QPalette(parent.palette())
     palette.setColor(QPalette.Highlight, QColor("#ffe080"))
     palette.setColor(QPalette.HighlightedText, QColor("#202020"))
-    label.setPalette(palette)
+    parent.setPalette(palette)
     label.change_state(VimState.VISUAL)
     assert "#ffe080" in label.styleSheet()
     assert "#202020" in label.styleSheet()
     assert label.text() == "VISUAL"
     assert "VISUAL" in label.accessibleDescription()
 
-    original = CONF.get
-    overrides = {"mode_fg_color": "#123456", "mode_bg_color": "#fedcba"}
-    monkeypatch.setattr(
-        CONF,
-        "get",
-        lambda section, option, *args, **kwargs: overrides.get(
-            option, original(section, option, *args, **kwargs)
-        ),
-    )
-    label.refresh_appearance()
+    palette.setColor(QPalette.Highlight, QColor("#fedcba"))
+    palette.setColor(QPalette.HighlightedText, QColor("#123456"))
+    parent.setPalette(palette)
     assert "#123456" in label.styleSheet()
     assert "#fedcba" in label.styleSheet()
 

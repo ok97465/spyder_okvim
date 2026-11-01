@@ -5,9 +5,9 @@
 """Spyder okvim configuration page."""
 
 # Third Party Libraries
-from qtpy.QtCore import QRegularExpression, Qt
-from qtpy.QtGui import QKeySequence, QRegularExpressionValidator
-from qtpy.QtWidgets import QGridLayout, QGroupBox, QHBoxLayout, QLineEdit, QVBoxLayout
+from qtpy.QtCore import Qt
+from qtpy.QtGui import QKeySequence
+from qtpy.QtWidgets import QGroupBox, QHBoxLayout, QLineEdit, QVBoxLayout
 from spyder.api.preferences import PluginConfigPage
 
 
@@ -17,51 +17,8 @@ class OkvimConfigPage(PluginConfigPage):
     def setup_page(self):
         """Create configuration page for the plugin."""
         newcb = self.create_checkbox
-        newce = self.create_coloredit
         newsb = self.create_spinbox
         newle = self.create_lineedit
-
-        color_group = QGroupBox("Color")
-        color_layout = QGridLayout()
-
-        conf_color_info = {
-            "Cursor Fg": ("cursor_fg_color", 0, 0),
-            "Cursor Bg": ("cursor_bg_color", 0, 2),
-            "Selection Fg": ("select_fg_color", 1, 0),
-            "Selection Bg": ("select_bg_color", 1, 2),
-            "Search Fg": ("search_fg_color", 2, 0),
-            "Search Bg": ("search_bg_color", 2, 2),
-            "Highlight after yank Fg": ("yank_fg_color", 3, 0),
-            "Highlight after yank Bg": ("yank_bg_color", 3, 2),
-            "Jump label Fg (empty: theme)": ("annotation_fg_color", 4, 0),
-            "Jump label Bg (empty: theme)": ("annotation_bg_color", 4, 2),
-            "Jump label border (empty: theme)": ("annotation_border_color", 5, 0),
-            "Mode Fg (empty: theme)": ("mode_fg_color", 6, 0),
-            "Mode Bg (empty: theme)": ("mode_bg_color", 6, 2),
-        }
-        theme_color_options = {
-            "annotation_fg_color",
-            "annotation_bg_color",
-            "annotation_border_color",
-            "mode_fg_color",
-            "mode_bg_color",
-        }
-
-        for name, (option_name, idx_row, idx_col) in conf_color_info.items():
-            label, clayout = newce(name, option_name, without_layout=True)
-            label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            clayout.lineedit.setValidator(
-                QRegularExpressionValidator(
-                    QRegularExpression(
-                        r"(?:#[0-9abcdefABCDEF]{6})?"
-                        if option_name in theme_color_options
-                        else r"#[0-9abcdefABCDEF]{6}"
-                    )
-                )
-            )
-            color_layout.addWidget(label, idx_row, idx_col)
-            color_layout.addLayout(clayout, idx_row, idx_col + 1)
-            color_group.setLayout(color_layout)
 
         options_group = QGroupBox("Options")
         options_layout = QVBoxLayout()
@@ -171,7 +128,6 @@ class OkvimConfigPage(PluginConfigPage):
         which_key_group.setLayout(which_key_layout)
 
         layout = QVBoxLayout()
-        layout.addWidget(color_group)
         layout.addWidget(options_group)
         layout.addWidget(yanky_group)
         layout.addWidget(leaderkey_group)

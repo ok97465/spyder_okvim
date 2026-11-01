@@ -4,10 +4,11 @@
 import weakref
 
 from qtpy.QtCore import QEvent, QRect, Qt
-from qtpy.QtGui import QColor, QPalette
+from qtpy.QtGui import QPalette
 from qtpy.QtWidgets import QLabel
 
 from spyder_okvim.utils.qtcompat import live_widget
+from spyder_okvim.utils.theme import selection_colors
 
 
 ANNOTATION_STYLE = {
@@ -19,19 +20,16 @@ ANNOTATION_STYLE = {
 }
 
 
-def annotation_style(widget, settings=None):
-    """Resolve matching label colors from the current editor and overrides."""
+def annotation_style(widget):
+    """Resolve matching label colors from the current editor's palette."""
     palette = widget.palette()
-    colors = {
-        "background": ("annotation_bg_color", QPalette.Highlight),
-        "text": ("annotation_fg_color", QPalette.HighlightedText),
-        "border": ("annotation_border_color", QPalette.Text),
+    foreground, background = selection_colors(widget)
+    return {
+        **ANNOTATION_STYLE,
+        "background": background.name(),
+        "text": foreground.name(),
+        "border": palette.color(QPalette.Text).name(),
     }
-    style = dict(ANNOTATION_STYLE)
-    for name, (option, role) in colors.items():
-        custom = QColor(getattr(settings, option, ""))
-        style[name] = custom.name() if custom.isValid() else palette.color(role).name()
-    return style
 
 
 def place_annotation(target, width, height, bounds, occupied):
@@ -71,14 +69,11 @@ class InlineLabel(QLabel):
         self.setAccessibleName("Jump target label")
         self.setAccessibleDescription("Type this label to jump to its target.")
         self._style_source_ref = None
-        self._settings = None
         self._font_family = ""
         self._font_size = 10
         self._applying_style = False
 
-    def set_style(
-        self, font_family: str, font_size_pt: int, source=None, settings=None
-    ):
+    def set_style(self, font_family: str, font_size_pt: int, source=None):
         """Apply styling for display.
 
         Args:
@@ -93,13 +88,10 @@ class InlineLabel(QLabel):
             self._style_source_ref = weakref.ref(source)
             if source is not self:
                 source.installEventFilter(self)
-        self._settings = settings
         self._font_family = font_family
         self._font_size = font_size_pt
-        style = annotation_style(source, settings)
-        self._applying_style = True
-        self.setStyleSheet(
-            f"""QLabel {{
+        style = annotation_style(source)
+        stylesheet = f"""QLabel {{
                 background-color: {style["background"]};
                 color: {style["text"]};
                 border: {style["border_width"]}px solid {style["border"]};
@@ -110,14 +102,23 @@ class InlineLabel(QLabel):
                 font-size: {font_size_pt}pt;
                 font-weight: {ANNOTATION_STYLE["font_weight"]};
             }}"""
-        )
-        self._applying_style = False
+        if stylesheet != self.styleSheet():
+            self._applying_style = True
+            try:
+                self.setStyleSheet(stylesheet)
+            finally:
+                self._applying_style = False
 
     def changeEvent(self, event):
         """Refresh visible annotations when the host palette changes."""
         super().changeEvent(event)
         if (
-            event.type() == QEvent.PaletteChange
+            event.type()
+            in (
+                QEvent.PaletteChange,
+                QEvent.ApplicationPaletteChange,
+                QEvent.StyleChange,
+            )
             and live_widget(self._style_source_ref) is not None
             and not self._applying_style
         ):
@@ -125,10 +126,17 @@ class InlineLabel(QLabel):
                 self._font_family,
                 self._font_size,
                 live_widget(self._style_source_ref),
-                self._settings,
             )
 
     def eventFilter(self, watched, event):
-        if event.type() == QEvent.PaletteChange and not self._applying_style:
-            self.set_style(self._font_family, self._font_size, watched, self._settings)
+        if (
+            event.type()
+            in (
+                QEvent.PaletteChange,
+                QEvent.ApplicationPaletteChange,
+                QEvent.StyleChange,
+            )
+            and not self._applying_style
+        ):
+            self.set_style(self._font_family, self._font_size, watched)
         return False

@@ -422,7 +422,7 @@ def test_formatting(vim_bot):
     assert editor.format_document_or_range.called
 
 
-def test_open_switcher_plugin(vim_bot):
+def test_open_switcher_plugin(vim_bot, monkeypatch):
     """Test open switcher when provided by plugin."""
     main, _, _, vim, qtbot = vim_bot
 
@@ -430,7 +430,7 @@ def test_open_switcher_plugin(vim_bot):
         delattr(main, "open_switcher")
 
     plugin = Mock()
-    main.get_plugin = Mock(return_value=plugin)
+    monkeypatch.setattr(main, "get_plugin", Mock(return_value=plugin))
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)
@@ -440,7 +440,7 @@ def test_open_switcher_plugin(vim_bot):
     assert plugin.open_switcher.called
 
 
-def test_open_symbol_swithcer_plugin(vim_bot):
+def test_open_symbol_swithcer_plugin(vim_bot, monkeypatch):
     """Test open symbol switcher when provided by plugin."""
     main, _, _, vim, qtbot = vim_bot
 
@@ -448,7 +448,7 @@ def test_open_symbol_swithcer_plugin(vim_bot):
         delattr(main, "open_switcher")
 
     plugin = Mock()
-    main.get_plugin = Mock(return_value=plugin)
+    monkeypatch.setattr(main, "get_plugin", Mock(return_value=plugin))
 
     cmd_line = vim.vim_cmd.commandline
     qtbot.keyPress(cmd_line, Qt.Key_Space)

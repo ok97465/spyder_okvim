@@ -1,7 +1,5 @@
 """Theme and viewport regressions for temporary jump labels."""
 
-from types import SimpleNamespace
-
 from qtpy.QtCore import QCoreApplication, QEvent, QPoint, QRect
 from qtpy.QtGui import QColor, QPalette
 from qtpy.QtWidgets import QPlainTextEdit, QWidget
@@ -9,22 +7,28 @@ from qtpy.QtWidgets import QPlainTextEdit, QWidget
 from spyder_okvim.vim.label import InlineLabel, annotation_style
 
 
-def test_annotation_palette_and_custom_colors(qtbot):
+def test_annotation_follows_editor_palette(qtbot):
     source = QPlainTextEdit()
     parent = QWidget()
     qtbot.addWidget(source)
     qtbot.addWidget(parent)
     label = InlineLabel(parent)
-    settings = SimpleNamespace(
-        annotation_bg_color="#abcdef", annotation_fg_color="invalid"
-    )
-    label.set_style("Monospace", 10, source, settings)
-    assert "#abcdef" in label.styleSheet()
+    label.set_style("Monospace", 10, source)
     palette = QPalette(source.palette())
+    palette.setColor(QPalette.Highlight, QColor("#abcdef"))
     palette.setColor(QPalette.HighlightedText, QColor("#112233"))
+    palette.setColor(QPalette.Text, QColor("#334455"))
     source.setPalette(palette)
+    assert "background-color: #abcdef" in label.styleSheet()
     assert "color: #112233" in label.styleSheet()
-    assert annotation_style(source, settings)["background"] == "#abcdef"
+    assert "solid #334455" in label.styleSheet()
+    assert annotation_style(source)["background"] == "#abcdef"
+
+    palette.setColor(QPalette.Highlight, QColor("#123456"))
+    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
+    source.setPalette(palette)
+    assert "background-color: #123456" in label.styleSheet()
+    assert "color: #ffffff" in label.styleSheet()
 
 
 def test_annotation_survives_style_source_deletion(qtbot):
@@ -39,6 +43,26 @@ def test_annotation_survives_style_source_deletion(qtbot):
     palette.setColor(QPalette.Window, QColor("#ffffff"))
     label.setPalette(palette)
     assert label.parent() is parent
+
+
+def test_visible_annotation_repairs_unreadable_new_theme_colors(qtbot):
+    source = QPlainTextEdit()
+    parent = QWidget()
+    qtbot.addWidget(source)
+    qtbot.addWidget(parent)
+    label = InlineLabel(parent)
+    label.set_style("Monospace", 10, source)
+    for background, unreadable, text in (
+        ("#888888", "#777777", "#000000"),
+        ("#555555", "#666666", "#ffffff"),
+    ):
+        palette = QPalette(source.palette())
+        palette.setColor(QPalette.Highlight, QColor(background))
+        palette.setColor(QPalette.HighlightedText, QColor(unreadable))
+        palette.setColor(QPalette.Text, QColor(text))
+        source.setPalette(palette)
+        assert f"background-color: {background};" in label.styleSheet()
+        assert f"color: {text};" in label.styleSheet()
 
 
 def test_jump_annotation_fits_right_edge_and_replaces_previous_labels(vim_bot):

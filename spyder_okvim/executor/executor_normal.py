@@ -35,6 +35,7 @@ from spyder_okvim.executor.prefixes import (
     ViewportPrefixExecutor,
 )
 from spyder_okvim.utils.motion import MotionInfo, MotionType
+from spyder_okvim.utils.undo import editor_undo
 
 
 class NormalModeExecutor(MovementMixin, ExecutorBase):
@@ -161,7 +162,7 @@ class NormalModeExecutor(MovementMixin, ExecutorBase):
         n_block_old = editor.blockCount()
 
         for _ in range(count):
-            editor.undo()
+            editor_undo(editor)
         cursor = editor.textCursor()
         pos = cursor.position()
         if cursor.atBlockEnd() and not cursor.atBlockStart():
