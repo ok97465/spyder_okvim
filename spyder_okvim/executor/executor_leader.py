@@ -2,7 +2,12 @@
 """Executor handling leader-key sequences."""
 
 # Project Libraries
-from spyder_okvim.executor.executor_base import CommandSpec, ExecutorBase
+from spyder_okvim.executor.executor_base import (
+    CommandSpec,
+    ExecutorBase,
+    ExecutorSubBase,
+    ExecutorTransition,
+)
 
 
 class ExecutorLeaderKey(ExecutorBase):
@@ -20,12 +25,14 @@ class ExecutorLeaderKey(ExecutorBase):
         CommandSpec("p", "open_switcher", "Switch file"),
         CommandSpec("s", "open_symbol_switcher", "Switch symbol"),
         CommandSpec("y", "show_yank_history", "Yank history"),
+        CommandSpec("t", "telescope", "Telescope / Pickers"),
     )
 
     def __init__(self, vim_status):
         super().__init__(vim_status)
 
         self.prev_executor = None
+        self._telescope = _TelescopePrefixExecutor(vim_status)
 
     def set_easymotion_key(self, key):
         """Restore default commands and bind the current EasyMotion key."""
@@ -100,3 +107,47 @@ class ExecutorLeaderKey(ExecutorBase):
     def show_yank_history(self, count=1, count_text=""):
         """Request the active view's yank picker through the session callback."""
         self.vim_status.show_yank_history()
+
+    def telescope(self, count=1, count_text=""):
+        """Wait for one case-sensitive Telescope picker continuation."""
+        return ExecutorTransition(self._telescope, True)
+
+
+class _TelescopePrefixExecutor(ExecutorSubBase):
+    """Select a picker using the regular prefix dispatch and hint contract."""
+
+    hint_prefix = "<leader>t"
+    command_specs = (
+        CommandSpec("m", "marks", "Marks"),
+        CommandSpec("j", "jumps", "Jumps"),
+        CommandSpec("s", "status", "Git status"),
+        CommandSpec("S", "stash", "Git stashes"),
+        CommandSpec("c", "commits", "Git commits"),
+        CommandSpec("C", "file_commits", "Git commits of current file"),
+        CommandSpec("b", "branches", "Git branches"),
+    )
+
+    def __init__(self, vim_status):
+        super().__init__(vim_status)
+        self.allow_leaderkey = False
+
+    def marks(self, count=1, count_text=""):
+        self.vim_status.open_picker("marks")
+
+    def jumps(self, count=1, count_text=""):
+        self.vim_status.open_picker("jumps")
+
+    def status(self, count=1, count_text=""):
+        self.vim_status.open_picker("git_status")
+
+    def stash(self, count=1, count_text=""):
+        self.vim_status.open_picker("git_stash")
+
+    def commits(self, count=1, count_text=""):
+        self.vim_status.open_picker("git_log")
+
+    def file_commits(self, count=1, count_text=""):
+        self.vim_status.open_picker("git_file_log")
+
+    def branches(self, count=1, count_text=""):
+        self.vim_status.open_picker("git_branches")

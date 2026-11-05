@@ -1,9 +1,9 @@
-"""Shared keyboard, mouse and layout behavior for navigation pickers."""
+"""The table popup and keyboard contract retained by yank history."""
 
 from __future__ import annotations
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, QPoint, QRect, QStringListModel, Qt, QTimer
+from qtpy.QtCore import QEvent, QPoint, QRect, Qt, QTimer
 from qtpy.QtGui import QStandardItemModel
 from qtpy.QtWidgets import (
     QAbstractItemView,
@@ -12,7 +12,6 @@ from qtpy.QtWidgets import (
     QHeaderView,
     QLabel,
     QLayout,
-    QListView,
     QSizePolicy,
     QTableView,
     QVBoxLayout,
@@ -21,14 +20,21 @@ from spyder.utils.fonts import get_font
 from spyder.utils.palette import SpyderPalette
 
 
-class _PopupDialog(QDialog):
-    """Keep picker input and sizing in one place, independent of its contents."""
+class PopupTableDialog(QDialog):
+    """Display read-only metadata rows without a search-field abstraction."""
 
-    def __init__(self, title, parent, *, min_width, max_height):
+    def __init__(
+        self,
+        title: str,
+        parent=None,
+        *,
+        headers: list[str] | None = None,
+        min_width: int | None = None,
+        max_height: int = 600,
+    ) -> None:
         super().__init__(parent)
         self._preferred_width = min_width or 560
         self._max_list_height = max_height or 600
-        self._input_widget = None
         self._geometry_timer = QTimer(self)
         self._geometry_timer.setSingleShot(True)
         self._geometry_timer.timeout.connect(self.update_geometry)
@@ -51,6 +57,16 @@ class _PopupDialog(QDialog):
         self.help_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.help_label.setAccessibleName("Picker keyboard help")
         self.set_navigation_help("open")
+        self.list_viewer = QTableView(self)
+        self.list_viewer.setSelectionBehavior(QTableView.SelectRows)
+        self.list_viewer.verticalHeader().setVisible(False)
+        self.list_model = QStandardItemModel(self)
+        if headers:
+            self.list_model.setHorizontalHeaderLabels(headers)
+        self._setup_view()
+        header = self.list_viewer.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
 
     def _setup_view(self):
         view = self.list_viewer
@@ -65,7 +81,6 @@ class _PopupDialog(QDialog):
         view.setAccessibleName(f"{self.windowTitle()} results")
         view.setAccessibleDescription(self.help_label.text())
         view.installEventFilter(self)
-        view.clicked.connect(self._restore_input_focus)
         view.doubleClicked.connect(self._activate_index)
         self.layout_.addWidget(view)
         self.layout_.addWidget(self.help_label)
@@ -84,18 +99,6 @@ class _PopupDialog(QDialog):
         if hasattr(self, "list_viewer"):
             self.list_viewer.setAccessibleDescription(self.help_label.text())
 
-    def set_input_widget(self, widget):
-        """Let mouse selection preserve an optional search field's focus."""
-        self._input_widget = widget
-        widget.installEventFilter(self)
-        widget.setMinimumWidth(0)
-        widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.list_viewer.setFocusPolicy(Qt.NoFocus)
-
-    def _restore_input_focus(self, *_):
-        if self._input_widget is not None:
-            self._input_widget.setFocus()
-
     def _activate_index(self, index):
         if index.isValid():
             self.list_viewer.setCurrentIndex(index)
@@ -108,8 +111,7 @@ class _PopupDialog(QDialog):
         row = max(0, min(row, count - 1))
         index = self.list_model.index(row, 0)
         self.list_viewer.setCurrentIndex(index)
-        if isinstance(self.list_viewer, QTableView):
-            self.list_viewer.selectRow(row)
+        self.list_viewer.selectRow(row)
         self.list_viewer.scrollTo(index)
 
     def get_number_of_visible_lines(self):
@@ -152,7 +154,7 @@ class _PopupDialog(QDialog):
     def eventFilter(self, obj, event):
         """Reserve shortcuts once; perform their action only on KeyPress."""
         if (
-            (obj is self.list_viewer or obj is self._input_widget)
+            obj is self.list_viewer
             and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
             and self._handles_key(event)
         ):
@@ -252,46 +254,3 @@ class _PopupDialog(QDialog):
             # Styled parents do not always propagate their palette to Qt views.
             if hasattr(self, "list_viewer"):
                 self.list_viewer.setPalette(self.palette())
-
-
-class PopupListDialog(_PopupDialog):
-    """Picker for a simple list of strings."""
-
-    def __init__(
-        self,
-        title: str,
-        parent=None,
-        *,
-        min_width: int | None = None,
-        max_height: int = 600,
-    ) -> None:
-        super().__init__(title, parent, min_width=min_width, max_height=max_height)
-        self.list_viewer = QListView(self)
-        self.list_viewer.setUniformItemSizes(True)
-        self.list_model = QStringListModel(self)
-        self._setup_view()
-
-
-class PopupTableDialog(_PopupDialog):
-    """Picker for read-only rows of metadata."""
-
-    def __init__(
-        self,
-        title: str,
-        parent=None,
-        *,
-        headers: list[str] | None = None,
-        min_width: int | None = None,
-        max_height: int = 600,
-    ) -> None:
-        super().__init__(title, parent, min_width=min_width, max_height=max_height)
-        self.list_viewer = QTableView(self)
-        self.list_viewer.setSelectionBehavior(QTableView.SelectRows)
-        self.list_viewer.verticalHeader().setVisible(False)
-        self.list_model = QStandardItemModel(self)
-        if headers:
-            self.list_model.setHorizontalHeaderLabels(headers)
-        self._setup_view()
-        header = self.list_viewer.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        header.setStretchLastSection(True)

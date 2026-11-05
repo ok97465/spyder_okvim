@@ -93,7 +93,7 @@ class VimLineEdit(QLineEdit):
             Qt.Key_U: vim_shortcut.pg_half_up,
             Qt.Key_B: vim_shortcut.pg_up,
             Qt.Key_R: vim_shortcut.redo,
-            Qt.Key_P: vim_shortcut.open_file_search,
+            Qt.Key_P: vim_shortcut.open_picker,
             Qt.Key_C: vim_shortcut.clear_tip_search,
             Qt.Key_O: vim_shortcut.jump_backward,
             Qt.Key_I: vim_shortcut.jump_forward,
@@ -611,7 +611,7 @@ class VimLineEdit(QLineEdit):
             self.vim_widget.handle_prompt_event(QEvent.WindowActivate)
             self.vim_widget.sig_command_changed.emit()
             return
-        if self.vim_widget.has_yank_picker:
+        if self.vim_widget.has_yank_picker or self.vim_widget.picker.owns_focus:
             return
         if self.vim_status.cursor.get_editor():
             self.to_normal()
@@ -639,7 +639,7 @@ class VimLineEdit(QLineEdit):
             return
         self._prompt_focus_window = None
         self.vim_widget.cancel_substitute()
-        if self.vim_widget.has_yank_picker:
+        if self.vim_widget.has_yank_picker or self.vim_widget.picker.owns_focus:
             super().focusOutEvent(event)
             return
         self.vim_widget.put_controller.cancel()

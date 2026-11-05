@@ -118,8 +118,10 @@ Use `m{mark}` to set a mark at the current cursor position and `'` or \` to jump
 - zz, zt, tb : Cursor line to some locations of screen.
 - ZZ : Save and close current file.
 - q, @: macro
-- :marks: Displays the list of currently set marks.
-- :jumps: Displays the list of currently set jumplist.
+- :marks: Searches marks with a code preview.
+- :jumps: Searches jump history with a code preview.
+- :gitstatus: Inspects staged and unstaged changes.
+- :gitlog / :gitcommits: Browses existing commits and patches.
 - :vs, :vsp, :vsplit: Splits the current editor into side-by-side views.
 - Ctrl+w then h/j/k/l: Moves to the left/down/up/right editor split in Normal mode.
   Disable Spyder's Ctrl+w shortcut to use this sequence.
@@ -144,6 +146,13 @@ seconds, that temporary entry is discarded.
 - \<leader\>enter :  run cell and advance
 - \<leader\>p : Spyder switcher
 - \<leader\>s : Spyder symbol switcher
+- \<leader\>tm : Marks picker
+- \<leader\>tj : Jumps picker
+- \<leader\>ts : Git status and staged/unstaged patches
+- \<leader\>tS : Git stash list and saved patches
+- \<leader\>tc : Repository commit history
+- \<leader\>tC : Current file commit history, following renames
+- \<leader\>tb : Local and remote Git branches
 - [d : go to previous warning/error
 - ]d : go to next warning/error
 - gc{motion} : toggle comments (works in visual mode)
@@ -214,14 +223,89 @@ The following actions are supported:
 - cs{surroundings}{surroundings} in normal mode: change surroundings in pairs.
 - S{surroundings} in visual mode: add surroundings in pairs.
 
-## Fuzzy path finder
+## Shared picker
 
-Press Ctrl+p to open the fuzzy path finder. Spyder uses the same shortcut as a
-global command, so you may need to `reassign Spyder's default Ctrl+p binding` to
-use this feature.
-Use ^p, ^n, ^f, ^b, ^u, and ^d to navigate the list.
+Press **Ctrl+P** to search project files. `:marks` / `<leader>tm` and
+`:jumps` / `<leader>tj` open the same window; the source selector switches
+between Files, Marks, Jumps, Git status,
+Git commits/log, Git stashes, current file commits, and Git branches. If Spyder intercepts
+Ctrl+P, reassign its global binding.
 
-![fuzzy path finder](https://github.com/ok97465/spyder_okvim/raw/main/doc/path_finder.gif)
+Results appear on the left, with the best match beside the search prompt at the
+bottom. The independent preview on the right follows the editor's theme and
+shows unsaved open documents. Selecting a row, searching, or closing the picker
+preserves the original document and navigation history.
+
+| Key | Action |
+| --- | --- |
+| Ctrl+N/P, Down/Up | Next/previous result |
+| Ctrl+F/B, PageDown/PageUp | Page through results |
+| Ctrl+D/U | Scroll the preview; disabled when preview is hidden/unavailable |
+| Enter / double click | Open a location, checkout a commit/branch, or apply a stash |
+| Esc / Ctrl+C | Close |
+| Ctrl+O/I in Jumps | Move through actual history immediately; Esc keeps that movement |
+
+The picker starts at 80% of the parent width and 70% of its height. Refresh and
+Preview have full-size click targets; narrow windows put the buttons on a second
+row and stack the panels. The Preview button hides/shows preview.
+Refresh recollects the current source. Query, selection and scroll are retained
+per source and scope until the picker closes. Files retain the existing
+`.py`, `.txt`, `.md` range, excluding hidden paths and symlinks. Collection,
+search, content, and display limits are reported separately when reached.
+
+Use `:gitstatus` to inspect separate unstaged and staged patches, including
+staged-only changes. Untracked files show their contents. `:gitlog` (also
+`:gitcommits`) browses existing commits; Ctrl+L lists changed files, and Back
+restores the previous query and selection. Load more extends the loaded history
+range. Root commits compare against an empty tree; merge commits compare against
+the first parent. Disk/index diffs are labelled when an open buffer has unsaved
+changes. The Actions menu lists the available Git operations and their keys.
+
+The default Space leader adds these Telescope-style picker shortcuts:
+
+| Shortcut | Picker |
+| --- | --- |
+| `<leader>tm` | Marks |
+| `<leader>tj` | Jump history |
+| `<leader>ts` | Git status |
+| `<leader>tS` | Saved Git stashes and their tracked/untracked patches |
+| `<leader>tc` | Repository commits |
+| `<leader>tC` | Commits that changed the current file, including its pre-rename history |
+| `<leader>tb` | Local and remote-tracking branches with log preview |
+
+After `<leader>t`, WhichKey shows the case-sensitive continuations. File history
+uses the current file's repository even when the active project is elsewhere.
+
+| Picker | Key | Git operation |
+| --- | --- | --- |
+| Status | Tab | Stage the file; unstage first when it already has indexed changes |
+| Commits / current file commits | Enter | Checkout the selected commit with detached HEAD |
+| Commits / current file commits | Ctrl+R, then m / s / h | Reset current HEAD in mixed / soft / hard mode |
+| Commits / current file commits | Ctrl+L | Browse the commit's changed files; Back restores the history query/selection |
+| Branches | Enter | Checkout the selected local branch; a remote ref opens detached HEAD |
+| Branches | Ctrl+T | Create/switch a local branch tracking the selected remote branch |
+| Branches | Ctrl+A | Name, create and switch a new branch from current HEAD |
+| Branches | Ctrl+D | Delete the selected branch; Git refuses an unmerged local branch |
+| Branches | Ctrl+R | Rebase the current branch onto the selected branch |
+| Branches | Ctrl+Y | Merge the selected branch into the current branch |
+| Stashes | Enter | Apply the selected saved stash, including index state; retain the stash |
+
+Reset, branch deletion, rebase and merge show the target in a confirmation dialog.
+Hard reset discards tracked changes on disk and in the index, and can remove
+untracked files that obstruct the target tree. Remote branch deletion
+removes only the local remote-tracking reference; it does not push a deletion.
+Disk-changing operations require saving or closing modified open buffers first.
+Stage uses saved disk content. Clean open files changed by Git are reloaded; a
+buffer edited during execution or removed on disk is kept for review.
+
+Writes use a separate, serial process service. Searching, switching source or
+closing the picker does not interrupt a submitted Git operation. HEAD, its current
+branch and the selected branch ref are rechecked before execution. On completion,
+results are refreshed and Git errors are shown. Merge/rebase conflicts retain Git's
+conflict state for normal resolution; the picker does not auto-abort or auto-stash.
+
+See [picker measurements](doc/picker_performance.md) for search latency, worker
+ownership and memory limits.
 
 ## Config page
 

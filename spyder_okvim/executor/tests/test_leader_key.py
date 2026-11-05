@@ -34,6 +34,7 @@ def test_leader_hint_candidates_match_dispatch(vim_bot):
         ("p", "Switch file"),
         ("s", "Switch symbol"),
         ("y", "Yank history"),
+        ("t", "Telescope / Pickers"),
     ]
     assert [key for key, _ in candidates] == list(executor.dispatcher)
     assert executor.dispatcher["i"] == executor.auto_import
@@ -73,7 +74,7 @@ def test_yank_history_leader_dispatch(vim_bot, monkeypatch):
     assert widget.commandline.text() == ""
 
 
-@pytest.mark.parametrize("key", [" ", "\r", "\b", "b", "I"])
+@pytest.mark.parametrize("key", [" ", "\r", "\b", "b", "I", "t"])
 def test_easymotion_hint_uses_current_key(vim_bot, key):
     """EasyMotion replaces collisions in place and retains raw special keys."""
     _, _, _, vim, _ = vim_bot
@@ -456,3 +457,69 @@ def test_open_symbol_swithcer_plugin(vim_bot, monkeypatch):
 
     assert cmd_line.text() == ""
     assert plugin.open_switcher.called
+
+
+@pytest.mark.parametrize(
+    "key, source",
+    [
+        ("s", "git_status"),
+        ("S", "git_stash"),
+        ("c", "git_log"),
+        ("C", "git_file_log"),
+        ("b", "git_branches"),
+    ],
+)
+def test_telescope_git_leader_sequences_preserve_case(
+    vim_bot, monkeypatch, key, source
+):
+    """The prefix waits without an action, then opens exactly its chosen source."""
+    _, _, _, vim, qtbot = vim_bot
+    widget = vim.vim_cmd
+    status = widget.vim_status
+    reset_vim_state(status)
+    opened = Mock()
+    monkeypatch.setattr(status, "open_picker", opened)
+    qtbot.keyClicks(widget.commandline, " t")
+    pending = widget.pending_hint()
+    assert pending is not None
+    assert pending.prefix == "<leader>t"
+    assert dict(pending.executor.get_hint_candidates()) == {
+        "m": "Marks",
+        "j": "Jumps",
+        "s": "Git status",
+        "S": "Git stashes",
+        "c": "Git commits",
+        "C": "Git commits of current file",
+        "b": "Git branches",
+    }
+    assert widget.commandline.text() == ""
+    opened.assert_not_called()
+    qtbot.keyClicks(widget.commandline, key)
+    opened.assert_called_once_with(source)
+    assert status.sub_mode is None
+    assert widget.commandline.text() == ""
+
+
+@pytest.mark.parametrize("key", [Qt.Key_Escape, Qt.Key_Backspace, Qt.Key_Question])
+def test_telescope_prefix_cancels_without_opening_picker(vim_bot, monkeypatch, key):
+    _, _, _, vim, qtbot = vim_bot
+    widget = vim.vim_cmd
+    status = widget.vim_status
+    reset_vim_state(status)
+    opened = Mock()
+    monkeypatch.setattr(status, "open_picker", opened)
+    qtbot.keyClicks(widget.commandline, " t")
+    qtbot.keyClick(widget.commandline, key)
+    opened.assert_not_called()
+    assert status.sub_mode is None
+    assert widget.commandline.text() == ""
+
+
+def test_changing_easymotion_key_restores_telescope_prefix(vim_bot):
+    _, _, _, vim, _ = vim_bot
+    executor = ExecutorLeaderKey(vim.vim_cmd.vim_status)
+    executor.set_easymotion_key("t")
+    assert executor.dispatcher["t"] == executor.execute_easymotion
+    executor.set_easymotion_key(" ")
+    assert executor.dispatcher["t"] == executor.telescope
+    assert dict(executor.get_hint_candidates())["t"] == "Telescope / Pickers"

@@ -14,7 +14,6 @@ input and queued macro playback have their own cohesive modules and lifetimes.
 from __future__ import annotations
 
 # Standard Libraries
-import os.path as osp
 import re
 import weakref
 from contextlib import contextmanager
@@ -24,7 +23,6 @@ from qtpy.QtCore import QEvent, QObject, QSize, Qt, Signal, Slot
 from qtpy.QtGui import QKeySequence, QPainter, QPalette, QTextCursor
 from qtpy.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QWidget
 from spyder.api.config.decorators import on_conf_change
-from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
 
@@ -47,10 +45,9 @@ from spyder_okvim.spyder.macro_playback import (
 )
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
-from spyder_okvim.utils.file_search import FileSearchDialog
+from spyder_okvim.spyder.picker import PickerController
 from spyder_okvim.utils.put import PutController
 from spyder_okvim.utils.qtcompat import (
-    exec_dialog,
     live_widget,
     text_width,
     widget_is_deleted,
@@ -256,20 +253,9 @@ class VimShortcut(QObject):
 
         self.cmd_line.esc_pressed()
 
-    def open_file_search(self) -> None:
-        """Open the file search dialog."""
-        root_folder = self.main.projects.get_active_project_path()
-
-        dlg = FileSearchDialog(root_folder, self.get_editor())
-        exec_dialog(dlg)
-        path = dlg.get_selected_path()
-
-        if osp.isfile(path):
-            self.vim_status.push_jump()
-            application = self.main.get_plugin(Plugins.Application)
-            application.open_file_in_plugin(path)
-            self.vim_status.jump_list.push(path, 0)
-        self.vim_status.set_focus_to_vim()
+    def open_picker(self, source="files") -> None:
+        """Open a source in the shared modeless picker."""
+        self.cmd_line.vim_widget.open_picker(source)
 
     def clear_tip_search(self) -> None:
         """Clear tooltip, search highlight."""
@@ -486,6 +472,8 @@ class VimWidget(QWidget):
         self.which_key = WhichKeyController(self)
         self.commandline_popup = CommandlinePopupController(self)
         self.substitute_preview = SubstitutePreviewController(self)
+        self.picker = PickerController(self)
+        self.vim_status.open_picker = self.open_picker
         self.substitute_preview.sig_result_ready.connect(self.commandline_popup.sync)
         self.vim_status.cancel_pending_input = lambda: self.cancel_pending_input()
         self.vim_status.cancel_macro = lambda: self.cancel_macro()
@@ -562,7 +550,7 @@ class VimWidget(QWidget):
         """
         if self._closed:
             return
-        if editor is not self.put_controller.editor:
+        if editor is not self.put_controller.editor and not self.picker.navigating:
             self.cancel_pending_input()
         self.which_key.set_editor(editor)
         self.substitute_preview.set_editor(editor)
@@ -598,8 +586,16 @@ class VimWidget(QWidget):
         self.substitute_preview.cancel()
         self.cancel_substitute()
         self.cancel_yank_picker()
+        if not self.picker.navigating:
+            self.picker.cancel()
         self.put_controller.cancel()
         self.cancel_macro()
+
+    def open_picker(self, source="files"):
+        """Share one picker and keep its focus handoff inside this input owner."""
+        self.cancel_yank_picker()
+        self.put_controller.cancel()
+        self.picker.open(source)
 
     def clear_yank_history(self):
         """Clear memory explicitly, including while Yanky is disabled."""
@@ -771,6 +767,7 @@ class VimWidget(QWidget):
             return
         self._closed = True
         self.vim_status.cancel_pending_work()
+        self.picker.cleanup()
         self.vim_status.cursor.close()
         self.substitute_preview.cleanup()
         self.put_controller.cleanup()

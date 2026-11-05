@@ -158,6 +158,77 @@ measure content and report changes. Which-key wraps and scrolls its own rows.
 Passive popups keep keyboard focus in the command input. Theme regressions cover
 discovered installed variants and synthetic low-contrast palettes.
 
+## Shared picker
+
+`utils/picker.py` owns immutable targets/candidate snapshots and bounded search.
+`spyder/picker_dialog.py` renders only values and emits intent; it never reads a
+file or navigates the host. `picker_providers.py` captures GUI values and checks
+live targets before using existing bookmark/jump/editor owners. Blocks are
+zero-based, offsets and columns are Qt UTF-16, and displayed coordinates are
+one-based. `picker_preview.py` shares bounded content/indexes between metadata
+and the independent read-only preview document. Open buffers take precedence;
+GUI validity checks inspect document revision without recopying text. The host
+reuses one bounded open-document snapshot until its document or revision changes.
+Metadata rows retain at most 1,024 source characters per location, and report
+partial text search when that limit is reached. Preview language highlighters
+are reused, with only the current code or diff highlighter attached.
+
+`PickerController` owns one nonmodal session and per-source/scope state. Its
+application-owned `PickerWorkService` keeps one active plus one latest pending
+request per collection/search/content lane across close/reopen. Operations
+capture values and services only; cancellation leaves a blocked operation in its
+slot until it returns. Session, scope, dataset, query and selection tokens reject
+late publication. Search always starts from the candidate snapshot, never the
+displayed top-N rows. Metadata batches by file and yields to selected preview.
+Failed metadata work advances the queue and can be retried by refreshing;
+background failures cannot replace another selection's preview.
+Git uses a separate bounded `QProcess` lane with timeout, terminate/kill and
+NUL-safe parsers. Patch previews display text; navigation uses the candidate's
+original target rather than displayed patch row numbers.
+Stashes retain a fixed object SHA for preview rather than a mutable reflog index.
+Current-file history follows renames in that file's repository; repository history
+uses the active project. Paging budgets belong to each source/scope, and commit
+Back returns to the source that opened its changed files. The `<leader>t` submode
+uses the existing prefix transition/WhichKey contract for m/j/s/S/c/C/b.
+
+`picker_git_controller.py` owns Git execution intent and runtime prompts.
+`picker_git_actions.py` builds explicit commands and serializes accepted writes in
+an application-owned process service without a replaceable queue. Query/source
+cancellation invalidates preflight intent; it never terminates an accepted write.
+HEAD, symbolic HEAD and selected branch refs are checked before the mutation.
+UI callbacks use session/query/selection identity; cleanup detaches observers and
+lets already accepted execution finish. Open-document revisions protect edits
+made during Git execution from being overwritten when clean buffers are reloaded.
+Buffer snapshots are captured again after runtime prompts. Shared documents
+reload once through a surviving view if another clone closes during execution.
+Confirmation dialogs cover reset/delete/rebase/merge; normal Git refusal/conflict
+messages remain visible without forcing, automatically stashing or aborting.
+The Actions menu and source-specific keys share the same intent path.
+
+Focus ownership lasts through `active → finishing → closed`. A replacement
+invalidates a queued action and focus handoff. Accept closes first, then validates
+and executes once on a later event-loop turn. `VimLineEdit` recognizes both active
+and finishing ownership. The internal navigation guard permits only the captured
+stack/window during explicit acceptance or Jumps Ctrl+O/I; external view/project
+changes and shutdown cancel through the normal shared boundaries. ShortcutOverride
+reserves keys, and KeyPress executes them once. Native preedit Enter/Esc completes
+or cancels composition before picker acceptance. YankHistory keeps its separate
+table popup and key contract. The former file/mark/jump dialogs and modal helper
+have been removed.
+
+The measured design and intentional limits are recorded in
+[picker performance](picker_performance.md). Layout state belongs to the session;
+no extra color settings, query cache, native sorter, permanent file index or
+provider registry was introduced without evidence that it is needed.
+
+Keep source adapters explicit: each validates and executes against its existing
+file, bookmark or jump owner. Entries store one target and a preview kind; avoid
+wrapping the same target in a second preview object. Content requests use object
+identity to reject replaced work and retain only selection and buffer identity
+for publication checks. Buffer snapshots name their fields so Git reload guards
+can be read without remembering tuple positions. Fixed read and decoding limits
+belong to the content service rather than each cache key.
+
 ## Verification
 
 Run commands from the repository root in a development environment with the
