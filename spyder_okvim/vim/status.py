@@ -601,16 +601,17 @@ class VimStatus(QObject):
             connect_editor, register_name, key_list_to_cmd_line
         )
 
-    def cancel_pending_work(self):
-        """Release view-bound work before a switch or shutdown; safe to repeat."""
+    def cancel_pending_work(self, *, preserve_definition=False):
+        """Release view work, optionally keeping gd's cross-file arrival watch."""
         self.cancel_pending_input()
         self.finish_insert(apply_count=False)
         self.disconnect_from_editor()
         self._focus_timer.stop()
-        self._definition_deadline.stop()
-        self._definition_generation += 1
-        self._definition_watch.stop()
-        self.timer_go_to_definition = None
+        if not preserve_definition:
+            self._definition_deadline.stop()
+            self._definition_generation += 1
+            self._definition_watch.stop()
+            self.timer_go_to_definition = None
         self.cursor.clear_highlights()
         self.remove_marker_of_easymotion()
 
