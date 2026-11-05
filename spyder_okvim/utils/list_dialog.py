@@ -1,10 +1,10 @@
-"""Shared keyboard, mouse and layout behavior for navigation pickers."""
+"""The table popup and keyboard contract retained by yank history."""
 
 from __future__ import annotations
 
 # Third Party Libraries
-from qtpy.QtCore import QEvent, QPoint, QRect, QStringListModel, Qt, QTimer
-from qtpy.QtGui import QStandardItemModel
+from qtpy.QtCore import QEvent, QPoint, QRect, Qt, QTimer
+from qtpy.QtGui import QPalette, QStandardItemModel
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -12,23 +12,32 @@ from qtpy.QtWidgets import (
     QHeaderView,
     QLabel,
     QLayout,
-    QListView,
     QSizePolicy,
     QTableView,
     QVBoxLayout,
 )
 from spyder.config.gui import get_font
-from spyder.utils.palette import SpyderPalette
+
+# Project Libraries
+from spyder_okvim.utils.theme import interface_palette, selection_colors
 
 
-class _PopupDialog(QDialog):
-    """Keep picker input and sizing in one place, independent of its contents."""
+class PopupTableDialog(QDialog):
+    """Display read-only metadata rows without a search-field abstraction."""
 
-    def __init__(self, title, parent, *, min_width, max_height):
+    def __init__(
+        self,
+        title: str,
+        parent=None,
+        *,
+        headers: list[str] | None = None,
+        min_width: int | None = None,
+        max_height: int = 600,
+    ) -> None:
         super().__init__(parent)
+        self._applying_appearance = False
         self._preferred_width = min_width or 560
         self._max_list_height = max_height or 600
-        self._input_widget = None
         self._geometry_timer = QTimer(self)
         self._geometry_timer.setSingleShot(True)
         self._geometry_timer.timeout.connect(self.update_geometry)
@@ -38,11 +47,7 @@ class _PopupDialog(QDialog):
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setAccessibleName(title)
         self.setObjectName("okvimPicker")
-        self.setStyleSheet(
-            "QDialog#okvimPicker {"
-            f"background-color: {SpyderPalette.COLOR_BACKGROUND_1};"
-            f"border: 1px solid {SpyderPalette.COLOR_BACKGROUND_4}; }}"
-        )
+        self.setPalette(interface_palette(self))
         self.layout_ = QVBoxLayout(self)
         self.layout_.setSizeConstraint(QLayout.SetNoConstraint)
         self.help_label = QLabel(self)
@@ -51,6 +56,79 @@ class _PopupDialog(QDialog):
         self.help_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.help_label.setAccessibleName("Picker keyboard help")
         self.set_navigation_help("open")
+        self.list_viewer = QTableView(self)
+        self.list_viewer.setObjectName("okvimPickerTable")
+        self.list_viewer.viewport().setObjectName("okvimPickerTableViewport")
+        self.list_viewer.setSelectionBehavior(QTableView.SelectRows)
+        self.list_viewer.verticalHeader().setVisible(False)
+        self.list_model = QStandardItemModel(self)
+        if headers:
+            self.list_model.setHorizontalHeaderLabels(headers)
+        self._setup_view()
+        header = self.list_viewer.horizontalHeader()
+        header.setObjectName("okvimPickerTableHeader")
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
+        self.refresh_appearance()
+
+    def refresh_appearance(self):
+        """Apply UI roles to the table, viewport and header, including popups."""
+        if self._applying_appearance or not hasattr(self, "list_viewer"):
+            return
+        self._applying_appearance = True
+        try:
+            palette = self.palette()
+            window = palette.color(QPalette.Window).name()
+            text = palette.color(QPalette.WindowText).name()
+            base = palette.color(QPalette.Base).name()
+            foreground = palette.color(QPalette.Text).name()
+            border = palette.color(QPalette.Mid).name()
+            header = palette.color(QPalette.AlternateBase).name()
+            header_text = palette.color(QPalette.ButtonText).name()
+            selected_text, selected = selection_colors(self)
+            stylesheet = (
+                "QDialog#okvimPicker {"
+                f"background-color: {window};"
+                f"border: 1px solid {border}; }}"
+                "QDialog#okvimPicker QLabel {"
+                f"color: {text}; background: transparent; border: none; }}"
+                "QTableView#okvimPickerTable {"
+                f"background-color: {base}; color: {foreground};"
+                f"gridline-color: {border}; border: 1px solid {border};"
+                f"selection-background-color: {selected.name()};"
+                f"selection-color: {selected_text.name()}; }}"
+                "QWidget#okvimPickerTableViewport {"
+                f"background-color: {base}; color: {foreground}; }}"
+                "QTableView#okvimPickerTable::item:selected {"
+                f"background-color: {selected.name()};"
+                f"color: {selected_text.name()}; }}"
+                "QDialog#okvimPicker QTableCornerButton::section {"
+                f"background-color: {header}; color: {header_text};"
+                f"border: 1px solid {border}; }}"
+            )
+            if stylesheet != self.styleSheet():
+                self.setStyleSheet(stylesheet)
+            # QHeaderView uses its own QSS section rules; styling it directly
+            # also takes precedence over the host's global header stylesheet.
+            header_stylesheet = (
+                "QHeaderView::section {"
+                f"background-color: {header}; color: {header_text};"
+                f"border: 1px solid {border}; }}"
+            )
+            table_header = self.list_viewer.horizontalHeader()
+            if header_stylesheet != table_header.styleSheet():
+                table_header.setStyleSheet(header_stylesheet)
+            # QDialog is a separate window, so native palette inheritance can
+            # otherwise leave its table and header on the OS light theme.
+            for widget in (
+                self.list_viewer,
+                self.list_viewer.viewport(),
+                self.list_viewer.horizontalHeader(),
+                self.help_label,
+            ):
+                widget.setPalette(palette)
+        finally:
+            self._applying_appearance = False
 
     def _setup_view(self):
         view = self.list_viewer
@@ -65,7 +143,6 @@ class _PopupDialog(QDialog):
         view.setAccessibleName(f"{self.windowTitle()} results")
         view.setAccessibleDescription(self.help_label.text())
         view.installEventFilter(self)
-        view.clicked.connect(self._restore_input_focus)
         view.doubleClicked.connect(self._activate_index)
         self.layout_.addWidget(view)
         self.layout_.addWidget(self.help_label)
@@ -84,18 +161,6 @@ class _PopupDialog(QDialog):
         if hasattr(self, "list_viewer"):
             self.list_viewer.setAccessibleDescription(self.help_label.text())
 
-    def set_input_widget(self, widget):
-        """Let mouse selection preserve an optional search field's focus."""
-        self._input_widget = widget
-        widget.installEventFilter(self)
-        widget.setMinimumWidth(0)
-        widget.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self.list_viewer.setFocusPolicy(Qt.NoFocus)
-
-    def _restore_input_focus(self, *_):
-        if self._input_widget is not None:
-            self._input_widget.setFocus()
-
     def _activate_index(self, index):
         if index.isValid():
             self.list_viewer.setCurrentIndex(index)
@@ -108,8 +173,7 @@ class _PopupDialog(QDialog):
         row = max(0, min(row, count - 1))
         index = self.list_model.index(row, 0)
         self.list_viewer.setCurrentIndex(index)
-        if isinstance(self.list_viewer, QTableView):
-            self.list_viewer.selectRow(row)
+        self.list_viewer.selectRow(row)
         self.list_viewer.scrollTo(index)
 
     def get_number_of_visible_lines(self):
@@ -152,7 +216,7 @@ class _PopupDialog(QDialog):
     def eventFilter(self, obj, event):
         """Reserve shortcuts once; perform their action only on KeyPress."""
         if (
-            (obj is self.list_viewer or obj is self._input_widget)
+            obj is self.list_viewer
             and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
             and self._handles_key(event)
         ):
@@ -248,50 +312,9 @@ class _PopupDialog(QDialog):
 
     def changeEvent(self, event):
         super().changeEvent(event)
-        if event.type() in (QEvent.PaletteChange, QEvent.ApplicationPaletteChange):
-            # Styled parents do not always propagate their palette to Qt views.
-            if hasattr(self, "list_viewer"):
-                self.list_viewer.setPalette(self.palette())
-
-
-class PopupListDialog(_PopupDialog):
-    """Picker for a simple list of strings."""
-
-    def __init__(
-        self,
-        title: str,
-        parent=None,
-        *,
-        min_width: int | None = None,
-        max_height: int = 600,
-    ) -> None:
-        super().__init__(title, parent, min_width=min_width, max_height=max_height)
-        self.list_viewer = QListView(self)
-        self.list_viewer.setUniformItemSizes(True)
-        self.list_model = QStringListModel(self)
-        self._setup_view()
-
-
-class PopupTableDialog(_PopupDialog):
-    """Picker for read-only rows of metadata."""
-
-    def __init__(
-        self,
-        title: str,
-        parent=None,
-        *,
-        headers: list[str] | None = None,
-        min_width: int | None = None,
-        max_height: int = 600,
-    ) -> None:
-        super().__init__(title, parent, min_width=min_width, max_height=max_height)
-        self.list_viewer = QTableView(self)
-        self.list_viewer.setSelectionBehavior(QTableView.SelectRows)
-        self.list_viewer.verticalHeader().setVisible(False)
-        self.list_model = QStandardItemModel(self)
-        if headers:
-            self.list_model.setHorizontalHeaderLabels(headers)
-        self._setup_view()
-        header = self.list_viewer.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        header.setStretchLastSection(True)
+        if event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
+        ) and hasattr(self, "_applying_appearance"):
+            self.refresh_appearance()

@@ -7,6 +7,7 @@ calls, save/close guards and cursor restoration on the GUI thread.
 
 # Standard Libraries
 import ast
+import os.path as osp
 
 # Third Party Libraries
 from qtpy.QtGui import QTextCursor
@@ -95,6 +96,31 @@ class EditorCommands:
         open_file = getattr(self._application_plugin, "open_file_in_plugin", None)
         if callable(open_file):
             open_file(path)
+
+    def activate_file(self, path) -> bool:
+        """Select a navigation target only in the captured editor stack.
+
+        Opening a file may process events or move focus to another view. Callers
+        apply stored cursor positions only after this confirms the destination.
+        Already active buffers also work before their first save to disk.
+        """
+        stack = self.get_editorstack()
+        if stack is None or not path:
+            return False
+        if stack.get_current_filename() == path:
+            return True
+        if stack.is_file_opened(path) is None:
+            if not osp.isfile(path):
+                return False
+            self.open_file(path)
+            if (
+                self.get_editorstack() is not stack
+                or stack.is_file_opened(path) is None
+            ):
+                return False
+        if stack.get_current_filename() != path:
+            stack.set_current_filename(path)
+        return self.get_editorstack() is stack and stack.get_current_filename() == path
 
     def auto_import(self):
         """Run the optional personal import helper and restore input focus."""

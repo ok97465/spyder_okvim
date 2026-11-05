@@ -77,6 +77,7 @@ def process_events_after_test(request):
     try:
         yield
     finally:
+        widget.picker.cancel()
         widget.which_key.cancel()
         widget.substitute_preview.cancel()
         restore_configuration(options)

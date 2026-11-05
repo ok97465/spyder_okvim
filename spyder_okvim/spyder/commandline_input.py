@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 # Third Party Libraries
 from qtpy.QtCore import QEvent, Qt
-from qtpy.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent
+from qtpy.QtGui import QFocusEvent, QInputMethodEvent, QKeyEvent, QPalette
 from qtpy.QtWidgets import QApplication, QLineEdit
 from spyder.config.manager import CONF
 
@@ -33,6 +33,7 @@ from spyder_okvim.utils.qtcompat import (
     python_cursor_position,
     qt_cursor_position,
 )
+from spyder_okvim.utils.theme import interface_palette, selection_colors
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ class VimLineEdit(QLineEdit):
 
     def __init__(self, vim_widget, vim_status, vim_shortcut):
         super().__init__(vim_widget)
+        self._applying_appearance = False
         self.vim_widget = vim_widget
         self.vim_status = vim_status
         self.vim_shortcut = vim_shortcut
@@ -93,13 +95,48 @@ class VimLineEdit(QLineEdit):
             Qt.Key_U: vim_shortcut.pg_half_up,
             Qt.Key_B: vim_shortcut.pg_up,
             Qt.Key_R: vim_shortcut.redo,
-            Qt.Key_P: vim_shortcut.open_file_search,
+            Qt.Key_P: vim_shortcut.open_picker,
             Qt.Key_C: vim_shortcut.clear_tip_search,
             Qt.Key_O: vim_shortcut.jump_backward,
             Qt.Key_I: vim_shortcut.jump_forward,
             Qt.Key_W: vim_shortcut.window_command,
         }
         self.setAttribute(Qt.WA_InputMethodEnabled, False)
+        self.setObjectName("okvimCommandline")
+        self.setPalette(interface_palette(self))
+        self.refresh_appearance()
+
+    def refresh_appearance(self):
+        """Keep typing and selection legible when the OS uses a light palette."""
+        if self._applying_appearance:
+            return
+        self._applying_appearance = True
+        try:
+            palette = self.palette()
+            selected_text, selected = selection_colors(self)
+            stylesheet = (
+                "QLineEdit#okvimCommandline {"
+                f"background-color: {palette.color(QPalette.Base).name()};"
+                f"color: {palette.color(QPalette.Text).name()};"
+                f"border: 1px solid {palette.color(QPalette.Mid).name()};"
+                f"selection-background-color: {selected.name()};"
+                f"selection-color: {selected_text.name()}; }}"
+                "QLineEdit#okvimCommandline:disabled {"
+                f"color: {palette.color(QPalette.Disabled, QPalette.Text).name()}; }}"
+            )
+            if stylesheet != self.styleSheet():
+                self.setStyleSheet(stylesheet)
+        finally:
+            self._applying_appearance = False
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (
+            QEvent.PaletteChange,
+            QEvent.ApplicationPaletteChange,
+            QEvent.StyleChange,
+        ) and hasattr(self, "_applying_appearance"):
+            self.refresh_appearance()
 
     def reset_navigation(self, text="") -> None:
         """Discard history drafts and applied Tab candidates after a real edit.
@@ -611,7 +648,7 @@ class VimLineEdit(QLineEdit):
             self.vim_widget.handle_prompt_event(QEvent.WindowActivate)
             self.vim_widget.sig_command_changed.emit()
             return
-        if self.vim_widget.has_yank_picker:
+        if self.vim_widget.has_yank_picker or self.vim_widget.picker.owns_focus:
             return
         if self.vim_status.cursor.get_editor():
             self.to_normal()
@@ -639,7 +676,7 @@ class VimLineEdit(QLineEdit):
             return
         self._prompt_focus_window = None
         self.vim_widget.cancel_substitute()
-        if self.vim_widget.has_yank_picker:
+        if self.vim_widget.has_yank_picker or self.vim_widget.picker.owns_focus:
             super().focusOutEvent(event)
             return
         self.vim_widget.put_controller.cancel()

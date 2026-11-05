@@ -191,149 +191,93 @@ def test_colon_backspace_command(vim_bot):
     assert vim.vim_cmd.vim_status.sub_mode is None
 
 
-def test_colon_marks_command(vim_bot, monkeypatch):
-    """Test :marks opens dialog and jumps to the selected mark."""
+def test_colon_marks_command(vim_bot):
+    """A mark is selected in the shared modeless picker before navigation."""
     _, _, editor, vim, qtbot = vim_bot
+    widget = vim.vim_cmd
+    status = widget.vim_status
+    reset_vim_state(status)
     editor.set_text("a\nb\nc\n")
-    vs = vim.vim_cmd.vim_status
-    vs.cursor.set_cursor_pos(2)
-    reset_vim_state(vs)
-
-    cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, "ma")
-    vs.cursor.set_cursor_pos(0)
-
-    # Project Libraries
-    from spyder_okvim.utils import mark_dialog
-
-    monkeypatch.setattr(mark_dialog.MarkListDialog, "exec_", lambda self: None)
-    monkeypatch.setattr(
-        mark_dialog.MarkListDialog, "get_selected_mark", lambda self: "a"
-    )
-
-    qtbot.keyClicks(cmd_line, ":")
-    qtbot.keyClicks(cmd_line, "marks")
-    qtbot.keyPress(cmd_line, Qt.Key_Return)
-
+    status.cursor.set_cursor_pos(2)
+    status.bookmark_manager.set_bookmark("a")
+    status.cursor.set_cursor_pos(0)
+    qtbot.keyClicks(widget.commandline, ":marks")
+    qtbot.keyClick(widget.commandline, Qt.Key_Return)
+    picker = widget.picker
+    qtbot.waitUntil(lambda: picker.result_token == picker._search_token())
+    picker.dialog.prompt.setText("a")
+    qtbot.waitUntil(lambda: picker.result_token == picker._search_token())
+    assert editor.textCursor().position() == 0
+    qtbot.keyClick(picker.dialog.prompt, Qt.Key_Return)
+    qtbot.waitUntil(lambda: picker.phase == "closed")
     assert editor.textCursor().position() == 2
 
 
-def test_colon_marks_escape_focus(vim_bot, monkeypatch):
-    """Focus returns to command line when dialog closed with ESC."""
+def test_colon_marks_escape_focus(vim_bot):
     _, _, editor, vim, qtbot = vim_bot
-    editor.set_text("a\nb\nc\n")
-    vs = vim.vim_cmd.vim_status
-    pos_before = editor.textCursor().position()
-
-    # Project Libraries
-    from spyder_okvim.utils import mark_dialog
-
-    monkeypatch.setattr(mark_dialog.MarkListDialog, "exec_", lambda self: 0)
-    # Return a mark even though the dialog was rejected to ensure the
-    # executor ignores it when ESC is pressed.
-    monkeypatch.setattr(
-        mark_dialog.MarkListDialog, "get_selected_mark", lambda self: "a"
-    )
-
-    called = []
-    monkeypatch.setattr(
-        vs.bookmark_manager, "jump_to_bookmark", lambda *a: called.append(True)
-    )
-
-    cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ":")
-    qtbot.keyClicks(cmd_line, "marks")
-    qtbot.keyPress(cmd_line, Qt.Key_Return)
-
-    assert editor.textCursor().position() == pos_before
-    assert cmd_line.hasFocus()
-    assert not called
+    widget = vim.vim_cmd
+    reset_vim_state(widget.vim_status)
+    before = (editor.toPlainText(), editor.textCursor().position())
+    qtbot.keyClicks(widget.commandline, ":marks")
+    qtbot.keyClick(widget.commandline, Qt.Key_Return)
+    qtbot.keyClick(widget.picker.dialog.prompt, Qt.Key_Escape)
+    qtbot.waitUntil(lambda: widget.picker.phase == "closed")
+    assert (editor.toPlainText(), editor.textCursor().position()) == before
+    assert widget.commandline.hasFocus()
 
 
-def test_colon_jumps_dialog_navigation(vim_bot, monkeypatch):
-    """Jump dialog tracks jumplist navigation across files."""
-    _, stack, editor, vim, qtbot = vim_bot
-    vs = vim.vim_cmd.vim_status
-    orig_file = stack.get_current_filename()
-    stack.set_current_filename(stack.get_filenames()[0])
-    vs.cursor.set_cursor_pos(0)
-    reset_vim_state(vs)
-
-    # Create jumps across multiple files
-    vs.push_jump()
-    stack.set_current_filename(stack.get_filenames()[1])
-    vs.push_jump()
-    stack.set_current_filename(stack.get_filenames()[2])
-    vs.push_jump()
-
-    # Project Libraries
-    from spyder_okvim.utils import jump_dialog
-
-    captured = {}
-
-    def fake_exec(self):
-        captured["dlg"] = self
-        return None
-
-    monkeypatch.setattr(jump_dialog.JumpListDialog, "exec_", fake_exec)
-
-    cmd_line = vim.vim_cmd.commandline
-    qtbot.keyClicks(cmd_line, ":jumps")
-    qtbot.keyPress(cmd_line, Qt.Key_Return)
-
-    dlg = captured["dlg"]
-    dlg.list_viewer.setFocus()
-    assert dlg.list_model.rowCount() == 3
-    assert dlg.list_viewer.currentIndex().row() == vs.jump_list.index - 1
-
-    qtbot.keyPress(dlg.list_viewer, Qt.Key_O, modifier=Qt.ControlModifier)
-    assert stack.get_current_filename() == stack.get_filenames()[1]
-    assert dlg.list_viewer.currentIndex().row() == vs.jump_list.index - 1
-
-    qtbot.keyPress(dlg.list_viewer, Qt.Key_I, modifier=Qt.ControlModifier)
-    assert stack.get_current_filename() == stack.get_filenames()[2]
-    assert dlg.list_viewer.currentIndex().row() == vs.jump_list.index - 1
-
-    dlg.reject()
-    assert cmd_line.hasFocus()
-
-    # Restore state for other tests
-    stack.set_current_filename(orig_file)
-
-
-def test_colon_jumps_selected_row_opens_only_its_location(vim_bot, monkeypatch):
-    """Changing the row is a preview; Enter applies exactly one stored target."""
+def test_colon_jumps_dialog_navigation(vim_bot):
     _, stack, _, vim, qtbot = vim_bot
-    status = vim.vim_cmd.vim_status
-    original = stack.get_current_filename()
+    widget = vim.vim_cmd
+    status = widget.vim_status
     reset_vim_state(status)
-    filenames = stack.get_filenames()
+    original = stack.get_current_filename()
+    filenames = stack.get_filenames()[:3]
+    status.jump_list.jumps.clear()
+    status.jump_list.index = 0
     for filename in filenames:
         status.jump_list.push(filename, 0)
     stack.set_current_filename(filenames[-1])
-    visited = []
-    set_current_filename = stack.set_current_filename
-
-    def record_visit(filename):
-        visited.append(filename)
-        return set_current_filename(filename)
-
-    monkeypatch.setattr(stack, "set_current_filename", record_visit)
-
-    def select_first(dialog):
-        dialog.prev_row(100)
-        assert visited == []
-        dialog.accept()
-        return QDialog.Accepted
-
-    monkeypatch.setattr(
-        "spyder_okvim.executor.executor_colon.exec_dialog", select_first
-    )
     try:
-        qtbot.keyClicks(vim.vim_cmd.commandline, ":jumps")
-        qtbot.keyClick(vim.vim_cmd.commandline, Qt.Key_Return)
-        assert visited == [filenames[0]]
-        assert status.jump_list.index == 1
-        assert stack.get_current_filename() == filenames[0]
+        qtbot.keyClicks(widget.commandline, ":jumps")
+        qtbot.keyClick(widget.commandline, Qt.Key_Return)
+        picker = widget.picker
+        qtbot.waitUntil(lambda: picker.result_token == picker._search_token())
+        qtbot.keyClick(picker.dialog.prompt, Qt.Key_O, Qt.ControlModifier)
+        assert stack.get_current_filename() == filenames[-2]
+        assert picker.phase == "active"
+        qtbot.keyClick(picker.dialog.prompt, Qt.Key_I, Qt.ControlModifier)
+        assert stack.get_current_filename() == filenames[-1]
+        picker.dialog.reject()
+        qtbot.waitUntil(lambda: picker.phase == "closed")
     finally:
-        set_current_filename(original)
+        widget.picker.cancel()
+        stack.set_current_filename(original)
+
+
+def test_colon_jumps_selected_row_opens_only_its_location(vim_bot):
+    _, stack, _, vim, qtbot = vim_bot
+    widget = vim.vim_cmd
+    status = widget.vim_status
+    reset_vim_state(status)
+    original = stack.get_current_filename()
+    filenames = stack.get_filenames()
+    status.jump_list.jumps.clear()
+    status.jump_list.index = 0
+    for filename in filenames:
+        status.jump_list.push(filename, 0)
+    stack.set_current_filename(filenames[-1])
+    try:
+        qtbot.keyClicks(widget.commandline, ":jumps")
+        qtbot.keyClick(widget.commandline, Qt.Key_Return)
+        picker = widget.picker
+        qtbot.waitUntil(lambda: picker.result_token == picker._search_token())
+        picker.dialog.select_id(f"{picker.host.history_version}:0")
+        assert stack.get_current_filename() == filenames[-1]
+        qtbot.keyClick(picker.dialog.prompt, Qt.Key_Return)
+        qtbot.waitUntil(lambda: picker.phase == "closed")
+        assert stack.get_current_filename() == filenames[0]
+        assert status.jump_list.index == 1
+    finally:
+        widget.picker.cancel()
+        stack.set_current_filename(original)

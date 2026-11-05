@@ -111,6 +111,61 @@ def test_conf_page(vim_bot):
     assert conf_page.leaderkey_viewer.textbox.text() == "Enter"
 
 
+@pytest.mark.parametrize("dark", [True, False])
+def test_commandline_typing_uses_spyder_theme_with_native_light_palette(
+    qtbot, monkeypatch, plugin_config_path, dark
+):
+    """Input text and selections must follow Spyder instead of the OS theme."""
+    import qdarkstyle
+    from qtpy.QtGui import QColor, QPalette
+    from qtpy.QtWidgets import QWidget
+    from spyder.utils import palette as spyder_palette
+
+    from spyder_okvim.spyder.commandline_input import VimLineEdit
+    from spyder_okvim.utils.theme import contrast_ratio
+
+    colors = (
+        spyder_palette.SpyderPaletteDark if dark else spyder_palette.SpyderPaletteLight
+    )
+    monkeypatch.setattr(spyder_palette, "SpyderPalette", colors)
+    host = QWidget()
+    qtbot.addWidget(host)
+    native_palette = QPalette(host.palette())
+    for role in (QPalette.Base, QPalette.Window, QPalette.Mid):
+        native_palette.setColor(role, QColor("#ffffff"))
+    for role in (QPalette.Text, QPalette.WindowText):
+        native_palette.setColor(role, QColor("#000000"))
+    host.setPalette(native_palette)
+    host.setStyleSheet(qdarkstyle.load_stylesheet(palette=colors))
+    line = VimLineEdit(host, Mock(), Mock())
+    line.ensurePolished()
+    line.setText(":edit 한글.py")
+    line.setSelection(6, 2)
+
+    for group in (QPalette.Active, QPalette.Inactive):
+        palette = line.palette()
+        background = palette.color(group, QPalette.Base)
+        assert background == QColor(colors.COLOR_BACKGROUND_1)
+        assert palette.color(group, QPalette.Mid) == QColor(colors.COLOR_BACKGROUND_4)
+        assert contrast_ratio(palette.color(group, QPalette.Text), background) >= 4.5
+        assert (
+            contrast_ratio(
+                palette.color(group, QPalette.HighlightedText),
+                palette.color(group, QPalette.Highlight),
+            )
+            >= 4.5
+        )
+
+    # Appearance refreshes must not repolish unchanged input or discard drafts.
+    set_stylesheet = Mock(wraps=line.setStyleSheet)
+    monkeypatch.setattr(line, "setStyleSheet", set_stylesheet)
+    line.refresh_appearance()
+    QCoreApplication.sendEvent(line, QEvent(QEvent.StyleChange))
+    assert not set_stylesheet.called
+    assert line.text() == ":edit 한글.py"
+    assert line.selectedText() == "한글"
+
+
 def test_which_key_preference_defaults(vim_bot, monkeypatch):
     """Older configuration files can open the page with the new defaults."""
     main, _, _, vim, _ = vim_bot

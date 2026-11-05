@@ -14,7 +14,6 @@ input and queued macro playback have their own cohesive modules and lifetimes.
 from __future__ import annotations
 
 # Standard Libraries
-import os.path as osp
 import re
 import weakref
 from contextlib import contextmanager
@@ -24,7 +23,6 @@ from qtpy.QtCore import QEvent, QObject, QSize, Qt, Signal, Slot
 from qtpy.QtGui import QColor, QKeySequence, QPainter, QPalette, QTextCursor
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 from spyder.api.config.decorators import on_conf_change
-from spyder.api.plugins import Plugins
 from spyder.api.widgets.main_widget import PluginMainWidget
 from spyder.config.manager import CONF
 
@@ -45,16 +43,16 @@ from spyder_okvim.spyder.macro_playback import (
     MacroPlayback,
     MacroPlaybackWorker,
 )
+from spyder_okvim.spyder.picker import PickerController
 from spyder_okvim.spyder.substitute_preview import SubstitutePreviewController
 from spyder_okvim.spyder.which_key import PendingHint, WhichKeyController
-from spyder_okvim.utils.file_search import FileSearchDialog
 from spyder_okvim.utils.put import PutController
 from spyder_okvim.utils.qtcompat import (
-    exec_dialog,
     text_width,
     widget_is_deleted,
 )
 from spyder_okvim.utils.testing_env import running_in_pytest
+from spyder_okvim.utils.theme import interface_palette, readable_color
 from spyder_okvim.utils.yank_dialog import YankHistoryPicker
 from spyder_okvim.vim import InputCmdInfo, KeyInfo, VimState, VimStatus
 from spyder_okvim.vim.state import InputSource
@@ -254,20 +252,9 @@ class VimShortcut(QObject):
 
         self.cmd_line.esc_pressed()
 
-    def open_file_search(self) -> None:
-        """Open the file search dialog."""
-        root_folder = self.main.projects.get_active_project_path()
-
-        dlg = FileSearchDialog(root_folder, self.get_editor())
-        exec_dialog(dlg)
-        path = dlg.get_selected_path()
-
-        if osp.isfile(path):
-            self.vim_status.push_jump()
-            application = self.main.get_plugin(Plugins.Application)
-            application.open_file_in_plugin(path)
-            self.vim_status.jump_list.push(path, 0)
-        self.vim_status.set_focus_to_vim()
+    def open_picker(self, source="files") -> None:
+        """Open a source in the shared modeless picker."""
+        self.cmd_line.vim_widget.open_picker(source)
 
     def clear_tip_search(self) -> None:
         """Clear tooltip, search highlight."""
@@ -310,6 +297,7 @@ class VimStateLabel(QLabel):
     def __init__(self, parent):
         super().__init__(parent)
         self._applying_appearance = False
+        self.setPalette(interface_palette(self))
         self.setObjectName("vimStateLabel")
         self.setAccessibleName("Vim mode")
         self.setAlignment(Qt.AlignCenter)
@@ -345,18 +333,21 @@ class VimStateLabel(QLabel):
     def _apply_palette(self):
         """Guard stylesheet-induced palette events during window reparenting."""
         palette = self.palette()
-        colors = []
-        for option, role in (
-            ("mode_fg_color", QPalette.HighlightedText),
-            ("mode_bg_color", QPalette.Highlight),
-        ):
-            configured = QColor(CONF.get(CONF_SECTION, option, ""))
-            colors.append(configured if configured.isValid() else palette.color(role))
-        foreground, background = (color.name() for color in colors)
+        background = QColor(CONF.get(CONF_SECTION, "mode_bg_color", ""))
+        if not background.isValid():
+            background = palette.color(QPalette.Highlight)
+        foreground = QColor(CONF.get(CONF_SECTION, "mode_fg_color", ""))
+        if not foreground.isValid():
+            foreground = readable_color(
+                palette.color(QPalette.HighlightedText),
+                background,
+                palette.color(QPalette.Text),
+            )
         stylesheet = (
             "QLabel#vimStateLabel {"
-            f"color: {foreground}; background-color: {background};"
-            "border: 1px solid palette(mid); border-radius: 3px;"
+            f"color: {foreground.name()}; background-color: {background.name()};"
+            f"border: 1px solid {palette.color(QPalette.Mid).name()};"
+            "border-radius: 3px;"
             "padding: 1px 5px; font-weight: bold; }"
         )
         if stylesheet != self.styleSheet():
@@ -373,6 +364,7 @@ class VimMessageLabel(QLabel):
 
     def __init__(self, parent):
         super().__init__("", parent)
+        self.setPalette(interface_palette(self))
         self.setTextFormat(Qt.PlainText)
         self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.setAccessibleName("Vim status message")
@@ -463,6 +455,8 @@ class VimWidget(QWidget):
         self.which_key = WhichKeyController(self)
         self.commandline_popup = CommandlinePopupController(self)
         self.substitute_preview = SubstitutePreviewController(self)
+        self.picker = PickerController(self)
+        self.vim_status.open_picker = self.open_picker
         self.substitute_preview.sig_result_ready.connect(self.commandline_popup.sync)
         self.vim_status.cancel_pending_input = lambda: self.cancel_pending_input()
         self.vim_status.cancel_macro = lambda: self.cancel_macro()
@@ -540,7 +534,7 @@ class VimWidget(QWidget):
         """
         if self._closed:
             return
-        if editor is not self.put_controller.editor:
+        if editor is not self.put_controller.editor and not self.picker.navigating:
             self.cancel_pending_input()
         self.which_key.set_editor(editor)
         self.substitute_preview.set_editor(editor)
@@ -576,8 +570,16 @@ class VimWidget(QWidget):
         self.substitute_preview.cancel()
         self.cancel_substitute()
         self.cancel_yank_picker()
+        if not self.picker.navigating:
+            self.picker.cancel()
         self.put_controller.cancel()
         self.cancel_macro()
+
+    def open_picker(self, source="files"):
+        """Share one picker and keep its focus handoff inside this input owner."""
+        self.cancel_yank_picker()
+        self.put_controller.cancel()
+        self.picker.open(source)
 
     def clear_yank_history(self):
         """Clear memory explicitly, including while Yanky is disabled."""
@@ -749,6 +751,7 @@ class VimWidget(QWidget):
             return
         self._closed = True
         self.vim_status.cancel_pending_work()
+        self.picker.cleanup()
         self.substitute_preview.cleanup()
         self.put_controller.cleanup()
         self.which_key.cleanup()

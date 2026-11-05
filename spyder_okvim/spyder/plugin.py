@@ -275,7 +275,8 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         )
         self._input_focus_after_split_close = None
         editor = stack.get_current_editor()
-        if editor is not live_widget(self._active_editor):
+        changed_editor = editor is not live_widget(self._active_editor)
+        if changed_editor and not self.vim_cmd.picker.allows_navigation(stack):
             self._reset_view()
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None

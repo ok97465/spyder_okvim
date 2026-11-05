@@ -670,3 +670,30 @@ def test_compact_popup_keeps_every_candidate_reachable(which_key, size):
 )
 def test_readable_key_names_preserve_case(key, label):
     assert display_key(key) == label
+
+
+def test_telescope_prefix_shows_distinct_git_continuations(which_key, monkeypatch):
+    """Leader and Telescope hints use separate pending input contexts."""
+    state = which_key
+    opened = []
+    monkeypatch.setattr(state.status, "open_picker", opened.append)
+    popup = _show(state)
+    assert _candidate_texts(popup)["t"] == "Telescope / Pickers"
+    state.qtbot.keyClicks(state.commandline, "t")
+    state.qtbot.waitUntil(lambda: _shown(state))
+    assert state.controller.popup is popup
+    assert popup.header.text().endswith("<leader>t")
+    assert _candidate_texts(popup) == {
+        "m": "Marks",
+        "j": "Jumps",
+        "s": "Git status",
+        "S": "Git stashes",
+        "c": "Git commits",
+        "C": "Git commits of current file",
+        "b": "Git branches",
+    }
+    assert opened == []
+    assert state.commandline.hasFocus()
+    state.qtbot.keyClicks(state.commandline, "S")
+    assert opened == ["git_stash"]
+    _stays_hidden(state)

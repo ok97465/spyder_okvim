@@ -7,7 +7,6 @@ import os.path as osp
 # Third Party Libraries
 from qtpy.QtCore import QRegularExpression
 from qtpy.QtGui import QTextCursor
-from qtpy.QtWidgets import QDialog
 
 # Project Libraries
 from spyder_okvim.executor.executor_base import ExecutorSubBase
@@ -17,9 +16,6 @@ from spyder_okvim.utils.ex_parser import (
     resolve_substitute,
     scan_header,
 )
-from spyder_okvim.utils.jump_dialog import JumpListDialog, build_jump_snapshot
-from spyder_okvim.utils.mark_dialog import MarkListDialog, build_mark_rows
-from spyder_okvim.utils.qtcompat import exec_dialog
 from spyder_okvim.utils.search_helpers import resolve_ignorecase
 from spyder_okvim.utils.substitute import (
     build_substitution_plan,
@@ -43,6 +39,9 @@ class ExecutorColon(ExecutorSubBase):
         "n": "n",
         "marks": "marks",
         "jumps": "jumps",
+        "gitstatus": "gitstatus",
+        "gitlog": "gitlog",
+        "gitcommits": "gitlog",
         "vs": "vs",
         "vsp": "vs",
         "vsplit": "vs",
@@ -317,48 +316,20 @@ class ExecutorColon(ExecutorSubBase):
         self.vim_status.set_focus_to_vim()
 
     def marks(self, arg=""):
-        """Show bookmarks and jump to the selected one."""
-        status = self.vim_status
-        marks = status.bookmark_manager.list_bookmarks()
-
-        dlg = MarkListDialog(build_mark_rows(marks), status.get_editor())
-        result = exec_dialog(dlg)
-        # Tests patch ``exec_`` to return ``None``; ``exec_dialog`` keeps that
-        # behaviour so only an explicit ``QDialog.Rejected`` (0) cancels.
-        mark = (
-            dlg.get_selected_mark()
-            if result is None or result == QDialog.Accepted
-            else None
-        )
-        if mark:
-            status.push_jump()
-            status.bookmark_manager.jump_to_bookmark(mark)
-            status.push_jump()
-
-        status.set_focus_to_vim()
+        """Search marks in the shared picker."""
+        self.vim_status.open_picker("marks")
 
     def jumps(self, arg=""):
-        """Display the jumplist in a popup dialog."""
-        status = self.vim_status
+        """Search the jump list with explicit immediate history shortcuts."""
+        self.vim_status.open_picker("jumps")
 
-        def navigate(backward):
-            if backward:
-                status.jump_backward()
-            else:
-                status.jump_forward()
-            return build_jump_snapshot(status.jump_list)
+    def gitstatus(self, arg=""):
+        """Inspect staged and unstaged changes without changing Git state."""
+        self.vim_status.open_picker("git_status")
 
-        dlg = JumpListDialog(
-            build_jump_snapshot(status.jump_list),
-            status.get_editor(),
-            on_back=lambda: navigate(True),
-            on_forward=lambda: navigate(False),
-            on_select=status.jump_to_index,
-            on_finished=status.set_focus_to_vim,
-        )
-        exec_dialog(dlg)
-
-        status.set_focus_to_vim()
+    def gitlog(self, arg=""):
+        """Browse existing commits and their changed files."""
+        self.vim_status.open_picker("git_log")
 
     def goto_line(self, count):
         """Move cursor according to :number command."""
