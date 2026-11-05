@@ -267,9 +267,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def _use_stack(self, stack):
         """Bind commands to a view before restoring a closed split's Vim focus.
 
-        A pending close handoff is valid only in its original host window. All
-        old editor requests are cancelled before the new input-focus request is
-        scheduled, so a later view change can still reject that request.
+        A pending close handoff is valid only in its original host window.
+        View-bound work is cancelled before the new input-focus request is
+        scheduled. Definition tracking spans the switch to observe gd's arrival.
         """
         if stack is None or stack.window() in self._closing_windows:
             return
@@ -280,7 +280,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         editor = stack.get_current_editor()
         changed_editor = editor is not live_widget(self._active_editor)
         if changed_editor and not self.vim_cmd.picker.allows_navigation(stack):
-            self._reset_view()
+            # Definition navigation switches editors before placing the cursor.
+            # Keep its arrival watch alive through the destination's binding.
+            self._reset_view(preserve_definition=True)
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None
         remember_pane(self.vim_cmd.vim_status, stack)
@@ -314,14 +316,14 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._use_stack(self.sender().parent())
         self.vim_cmd.commandline.setFocus()
 
-    def _reset_view(self):
+    def _reset_view(self, *, preserve_definition=False):
         """Cancel partial commands before they can cross into another view."""
         self.vim_cmd.bind_editor(None)
         status = self.vim_cmd.vim_status
         self.vim_cmd.cancel_macro()
         if status.is_recording_macro():
             status.stop_recording_macro()
-        status.cancel_pending_work()
+        status.cancel_pending_work(preserve_definition=preserve_definition)
         editor = live_widget(self._active_editor)
         if editor is not None:
             editor.clear_extra_selections("vim_selection")

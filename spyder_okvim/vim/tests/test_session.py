@@ -5,6 +5,8 @@ from unittest.mock import Mock
 
 # Third Party Libraries
 import pytest
+from qtpy.QtCore import QEvent, Qt, QTimer
+from qtpy.QtGui import QKeyEvent
 
 # Project Libraries
 from tests.qt_support import reset_vim_state
@@ -24,7 +26,10 @@ def test_delayed_focus_tolerates_no_active_editor(vim_bot, monkeypatch):
         focus.assert_not_called()
 
 
-def test_cancelled_definition_callbacks_leave_jump_history_unchanged(vim_bot):
+@pytest.mark.parametrize("reset_view", [False, True])
+def test_cancelled_definition_callbacks_leave_jump_history_unchanged(
+    vim_bot, reset_view
+):
     """Late watch/deadline events must not add or remove navigation entries."""
     _, _, _, vim, _ = vim_bot
     status = vim.vim_cmd.vim_status
@@ -33,13 +38,77 @@ def test_cancelled_definition_callbacks_leave_jump_history_unchanged(vim_bot):
     status.push_jump()
     expected = list(status.jump_list.jumps)
     status.start_definition_tracking(previous)
-    status.cancel_pending_work()
+    if reset_view:
+        vim._reset_view()
+    else:
+        status.cancel_pending_work()
 
     status._definition_watch.timeout.emit()
     status._definition_deadline.timeout.emit()
 
     assert status.jump_list.jumps == expected
     assert status.timer_go_to_definition is None
+    assert not status._definition_watch.isActive()
+    assert not status._definition_deadline.isActive()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("destination_position", [0, 10])
+def test_definition_tracking_survives_editor_switch(
+    vim_bot, monkeypatch, asynchronous, destination_position
+):
+    """Spyder binds the destination editor before placing its definition cursor."""
+    _, stack, _, vim, qtbot = vim_bot
+    status = vim.vim_cmd.vim_status
+    previous_index = stack.get_stack_index()
+    stack.set_stack_index(0)
+    vim._on_editor_focus_changed()
+    reset_vim_state(status)
+    status.cursor.set_cursor_pos(2)
+    origin = status.get_current_location()
+    destination_file = stack.get_filenames()[1]
+    destination = (destination_file, destination_position)
+
+    def arrive():
+        stack.set_current_filename(destination_file)
+        vim._on_editor_focus_changed()
+        status.cursor.set_cursor_pos(destination_position)
+
+    def go_to_definition(self, cursor=None):
+        if asynchronous:
+            QTimer.singleShot(0, arrive)
+        else:
+            arrive()
+
+    monkeypatch.setattr(
+        type(status.get_editor()), "go_to_definition_from_cursor", go_to_definition
+    )
+    commandline = vim.vim_cmd.commandline
+    try:
+        qtbot.keyClicks(commandline, "gd")
+        qtbot.waitUntil(lambda: len(status.jump_list.jumps) == 2, timeout=1000)
+
+        assert [(jump.file, jump.pos) for jump in status.jump_list.jumps] == [
+            origin,
+            destination,
+        ]
+        assert status.timer_go_to_definition is None
+        assert not status._definition_deadline.isActive()
+
+        commandline.keyPressEvent(
+            QKeyEvent(QEvent.KeyPress, Qt.Key_O, Qt.ControlModifier)
+        )
+        vim._on_editor_focus_changed()
+        assert status.get_current_location() == origin
+        commandline.keyPressEvent(
+            QKeyEvent(QEvent.KeyPress, Qt.Key_I, Qt.ControlModifier)
+        )
+        vim._on_editor_focus_changed()
+        assert status.get_current_location() == destination
+    finally:
+        stack.set_stack_index(previous_index)
+        vim._on_editor_focus_changed()
+        reset_vim_state(status)
 
 
 @pytest.mark.parametrize("destination_position", [0, 10])
