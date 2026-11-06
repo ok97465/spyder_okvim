@@ -154,6 +154,70 @@ def test_commit_checkout_is_fixed_detached_snapshot(repository):
     assert (repository / "file.txt").read_text() == "root\n"
 
 
+@pytest.mark.parametrize("commit_kind", ["root", "ordinary", "empty", "merge"])
+def test_edit_head_message_preserves_commit_content_and_dirty_repository(
+    repository, commit_kind
+):
+    path = repository / "file.txt"
+    if commit_kind == "ordinary":
+        path.write_text("second commit\n")
+        git(repository, "commit", "-am", "Second message")
+    elif commit_kind == "empty":
+        git(repository, "commit", "--allow-empty", "-m", "Empty message")
+    elif commit_kind == "merge":
+        git(repository, "switch", "-c", "topic")
+        (repository / "topic.txt").write_text("topic\n")
+        git(repository, "add", "topic.txt")
+        git(repository, "commit", "-m", "Topic message")
+        git(repository, "switch", "main")
+        (repository / "main.txt").write_text("main\n")
+        git(repository, "add", "main.txt")
+        git(repository, "commit", "-m", "Main message")
+        git(repository, "merge", "--no-ff", "topic", "-m", "Merge message")
+
+    original = sha(repository)
+    metadata_args = ("show", "--no-patch", "--format=%T%n%P%n%an%n%ae%n%aI", "HEAD")
+    metadata = git(repository, *metadata_args).stdout
+    commit_count = git(repository, "rev-list", "--count", "HEAD").stdout
+    branch = git(repository, "symbolic-ref", "HEAD").stdout
+    # A new committer must not replace the original author's identity/date.
+    git(repository, "config", "user.name", "Message Editor")
+    git(repository, "config", "user.email", "editor@example.invalid")
+    path.write_text("staged version\n")
+    added = repository / "staged.txt"
+    added.write_text("staged addition\n")
+    git(repository, "add", "file.txt", "staged.txt")
+    path.write_text("unstaged version\n")
+    untracked = repository / "untracked.txt"
+    untracked.write_text("keep untracked\n")
+    index = git(repository, "ls-files", "--stage", "-z").stdout
+    staged_tree = git(repository, "write-tree").stdout
+    status = git(repository, "status", "--porcelain=v1", "-z").stdout
+    message = "- 수정한 제목 'quotes'\n\n본문: $(touch injected) `literal`"
+
+    _run(
+        repository,
+        "edit_commit_message",
+        PickerTarget(str(repository), commit=original),
+        message=message,
+    )
+
+    assert sha(repository) != original
+    assert git(repository, "log", "-1", "--format=%B").stdout.decode().rstrip("\n") == (
+        message
+    )
+    assert git(repository, *metadata_args).stdout == metadata
+    assert git(repository, "rev-list", "--count", "HEAD").stdout == commit_count
+    assert git(repository, "symbolic-ref", "HEAD").stdout == branch
+    assert git(repository, "ls-files", "--stage", "-z").stdout == index
+    assert git(repository, "write-tree").stdout == staged_tree
+    assert git(repository, "status", "--porcelain=v1", "-z").stdout == status
+    assert path.read_text() == "unstaged version\n"
+    assert added.read_text() == "staged addition\n"
+    assert untracked.read_text() == "keep untracked\n"
+    assert not (repository / "injected").exists()
+
+
 def test_branch_create_checkout_and_safe_delete(repository):
     target = PickerTarget(
         str(repository), ref="refs/heads/main", commit=sha(repository)
@@ -364,10 +428,19 @@ def test_service_rechecks_staged_tree_before_commit(qtbot, repository):
     service.close()
 
 
+@pytest.mark.parametrize("action", ["commit", "edit_commit_message"])
 @pytest.mark.parametrize("message", ["", " \t\n", "subject\0invalid"])
-def test_invalid_commit_message_cannot_reach_git(message):
+def test_invalid_commit_message_cannot_reach_git(message, action):
     with pytest.raises(ValueError, match="commit message"):
-        action_args("commit", PickerTarget(""), message=message)
+        action_args(action, PickerTarget("", commit="a" * 40), message=message)
+
+
+@pytest.mark.parametrize("commit", ["", "HEAD", "--amend", "a" * 39])
+def test_edit_commit_message_requires_fixed_commit_id(commit):
+    with pytest.raises(ValueError, match="fixed Git object ID"):
+        action_args(
+            "edit_commit_message", PickerTarget("", commit=commit), message="Edited"
+        )
 
 
 def test_service_cannot_be_replaced_and_close_does_not_interrupt_write(

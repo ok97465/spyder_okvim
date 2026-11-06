@@ -79,6 +79,7 @@ SOURCES = (
 _COMMIT_ACTIONS = (
     ("checkout", "Checkout selected commit (detached HEAD)\tEnter"),
     ("commit_files", "Changed files\tCtrl+L"),
+    ("edit_commit_message", "Edit HEAD commit message…\tCtrl+E"),
     ("reset_mixed", "Reset mixed\tCtrl+R, m"),
     ("reset_soft", "Reset soft\tCtrl+R, s"),
     ("reset_hard", "Reset hard\tCtrl+R, h"),
@@ -101,7 +102,11 @@ _GIT_ACTIONS = {
     ),
     "git_stash": (("stash_apply", "Apply selected stash\tEnter"),),
 }
-_COMMIT_SHORTCUTS = {Qt.Key_R: "reset", Qt.Key_L: "commit_files"}
+_COMMIT_SHORTCUTS = {
+    Qt.Key_R: "reset",
+    Qt.Key_L: "commit_files",
+    Qt.Key_E: "edit_commit_message",
+}
 _GIT_CONTROL_SHORTCUTS = {
     "git_status": {
         Qt.Key_Return: "commit",
@@ -837,6 +842,7 @@ class PickerDialog(QDialog):
             enter = "checkout commit"
             source_help = (
                 "\nCtrl+L: changed files · Ctrl+R then m/s/h: reset mixed/soft/hard"
+                " · Ctrl+E: edit HEAD message"
             )
         elif self._source == "git_branches":
             enter = "checkout branch"
@@ -937,7 +943,7 @@ class PickerDialog(QDialog):
                 modifiers == Qt.NoModifier
                 and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape)
             )
-            or git_action in ("commit", "revert")
+            or git_action in ("commit", "revert", "edit_commit_message")
         ):
             input_method = QApplication.inputMethod()
             if key == Qt.Key_Escape:
@@ -969,7 +975,9 @@ class PickerDialog(QDialog):
                 self._reset_pending = True
                 self._update_help()
         elif git_action is not None:
-            if not (git_action == "revert" and event.isAutoRepeat()):
+            if not (
+                git_action in ("revert", "edit_commit_message") and event.isAutoRepeat()
+            ):
                 self._request_action(git_action)
         elif control and key in (Qt.Key_O, Qt.Key_I):
             if self._source == "jumps":

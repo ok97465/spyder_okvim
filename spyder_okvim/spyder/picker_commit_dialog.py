@@ -1,4 +1,4 @@
-"""A focused composer for committing the repository's staged changes."""
+"""A focused composer for staged commits and HEAD message edits."""
 
 from __future__ import annotations
 
@@ -29,11 +29,14 @@ class _MessageEditor(QPlainTextEdit):
 class CommitMessageDialog(QDialog):
     """Compose a multiline message without changing what is staged."""
 
-    def __init__(self, parent=None, *, branch: str, summary: str, message: str = ""):
+    def __init__(
+        self, parent=None, *, branch: str, summary: str, message: str = "", amend=False
+    ):
         super().__init__(parent)
         self._submitted = False
-        self.setWindowTitle("Commit staged changes")
-        self.setAccessibleName("Commit staged changes")
+        title = "Edit HEAD commit message" if amend else "Commit staged changes"
+        self.setWindowTitle(title)
+        self.setAccessibleName(title)
         self.setMinimumSize(0, 0)
         if parent is not None:
             self.setPalette(parent.palette())
@@ -51,23 +54,37 @@ class CommitMessageDialog(QDialog):
         self.branch_label.setAccessibleName("Commit branch")
         layout.addWidget(self.branch_label)
 
-        scope_label = QLabel("Only staged changes are included.", self)
+        scope_label = QLabel(
+            (
+                "Only the HEAD commit message changes. The commit ID will change."
+                if amend
+                else "Only staged changes are included."
+            ),
+            self,
+        )
         scope_label.setAccessibleDescription(
-            "Unstaged changes and unsaved buffers are not included in the commit."
+            "Staged changes, working files and unsaved buffers are kept."
+            if amend
+            else "Unstaged changes and unsaved buffers are not included in the commit."
         )
         scope_label.setWordWrap(True)
         layout.addWidget(scope_label)
 
-        summary_label = QLabel("Staged changes", self)
+        summary_title = "Commit being edited" if amend else "Staged changes"
+        summary_label = QLabel(summary_title, self)
         self.summary_view = QPlainTextEdit(self)
         self.summary_view.setReadOnly(True)
         self.summary_view.setPlainText(summary)
         self.summary_view.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.summary_view.setMinimumSize(0, 0)
         self.summary_view.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
-        self.summary_view.setAccessibleName("Staged changes summary")
+        self.summary_view.setAccessibleName(
+            "HEAD commit summary" if amend else "Staged changes summary"
+        )
         self.summary_view.setAccessibleDescription(
-            "Read-only summary of all staged changes included in this commit."
+            "Read-only identity of the HEAD commit whose message will be changed."
+            if amend
+            else "Read-only summary of all staged changes included in this commit."
         )
         summary_label.setBuddy(self.summary_view)
         layout.addWidget(summary_label)
@@ -81,13 +98,24 @@ class CommitMessageDialog(QDialog):
         self.message_edit.setAccessibleName("Commit message")
         self.message_edit.setAccessibleDescription(
             "Enter a summary and optional description. "
-            "Enter adds a line; Ctrl+Enter commits staged changes."
+            + (
+                "Enter adds a line; Ctrl+Enter saves the HEAD commit message."
+                if amend
+                else "Enter adds a line; Ctrl+Enter commits staged changes."
+            )
         )
         message_label.setBuddy(self.message_edit)
         layout.addWidget(message_label)
         layout.addWidget(self.message_edit, 2)
 
-        hint = QLabel("Ctrl+Enter: commit · Esc: cancel", self)
+        hint = QLabel(
+            (
+                "Ctrl+Enter: save message · Esc: cancel"
+                if amend
+                else "Ctrl+Enter: commit · Esc: cancel"
+            ),
+            self,
+        )
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
@@ -103,8 +131,10 @@ class CommitMessageDialog(QDialog):
             label.setSizePolicy(policy)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel, self)
-        self.commit_button = buttons.addButton("Commit", QDialogButtonBox.AcceptRole)
-        self.commit_button.setAccessibleName("Commit staged changes")
+        self.commit_button = buttons.addButton(
+            "Save message" if amend else "Commit", QDialogButtonBox.AcceptRole
+        )
+        self.commit_button.setAccessibleName(title)
         for button in buttons.buttons():
             button.setAutoDefault(False)
             button.setDefault(False)

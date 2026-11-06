@@ -70,9 +70,14 @@ def action_args(
     index_tree: str = "",
 ) -> list[str]:
     """Build one argument vector; confirmation and live validation belong to UI."""
-    if action == "commit":
+    if action in ("commit", "edit_commit_message"):
         if not message.strip() or "\0" in message:
             raise ValueError("Enter a non-empty commit message without NUL characters")
+        if action == "edit_commit_message":
+            _sha(target.commit)
+            # --only with --amend and no paths keeps HEAD's tree, even when
+            # unrelated changes are staged. Empty commits can be reworded too.
+            return ["commit", "--amend", "--only", "--allow-empty", "-m", message]
         # No pathspec or --all: commit exactly the staged index, repository-wide.
         return ["commit", "-m", message]
     if action == "revert_file":

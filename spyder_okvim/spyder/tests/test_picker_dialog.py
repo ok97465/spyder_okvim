@@ -410,6 +410,54 @@ def test_commit_reset_prefix_executes_once_without_changing_query(
     assert "m mixed" not in picker.help_label.text()
 
 
+@pytest.mark.parametrize("source", ["git_log", "git_file_log"])
+def test_edit_commit_message_shortcut_reserves_key_and_ignores_autorepeat(
+    qtbot, source
+):
+    picker = dialog(qtbot)
+    picker.set_source(source)
+    picker.set_results(results())
+    actions = []
+    picker.action_requested.connect(
+        lambda action, entry: actions.append((action, entry.id))
+    )
+    override = QKeyEvent(QEvent.ShortcutOverride, Qt.Key_E, Qt.ControlModifier)
+    QCoreApplication.sendEvent(picker.prompt, override)
+    assert override.isAccepted()
+    assert not actions
+    repeat = QKeyEvent(QEvent.KeyPress, Qt.Key_E, Qt.ControlModifier, "e", True)
+    QCoreApplication.sendEvent(picker.prompt, repeat)
+    assert not actions
+    qtbot.keyClick(picker.prompt, Qt.Key_E, Qt.ControlModifier)
+    assert actions == [("edit_commit_message", "2")]
+    assert picker.query() == ""
+    assert "Ctrl+E: edit HEAD message" in picker.help_label.text()
+    picker.set_actions_busy(True)
+    qtbot.keyClick(picker.prompt, Qt.Key_E, Qt.ControlModifier)
+    assert actions == [("edit_commit_message", "2")]
+
+
+@pytest.mark.parametrize("source", ["git_log", "git_file_log"])
+def test_edit_commit_message_finishes_query_ime_before_opening(
+    qtbot, monkeypatch, source
+):
+    from qtpy.QtWidgets import QApplication
+
+    picker = dialog(qtbot)
+    picker.set_source(source)
+    picker.set_results(results())
+    actions, commits = [], []
+    picker.action_requested.connect(lambda action, entry: actions.append(action))
+    QCoreApplication.sendEvent(picker.prompt, QInputMethodEvent("한", []))
+    monkeypatch.setattr(QApplication.inputMethod(), "commit", lambda: commits.append(1))
+    qtbot.keyClick(picker.prompt, Qt.Key_E, Qt.ControlModifier)
+    assert commits == [1]
+    assert not actions
+    QCoreApplication.sendEvent(picker.prompt, QInputMethodEvent())
+    qtbot.keyClick(picker.prompt, Qt.Key_E, Qt.ControlModifier)
+    assert actions == ["edit_commit_message"]
+
+
 @pytest.mark.parametrize(
     "key, action",
     [
@@ -576,17 +624,28 @@ def test_git_action_menu_and_changed_files_are_available_only_for_valid_selectio
     assert set(menu) == {
         "checkout",
         "commit_files",
+        "edit_commit_message",
         "reset_mixed",
         "reset_soft",
         "reset_hard",
     }
     menu["reset_soft"].trigger()
+    menu["edit_commit_message"].trigger()
     qtbot.keyClick(picker.prompt, Qt.Key_L, Qt.ControlModifier)
-    assert actions == [("reset_soft", "2"), ("commit_files", "2")]
+    assert actions == [
+        ("reset_soft", "2"),
+        ("edit_commit_message", "2"),
+        ("commit_files", "2"),
+    ]
     picker.prompt.setText("stale")
     assert not picker.actions_button.isEnabled()
     menu["reset_hard"].trigger()
-    assert actions == [("reset_soft", "2"), ("commit_files", "2")]
+    menu["edit_commit_message"].trigger()
+    assert actions == [
+        ("reset_soft", "2"),
+        ("edit_commit_message", "2"),
+        ("commit_files", "2"),
+    ]
 
 
 def test_mutation_busy_keeps_query_close_but_blocks_git_actions(qtbot):
