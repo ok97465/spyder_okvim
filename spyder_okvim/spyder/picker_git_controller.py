@@ -108,6 +108,7 @@ class PickerGitActions:
         self.pending = None
         self.running = None
         self.commit_drafts = {}
+        self.amend_drafts = {}
 
     @property
     def busy(self):
@@ -179,6 +180,8 @@ class PickerGitActions:
             if action == "revert":
                 return "revert_file"
         if source in ("git_log", "git_file_log"):
+            if action == "edit_commit_message":
+                return action
             if action == "checkout":
                 return "checkout_commit"
             if action in ("reset_mixed", "reset_soft", "reset_hard"):
@@ -270,6 +273,9 @@ class PickerGitActions:
         if request.action == "commit":
             self._prepare_commit(request, branch, head)
             return
+        if request.action == "edit_commit_message":
+            self._prepare_message_edit(request, branch, head)
+            return
         if request.action == "revert_file":
             self._prepare_revert(request, branch, head)
             return
@@ -343,6 +349,52 @@ class PickerGitActions:
                 self._finish_preflight(request)
                 return
             self.commit_drafts[request.root] = message
+            self._submit_action(request, branch, head, message=message, index=index)
+
+        self._read_context(request, ["write-tree"], tree_read)
+
+    def _prepare_message_edit(self, request, branch, head):
+        """Reword only the selected HEAD, never include the staged index."""
+        if not head or request.entry.target.commit != head:
+            self._finish_preflight(
+                request, "Select the latest commit (HEAD) to edit its message"
+            )
+            return
+
+        def tree_read(result):
+            if result.error or result.returncode or result.truncated:
+                self._finish_preflight(
+                    request, result.error or result.stderr or "Git index output limited"
+                )
+                return
+            index = result.stdout.decode("ascii", errors="replace").strip()
+            self._read_context(
+                request,
+                [
+                    "show",
+                    "--no-patch",
+                    "--no-show-signature",
+                    "--encoding=UTF-8",
+                    "--format=format:%B",
+                    head,
+                    "--",
+                ],
+                lambda result: message_read(index, result),
+            )
+
+        def message_read(index, result):
+            if result.error or result.returncode or result.truncated:
+                self._finish_preflight(
+                    request,
+                    result.error or result.stderr or "Commit message output limited",
+                )
+                return
+            original = result.stdout.decode("utf-8", errors="replace")
+            message = self.compose_amend(request, branch, original)
+            if message is None:
+                self._finish_preflight(request)
+                return
+            self.amend_drafts[(request.root, head)] = message
             self._submit_action(request, branch, head, message=message, index=index)
 
         self._read_context(request, ["write-tree"], tree_read)
@@ -558,16 +610,36 @@ class PickerGitActions:
         self.sync()
 
     def compose_commit(self, request, branch, summary):
+        return self._compose_message(
+            request, branch, summary, drafts=self.commit_drafts, key=request.root
+        )
+
+    def compose_amend(self, request, branch, original):
+        commit = request.entry.target.commit
+        return self._compose_message(
+            request,
+            branch,
+            f"HEAD: {commit}\n\nStaged changes, working files and unsaved buffers are kept.",
+            drafts=self.amend_drafts,
+            key=(request.root, commit),
+            message=original,
+            amend=True,
+        )
+
+    def _compose_message(
+        self, request, branch, summary, *, drafts, key, message="", amend=False
+    ):
         dialog = CommitMessageDialog(
             self.picker.dialog,
             branch=branch,
             summary=summary,
-            message=self.commit_drafts.get(request.root, ""),
+            message=drafts.get(key, message),
+            amend=amend,
         )
 
         # Keep edits even if the parent picker disappears in the modal loop.
         def save_draft():
-            self.commit_drafts[request.root] = dialog.message()
+            drafts[key] = dialog.message()
 
         dialog.message_edit.textChanged.connect(save_draft)
         try:
@@ -726,6 +798,12 @@ class PickerGitActions:
             return
         if request.action == "commit" and not result.error and not result.returncode:
             self.commit_drafts.pop(request.root, None)
+        if (
+            request.action == "edit_commit_message"
+            and not result.error
+            and not result.returncode
+        ):
+            self.amend_drafts.pop((request.root, request.entry.target.commit), None)
         try:
             note = self._reload_changed_buffers(request, buffers)
         except (OSError, RuntimeError):

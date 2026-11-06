@@ -36,6 +36,21 @@ def test_multiline_unicode_draft_and_accessible_read_only_summary(qtbot):
     assert dialog.message_edit.textCursor().position() == len(message)
 
 
+def test_amend_composer_explains_message_only_edit_and_submits(qtbot):
+    dialog = composer(qtbot, amend=True, message="Existing subject\n\nExisting body")
+    assert dialog.windowTitle() == "Edit HEAD commit message"
+    assert dialog.summary_view.accessibleName() == "HEAD commit summary"
+    assert dialog.commit_button.text() == "Save message"
+    assert (
+        "saves the HEAD commit message" in dialog.message_edit.accessibleDescription()
+    )
+    labels = dialog.findChildren(QLabel)
+    assert any("commit ID will change" in label.text() for label in labels)
+    assert any("Staged changes" in label.accessibleDescription() for label in labels)
+    qtbot.keyClick(dialog.message_edit, Qt.Key_Return, Qt.ControlModifier)
+    assert dialog.result() == QDialog.Accepted
+
+
 @pytest.mark.parametrize("message", ["", " \t\n", "valid\0invalid"])
 def test_blank_and_nul_messages_cannot_commit(qtbot, message):
     dialog = composer(qtbot, message=message)
