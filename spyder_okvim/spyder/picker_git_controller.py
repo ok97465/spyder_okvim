@@ -5,15 +5,20 @@ from __future__ import annotations
 import logging
 import os
 import os.path as osp
+import stat
 import weakref
 from dataclasses import dataclass, replace
 
-from qtpy.QtWidgets import QInputDialog, QMessageBox
+from qtpy.QtWidgets import QDialog, QInputDialog, QMessageBox
 
+from spyder_okvim.spyder.picker_commit_dialog import CommitMessageDialog
+from spyder_okvim.spyder.picker_git import parse_status
 from spyder_okvim.spyder.picker_git_actions import (
     GitMutationService,
     action_args,
+    can_revert_status,
     status_action,
+    worktree_stamp as _worktree_stamp,
 )
 from spyder_okvim.utils.picker import PickerEntry, PickerTarget
 from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
@@ -30,6 +35,7 @@ _DISK_ACTIONS = frozenset(
         "rebase",
         "merge",
         "stash_apply",
+        "revert_file",
     )
 )
 _CONFIRM_ACTIONS = frozenset(
@@ -101,6 +107,7 @@ class PickerGitActions:
         self.service = GitMutationService()
         self.pending = None
         self.running = None
+        self.commit_drafts = {}
 
     @property
     def busy(self):
@@ -129,6 +136,8 @@ class PickerGitActions:
             or picker.result_token != picker._search_token()
         ):
             return False
+        if request.action == "commit":
+            return True
         entry = picker.dialog.selected_entry()
         if request.entry is None:
             return entry is None and request.action == "create_branch"
@@ -162,8 +171,13 @@ class PickerGitActions:
 
     @staticmethod
     def _operation(source, action, entry):
-        if source == "git_status" and action == "stage_toggle":
-            return status_action(entry.target)
+        if source == "git_status":
+            if action == "commit":
+                return "commit"
+            if action == "stage_toggle":
+                return status_action(entry.target)
+            if action == "revert":
+                return "revert_file"
         if source in ("git_log", "git_file_log"):
             if action == "checkout":
                 return "checkout_commit"
@@ -185,11 +199,19 @@ class PickerGitActions:
     def request(self, action, entry):
         picker = self.picker
         creating = picker.source == "git_branches" and action == "branch_create"
-        if self.busy or picker.phase != "active" or (entry is None and not creating):
+        committing = picker.source == "git_status" and action == "commit"
+        if (
+            self.busy
+            or picker.phase != "active"
+            or (entry is None and not (creating or committing))
+        ):
             self.sync()
             return
         operation = self._operation(picker.source, action, entry)
         if operation is None or not picker.git_root:
+            return
+        if operation == "revert_file" and not can_revert_status(entry.target):
+            self._message("Git: select an unstaged change to revert")
             return
         if operation == "track_branch" and not entry.target.ref.startswith(
             "refs/remotes/"
@@ -206,7 +228,7 @@ class PickerGitActions:
             selection_generation=picker.selection_generation,
             root=picker.git_root,
             action=operation,
-            entry=entry,
+            entry=None if committing else entry,
         )
         self.pending = request
         self.sync()
@@ -245,6 +267,12 @@ class PickerGitActions:
             if not result.returncode
             else ""
         )
+        if request.action == "commit":
+            self._prepare_commit(request, branch, head)
+            return
+        if request.action == "revert_file":
+            self._prepare_revert(request, branch, head)
+            return
         buffers = self._buffers(request.root) if request.action in _DISK_ACTIONS else []
         dirty = [
             buffer.path
@@ -276,6 +304,194 @@ class PickerGitActions:
         if any(buffer.editor_ref().document().isModified() for buffer in buffers):
             self._finish_preflight(request, "save or close modified buffers first")
             return
+        self._submit_action(request, branch, head, buffers=buffers, name=name)
+
+    def _prepare_commit(self, request, branch, head):
+        """Inspect the entire staged index, independent of the filtered row."""
+
+        def tree_read(result):
+            if result.error or result.returncode:
+                self._finish_preflight(request, result.error or result.stderr)
+                return
+            index = result.stdout.decode("ascii", errors="replace").strip()
+            self._read_context(
+                request,
+                [
+                    "diff",
+                    "--cached",
+                    "--stat",
+                    "--exit-code",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                ],
+                lambda summary: summary_read(index, summary),
+            )
+
+        def summary_read(index, result):
+            # --exit-code reports staged differences with status 1.
+            if result.returncode == 0 and not result.error:
+                self._finish_preflight(request, "No staged changes to commit")
+                return
+            if result.returncode != 1:
+                self._finish_preflight(request, result.error or result.stderr)
+                return
+            summary = result.stdout.decode("utf-8", errors="replace").strip()
+            if result.truncated:
+                summary += "\n[Staged summary truncated]"
+            message = self.compose_commit(request, branch, summary)
+            if message is None:
+                self._finish_preflight(request)
+                return
+            self.commit_drafts[request.root] = message
+            self._submit_action(request, branch, head, message=message, index=index)
+
+        self._read_context(request, ["write-tree"], tree_read)
+
+    def _prepare_revert(self, request, branch, head):
+        """Restore unstaged content or delete an untracked file, keeping the index."""
+        target = request.entry.target
+        path = osp.relpath(target.path, request.root).replace(os.sep, "/")
+        deleting = target.status == "??"
+
+        def status_read(result):
+            if result.error or result.returncode or result.truncated:
+                self._finish_preflight(
+                    request,
+                    result.error or result.stderr or "Git status output limited",
+                )
+                return
+            records = parse_status(result.stdout)
+            current = next(
+                (
+                    item
+                    for item in records
+                    if item.path == path
+                    and item.xy == target.status
+                    and item.old_path == target.old_path
+                ),
+                None,
+            )
+            if current is None or not can_revert_status(target):
+                self._finish_preflight(
+                    request, "Git status changed; refresh before reverting"
+                )
+                return
+            if current.submodule.startswith("S"):
+                self._finish_preflight(
+                    request, "Revert submodule files in their own repository"
+                )
+                return
+            self._read_context(request, ["write-tree"], tree_read)
+
+        def tree_read(result):
+            if result.error or result.returncode:
+                self._finish_preflight(request, result.error or result.stderr)
+                return
+            index = result.stdout.decode("ascii", errors="replace").strip()
+            if deleting:
+                self._confirm_revert(request, branch, head, index)
+                return
+            self._read_context(
+                request,
+                ["ls-tree", "-z", index, "--", path],
+                lambda baseline: baseline_read(index, baseline),
+            )
+
+        def baseline_read(index, result):
+            if result.error or result.returncode or result.truncated:
+                self._finish_preflight(
+                    request,
+                    result.error or result.stderr or "Staged file output limited",
+                )
+                return
+            if not result.stdout.endswith(b"\0") or not result.stdout.startswith(
+                (b"100644 blob ", b"100755 blob ", b"120000 blob ")
+            ):
+                self._finish_preflight(
+                    request, "Selected file has no staged version to restore"
+                )
+                return
+            self._confirm_revert(request, branch, head, index)
+
+        self._read_context(
+            request,
+            [
+                "status",
+                "--porcelain=v2",
+                "-z",
+                "--untracked-files=all",
+                "--",
+                path,
+                *([target.old_path] if target.old_path else []),
+            ],
+            status_read,
+        )
+
+    def _confirm_revert(self, request, branch, head, index):
+        """Recheck the selected file and its editors across the modal confirmation."""
+        target = request.entry.target
+        deleting = target.status == "??"
+        try:
+            before = _worktree_stamp(target.path)
+            if deleting and (
+                before is None
+                or not (stat.S_ISREG(before[1]) or stat.S_ISLNK(before[1]))
+            ):
+                self._finish_preflight(
+                    request, "Select an untracked file, not a directory, to delete"
+                )
+                return
+            if not deleting and before is not None and stat.S_ISDIR(before[1]):
+                self._finish_preflight(
+                    request, "Select a file, not a directory, to revert"
+                )
+                return
+            buffers = self._buffers(request.root, path=target.path)
+            if any(buffer.editor_ref().document().isModified() for buffer in buffers):
+                self._finish_preflight(request, "save or close modified buffers first")
+                return
+            if not self.confirm(request, branch):
+                self._finish_preflight(request)
+                return
+            if not self._valid(request):
+                self._finish_preflight(request)
+                return
+            buffers = self._buffers(request.root, path=target.path)
+            if any(buffer.editor_ref().document().isModified() for buffer in buffers):
+                self._finish_preflight(request, "save or close modified buffers first")
+                return
+            if _worktree_stamp(target.path) != before:
+                self._finish_preflight(
+                    request, "File changed; refresh before reverting"
+                )
+                return
+        except OSError as error:
+            self._finish_preflight(request, str(error))
+            return
+        self._submit_action(
+            request,
+            branch,
+            head,
+            buffers=buffers,
+            index=index,
+            file_stamp=before,
+        )
+
+    def _submit_action(
+        self,
+        request,
+        branch,
+        head,
+        *,
+        buffers=(),
+        name="",
+        message="",
+        index=None,
+        file_stamp=None,
+    ):
+        if not self._valid(request):
+            self._finish_preflight(request)
+            return
         target = (
             replace(
                 request.entry.target,
@@ -284,11 +500,19 @@ class PickerGitActions:
             if request.entry is not None
             else PickerTarget("")
         )
-        try:
-            args = action_args(request.action, target, branch_name=name)
-        except ValueError as error:
-            self._finish_preflight(request, str(error))
-            return
+        deleting = request.action == "revert_file" and target.status == "??"
+        if not deleting:
+            try:
+                args = action_args(
+                    request.action,
+                    target,
+                    branch_name=name,
+                    message=message,
+                    index_tree=index or "",
+                )
+            except ValueError as error:
+                self._finish_preflight(request, str(error))
+                return
         expected_ref = None
         if target.ref and request.action != "create_branch":
             expected_ref = (target.ref, target.commit)
@@ -301,19 +525,59 @@ class PickerGitActions:
             if actions is not None:
                 actions._finished(request, buffers, result)
 
-        accepted = self.service.submit(
-            request,
-            request.root,
-            args,
-            finished,
-            expected_head=head,
-            expected_branch=branch,
-            expected_ref=expected_ref,
-        )
+        if deleting:
+            accepted = self.service.submit_delete_untracked(
+                request,
+                request.root,
+                target.path,
+                file_stamp,
+                finished,
+                expected_head=head,
+                expected_branch=branch,
+                expected_index=index,
+            )
+        else:
+            accepted = self.service.submit(
+                request,
+                request.root,
+                args,
+                finished,
+                expected_head=head,
+                expected_branch=branch,
+                expected_ref=expected_ref,
+                expected_index=index,
+                expected_worktree=(
+                    (target.path, file_stamp)
+                    if request.action == "revert_file"
+                    else None
+                ),
+            )
         if not accepted:
             self.running = None
             self._message("Git: another operation is already running")
         self.sync()
+
+    def compose_commit(self, request, branch, summary):
+        dialog = CommitMessageDialog(
+            self.picker.dialog,
+            branch=branch,
+            summary=summary,
+            message=self.commit_drafts.get(request.root, ""),
+        )
+
+        # Keep edits even if the parent picker disappears in the modal loop.
+        def save_draft():
+            self.commit_drafts[request.root] = dialog.message()
+
+        dialog.message_edit.textChanged.connect(save_draft)
+        try:
+            accepted = dialog.exec_() == QDialog.Accepted
+            if widget_is_deleted(dialog):
+                return None
+            return dialog.message() if accepted else None
+        finally:
+            if not widget_is_deleted(dialog):
+                dialog.deleteLater()
 
     def name_branch(self):
         name, accepted = QInputDialog.getText(
@@ -326,7 +590,21 @@ class PickerGitActions:
     def confirm(self, request, branch):
         target = request.entry.target
         current = branch.removeprefix("refs/heads/") or "detached HEAD"
-        if request.action.startswith("reset_"):
+        if request.action == "revert_file":
+            path = osp.relpath(target.path, request.root)
+            if target.status == "??":
+                text = (
+                    f"Delete untracked file {path}?"
+                    "\nThe selected file will be removed from disk."
+                    "\nStaged changes and other files will be kept."
+                )
+            else:
+                text = (
+                    f"Revert unstaged changes in {path}?"
+                    "\nThe working file will be restored to its staged version."
+                    "\nStaged changes will be kept. Unstaged changes will be discarded."
+                )
+        elif request.action.startswith("reset_"):
             mode = request.action.removeprefix("reset_")
             text = f"Reset {current} to {target.commit[:12]} ({mode})?"
             if mode == "hard":
@@ -362,9 +640,14 @@ class PickerGitActions:
         current = host.status.get_editorstack()
         return list(dict.fromkeys((*stacks, current)))
 
-    def _buffers(self, root):
+    def _buffers(self, root, *, path=None):
         # Retain every view: the first clone may close while Git is running.
         # Deduplicate documents only when a live view actually reloads them.
+        selected_paths = (
+            {osp.normcase(osp.abspath(path)), osp.normcase(osp.realpath(path))}
+            if path is not None
+            else None
+        )
         buffers = []
         for stack in self._stacks():
             if stack is None or widget_is_deleted(stack):
@@ -373,9 +656,15 @@ class PickerGitActions:
                 editor = finfo.editor
                 if widget_is_deleted(editor):
                     continue
-                document = editor.document()
+                if (
+                    selected_paths is not None
+                    and osp.normcase(osp.abspath(finfo.filename)) not in selected_paths
+                    and osp.normcase(osp.realpath(finfo.filename)) not in selected_paths
+                ):
+                    continue
                 if not _in_repository(finfo.filename, root):
                     continue
+                document = editor.document()
                 buffers.append(
                     _BufferSnapshot(
                         stack_ref=weakref.ref(stack),
@@ -435,6 +724,8 @@ class PickerGitActions:
         picker = self.picker
         if picker.widget._closed or widget_is_deleted(picker.widget):
             return
+        if request.action == "commit" and not result.error and not result.returncode:
+            self.commit_drafts.pop(request.root, None)
         try:
             note = self._reload_changed_buffers(request, buffers)
         except (OSError, RuntimeError):

@@ -279,6 +279,8 @@ uses the current file's repository even when the active project is elsewhere.
 | Picker | Key | Git operation |
 | --- | --- | --- |
 | Status | Tab | Stage the file; unstage first when it already has indexed changes |
+| Status | Ctrl+R | Revert selected file's unstaged changes, or delete an untracked `-U` file, after confirmation; keep staged changes |
+| Status | Ctrl+Enter | Compose a message and commit all staged changes; Ctrl+Enter in the composer submits |
 | Commits / current file commits | Enter | Checkout the selected commit with detached HEAD |
 | Commits / current file commits | Ctrl+R, then m / s / h | Reset current HEAD in mixed / soft / hard mode |
 | Commits / current file commits | Ctrl+L | Browse the commit's changed files; Back restores the history query/selection |

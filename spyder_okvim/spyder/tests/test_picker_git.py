@@ -48,6 +48,92 @@ def repository(tmp_path):
     return tmp_path
 
 
+def _status_entries(repository):
+    snapshot = git_snapshot(
+        "git_status",
+        str(repository),
+        1,
+        str(repository),
+        "",
+        GitResult("status", git(repository, *status_args()), ""),
+    )
+    return {entry.id: entry for entry in snapshot.entries}
+
+
+def test_status_display_tracks_new_file_staging_with_literal_path(repository):
+    name = "new [literal]*\t\n.txt"
+    path = repository / name
+    path.write_text("new file\n")
+    entry = _status_entries(repository)[name]
+    assert entry.label == f"-U {name}"
+    assert entry.target.status == "??"
+    assert entry.target.path == str(path)
+    git(repository, "add", name)
+    entry = _status_entries(repository)[name]
+    assert entry.label == f"+U {name}"
+    assert entry.target.status == "A."
+    assert entry.target.path == str(path)
+    path.write_text("new file with an unstaged edit\n")
+    entry = _status_entries(repository)[name]
+    assert entry.label == f"+U -M {name}"
+    assert entry.target.status == "AM"
+
+
+def test_status_display_distinguishes_staged_unstaged_and_both(repository):
+    path = repository / "ordinary.txt"
+    path.write_text("staged version\n")
+    entry = _status_entries(repository)[path.name]
+    assert entry.label == "-M ordinary.txt"
+    assert entry.target.status == ".M"
+    git(repository, "add", path.name)
+    entry = _status_entries(repository)[path.name]
+    assert entry.label == "+M ordinary.txt"
+    assert entry.target.status == "M."
+    path.write_text("later worktree version\n")
+    entry = _status_entries(repository)[path.name]
+    assert entry.label == "+M -M ordinary.txt"
+    assert entry.target.status == "MM"
+    assert "+M -M ordinary.txt" in entry.search_text
+
+
+def test_status_display_keeps_rename_and_deletion_codes(repository):
+    name = "renamed [x]*\t\n.txt"
+    git(repository, "mv", "ordinary.txt", name)
+    (repository / "deleted.txt").unlink()
+    entries = _status_entries(repository)
+    assert entries[name].label == f"+R {name}"
+    assert entries[name].target.status == "R."
+    assert entries[name].target.old_path == "ordinary.txt"
+    assert entries["deleted.txt"].label == "-D deleted.txt"
+    assert entries["deleted.txt"].target.status == ".D"
+    git(repository, "add", "deleted.txt")
+    entry = _status_entries(repository)["deleted.txt"]
+    assert entry.label == "+D deleted.txt"
+    assert entry.target.status == "D."
+
+
+def test_status_ids_distinguish_staged_deletion_and_untracked_replacement(repository):
+    path = repository / "ordinary.txt"
+    git(repository, "rm", path.name)
+    path.write_text("recreated untracked content\n")
+
+    entries = _status_entries(repository)
+
+    assert len(entries) == 2
+    assert entries[path.name].target.status == "D."
+    replacement = next(
+        entry for entry in entries.values() if entry.target.status == "??"
+    )
+    assert replacement.id != path.name
+    assert replacement.target.path == entries[path.name].target.path == str(path)
+    assert _status_entries(repository).keys() == entries.keys()
+
+    git(repository, "add", path.name)
+    staged = _status_entries(repository)
+    assert list(staged) == [path.name]
+    assert staged[path.name].target.status == "M."
+
+
 def test_status_and_separate_index_worktree_patches(repository):
     path = repository / "ordinary.txt"
     path.write_text("staged\ntwo\nthree\n")
@@ -124,6 +210,10 @@ def test_conflict_status_and_first_parent_merge_patch(repository):
     (entry,) = parse_status(git(repository, *status_args()))
     assert entry.kind == "conflict"
     assert entry.xy == "UU"
+    displayed = _status_entries(repository)["ordinary.txt"]
+    assert displayed.label == "!UU ordinary.txt"
+    assert displayed.target.status == "UU"
+    assert "Unmerged conflict" in displayed.detail
     (repository / "ordinary.txt").write_text("resolved\n")
     git(repository, "add", "ordinary.txt")
     git(repository, "commit", "-m", "merge resolved")
