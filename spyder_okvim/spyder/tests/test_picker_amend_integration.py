@@ -6,6 +6,7 @@ import pytest
 from qtpy.QtCore import QTimer, Qt
 
 from spyder_okvim.spyder.picker_commit_dialog import CommitMessageDialog
+from spyder_okvim.spyder.tests.test_picker_commit_integration import _merge_head_change
 from spyder_okvim.spyder.tests.test_picker_git_integration import _git
 from spyder_okvim.spyder.tests.test_picker_git_mutation_integration import (
     _choose,
@@ -175,6 +176,33 @@ def test_repository_change_while_editing_aborts_and_keeps_draft(git_picker, chan
     assert state.picker.actions.amend_drafts[(str(state.root), head)] == (
         "Keep this amendment draft"
     )
+
+
+@pytest.mark.parametrize("change", ["started", "removed", "parents_changed"])
+def test_merge_state_change_while_editing_aborts_and_keeps_draft(git_picker, change):
+    state = git_picker
+    head = _head(state.root)
+    merge_head, after = _merge_head_change(state.root, change)
+    before = _repository_state(state.root)
+    draft = "Keep amendment after merge state changes"
+
+    def compose(request, branch, original):
+        if after is None:
+            merge_head.unlink()
+        else:
+            merge_head.write_bytes(after)
+        return draft
+
+    state.monkeypatch.setattr(state.picker.actions, "compose_amend", compose)
+    dialog = _open(state, "tc")
+    state.bot.keyClick(dialog.prompt, Qt.Key_E, Qt.ControlModifier)
+    _settled(state)
+
+    assert _repository_state(state.root) == before
+    assert (merge_head.read_bytes() if merge_head.exists() else None) == after
+    assert state.picker.actions.amend_drafts[(str(state.root), head)] == draft
+    assert "merge" in state.widget.msg_label.text().lower()
+    assert "changed" in state.widget.msg_label.text().lower()
 
 
 def test_failed_message_edit_keeps_draft_and_can_retry(git_picker):

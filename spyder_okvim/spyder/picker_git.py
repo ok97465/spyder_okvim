@@ -84,6 +84,7 @@ def parse_status(data: bytes) -> tuple[GitStatus, ...]:
             result.append(
                 GitStatus(
                     os.fsdecode(record[2:]),
+                    xy=kind.decode("ascii") * 2,
                     kind=("untracked" if kind == b"?" else "ignored"),
                 )
             )

@@ -10,8 +10,14 @@ from qtpy.QtCore import Qt
 
 from spyder_okvim.spyder.picker_git import GitResult
 from spyder_okvim.spyder.picker_git_controller import PickerGitActions, _in_repository
-from spyder_okvim.spyder.tests.test_picker_git_shortcuts import git_picker, _open
+from spyder_okvim.spyder.tests.test_picker_git_shortcuts import _open
+from spyder_okvim.spyder.tests.test_picker_git_shortcuts import (
+    git_picker as _git_picker,
+)
 from spyder_okvim.spyder.tests.test_picker_git_integration import _git, _ready
+
+
+git_picker = _git_picker
 
 
 class DeferredMutationService:
@@ -31,10 +37,10 @@ class DeferredMutationService:
         self.requests.append(self.active)
         return True
 
-    def finish(self, stdout=b"", error="", returncode=0):
+    def finish(self, stdout=b"", error="", returncode=0, truncated=False):
         key, cwd, args, callback, checks = self.active
         self.active = None
-        callback(GitResult(key, stdout, "", error, False, returncode))
+        callback(GitResult(key, stdout, "", error, truncated, returncode))
 
 
 @contextmanager
@@ -254,6 +260,38 @@ def test_index_action_does_not_inspect_or_stat_open_buffers(git_picker, monkeypa
         _git(state.root, *service.active[2])
         service.finish()
         buffers.assert_not_called()
+
+
+@pytest.mark.parametrize("action", ["commit", "edit_commit_message", "revert"])
+def test_truncated_index_preflight_aborts_before_composer_or_confirmation(
+    git_picker, action
+):
+    state = git_picker
+    state.file.write_text("changed = 2\n")
+    if action == "commit":
+        _git(state.root, "add", state.file.name)
+    dialog = _open(state, "tc" if action == "edit_commit_message" else "ts")
+    actions = state.picker.actions
+    compose = Mock(side_effect=AssertionError("Incomplete index cannot be reviewed"))
+    state.monkeypatch.setattr(actions, "compose_commit", compose)
+    state.monkeypatch.setattr(actions, "compose_amend", compose)
+    state.monkeypatch.setattr(actions, "confirm", compose)
+
+    with deferred(state) as service:
+        actions.request(action, dialog.selected_entry())
+        finish_preflight(state, service)
+        if action == "revert":
+            service.finish(_git(state.root, *service.active[2]))
+        else:
+            assert service.active[2] == ("rev-parse", "--git-path", "MERGE_HEAD")
+            service.finish(b".git/MERGE_HEAD\n")
+        assert service.active[2] == ("write-tree",)
+        service.finish(b"incomplete", truncated=True)
+
+        assert not actions.busy
+        assert service.requests[-1][2] == ("write-tree",)
+        assert "Git index output limited" in state.widget.msg_label.text()
+        compose.assert_not_called()
 
 
 @pytest.mark.parametrize("close_first_view", [False, True])

@@ -1,5 +1,6 @@
 """Commit composition writes only the reviewed index in temporary repositories."""
 
+from pathlib import Path
 import subprocess
 from unittest.mock import Mock
 
@@ -31,6 +32,28 @@ def _composer(state, message):
 
 def _count(root):
     return int(_git(root, "rev-list", "--count", "HEAD"))
+
+
+def _merge_head_change(root, change):
+    """Prepare valid merge parents without changing HEAD or the index."""
+    merge_head = Path(
+        _git(root, "rev-parse", "--path-format=absolute", "--git-path", "MERGE_HEAD")
+        .decode()
+        .strip()
+    )
+    tree = _git(root, "rev-parse", "HEAD^{tree}").decode().strip()
+    parents = [
+        _git(root, "commit-tree", tree, "-m", message)
+        for message in ("First parent", "Second parent", "Replacement parent")
+    ]
+    before, after = {
+        "started": (None, parents[0]),
+        "removed": (parents[0], None),
+        "parents_changed": (parents[0] + parents[1], parents[0] + parents[2]),
+    }[change]
+    if before is not None:
+        merge_head.write_bytes(before)
+    return merge_head, after
 
 
 def test_commit_shortcut_commits_index_and_preserves_disk_and_unsaved_editor(
@@ -236,6 +259,102 @@ def test_unresolved_index_skips_composer_and_preserves_conflict(git_picker):
     assert _git(state.root, "ls-files", "--unmerged") == unmerged
     assert state.file.read_text() == contents
     assert (state.root / ".git" / "MERGE_HEAD").exists()
+
+
+@pytest.mark.parametrize("linked_worktree", [False, True])
+def test_resolved_merge_with_unchanged_tree_can_be_committed(
+    git_picker, linked_worktree
+):
+    state = git_picker
+    if linked_worktree:
+        linked = state.root / "linked"
+        _git(state.root, "worktree", "add", "-b", "linked-main", str(linked))
+        state.root = linked
+        state.file = linked / "file.py"
+        state.monkeypatch.setattr(
+            state.main.projects, "get_active_project_path", lambda: str(linked)
+        )
+        assert (state.root / ".git").is_file()
+    branch = _git(state.root, "symbolic-ref", "--short", "HEAD").decode().strip()
+    _git(state.root, "switch", "-c", "topic")
+    state.file.write_text("topic = 2\n")
+    _git(state.root, "commit", "-am", "Topic version")
+    topic = _git(state.root, "rev-parse", "HEAD").strip()
+    _git(state.root, "switch", branch)
+    state.file.write_text("main = 3\n")
+    _git(state.root, "commit", "-am", "Main version")
+    head = _git(state.root, "rev-parse", "HEAD").strip()
+    with pytest.raises(subprocess.CalledProcessError):
+        _git(state.root, "merge", "topic")
+    _git(state.root, "checkout", "--ours", state.file.name)
+    _git(state.root, "add", state.file.name)
+    tree = _git(state.root, "write-tree")
+    assert tree == _git(state.root, "rev-parse", "HEAD^{tree}")
+    assert _git(state.root, "diff", "--cached") == b""
+    compose = _composer(state, "Complete resolved merge")
+    state.widget.open_picker("git_status")
+    state.bot.waitUntil(
+        lambda: state.picker.result_token == state.picker._search_token()
+        and state.picker.git_root == str(state.root)
+    )
+
+    state.picker.actions.request("commit", None)
+    _settled(state)
+
+    compose.assert_called_once()
+    assert topic.decode() in compose.call_args.args[2]
+    assert "No staged changes relative to HEAD." in compose.call_args.args[2]
+    assert _git(state.root, "show", "-s", "--format=%P", "HEAD").split() == [
+        head,
+        topic,
+    ]
+    assert _git(state.root, "rev-parse", "HEAD^{tree}") == tree
+    assert _git(state.root, "status", "--porcelain") == b""
+    merge_head = Path(
+        _git(
+            state.root,
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "MERGE_HEAD",
+        )
+        .decode()
+        .strip()
+    )
+    assert not merge_head.exists()
+    assert state.picker.git_root not in state.picker.actions.commit_drafts
+
+
+@pytest.mark.parametrize("change", ["started", "removed", "parents_changed"])
+def test_merge_state_change_while_composing_aborts_and_keeps_draft(git_picker, change):
+    state = git_picker
+    _stage(state)
+    merge_head, after = _merge_head_change(state.root, change)
+    head = _git(state.root, "rev-parse", "HEAD")
+    index = _git(state.root, "write-tree")
+    status = _git(state.root, "status", "--porcelain")
+    draft = "Keep this draft after merge state changes"
+
+    def compose(request, branch, summary):
+        if after is None:
+            merge_head.unlink()
+        else:
+            merge_head.write_bytes(after)
+        return draft
+
+    state.monkeypatch.setattr(state.picker.actions, "compose_commit", compose)
+    _open(state, "ts")
+
+    state.picker.actions.request("commit", None)
+    _settled(state)
+
+    assert _git(state.root, "rev-parse", "HEAD") == head
+    assert _git(state.root, "write-tree") == index
+    assert _git(state.root, "status", "--porcelain") == status
+    assert (merge_head.read_bytes() if merge_head.exists() else None) == after
+    assert state.picker.actions.commit_drafts[state.picker.git_root] == draft
+    assert "merge" in state.widget.msg_label.text().lower()
+    assert "changed" in state.widget.msg_label.text().lower()
 
 
 @pytest.mark.parametrize("change", ["index", "head", "branch"])

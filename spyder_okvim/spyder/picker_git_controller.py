@@ -17,6 +17,7 @@ from spyder_okvim.spyder.picker_git_actions import (
     GitMutationService,
     action_args,
     can_revert_status,
+    read_merge_head,
     status_action,
     worktree_stamp as _worktree_stamp,
 )
@@ -170,6 +171,40 @@ class PickerGitActions:
             self.pending = None
             self.sync()
 
+    def _read_index(self, request, callback):
+        """Read a complete index identity before reviewing or restoring it."""
+
+        def completed(result):
+            if result.error or result.returncode or result.truncated:
+                self._finish_preflight(
+                    request, result.error or result.stderr or "Git index output limited"
+                )
+                return
+            callback(result.stdout.decode("ascii", errors="replace").strip())
+
+        self._read_context(request, ["write-tree"], completed)
+
+    def _read_merge_state(self, request, callback):
+        """Resolve MERGE_HEAD through Git so linked worktrees use their own state."""
+
+        def completed(result):
+            if result.error or result.returncode or result.truncated:
+                self._finish_preflight(
+                    request, result.error or result.stderr or "Git path output limited"
+                )
+                return
+            path = osp.join(request.root, os.fsdecode(result.stdout.rstrip(b"\r\n")))
+            try:
+                contents = read_merge_head(path)
+            except OSError as error:
+                self._finish_preflight(request, str(error))
+                return
+            callback((path, contents))
+
+        self._read_context(
+            request, ["rev-parse", "--git-path", "MERGE_HEAD"], completed
+        )
+
     @staticmethod
     def _operation(source, action, entry):
         if source == "git_status":
@@ -270,27 +305,22 @@ class PickerGitActions:
             if not result.returncode
             else ""
         )
-        if request.action == "commit":
-            self._prepare_commit(request, branch, head)
-            return
-        if request.action == "edit_commit_message":
-            self._prepare_message_edit(request, branch, head)
+        if request.action in ("commit", "edit_commit_message"):
+            prepare = (
+                self._prepare_commit
+                if request.action == "commit"
+                else self._prepare_message_edit
+            )
+            self._read_merge_state(
+                request, lambda state: prepare(request, branch, head, state)
+            )
             return
         if request.action == "revert_file":
             self._prepare_revert(request, branch, head)
             return
-        buffers = self._buffers(request.root) if request.action in _DISK_ACTIONS else []
-        dirty = [
-            buffer.path
-            for buffer in buffers
-            if buffer.editor_ref().document().isModified()
-        ]
-        if dirty:
-            self._finish_preflight(
-                request,
-                "save or close modified buffers first: "
-                + ", ".join(osp.basename(path) for path in dirty),
-            )
+        changes_disk = request.action in _DISK_ACTIONS
+        buffers = self._clean_buffers(request) if changes_disk else []
+        if buffers is None:
             return
         name = ""
         if request.action == "create_branch":
@@ -306,20 +336,18 @@ class PickerGitActions:
             return
         # A confirmation runs a nested event loop; protect edits made while it
         # was open as well as those that predated the action.
-        buffers = self._buffers(request.root) if request.action in _DISK_ACTIONS else []
-        if any(buffer.editor_ref().document().isModified() for buffer in buffers):
-            self._finish_preflight(request, "save or close modified buffers first")
-            return
+        if changes_disk and (
+            request.action == "create_branch" or request.action in _CONFIRM_ACTIONS
+        ):
+            buffers = self._clean_buffers(request)
+            if buffers is None:
+                return
         self._submit_action(request, branch, head, buffers=buffers, name=name)
 
-    def _prepare_commit(self, request, branch, head):
+    def _prepare_commit(self, request, branch, head, merge_state):
         """Inspect the entire staged index, independent of the filtered row."""
 
-        def tree_read(result):
-            if result.error or result.returncode:
-                self._finish_preflight(request, result.error or result.stderr)
-                return
-            index = result.stdout.decode("ascii", errors="replace").strip()
+        def tree_read(index):
             self._read_context(
                 request,
                 [
@@ -335,25 +363,40 @@ class PickerGitActions:
 
         def summary_read(index, result):
             # --exit-code reports staged differences with status 1.
-            if result.returncode == 0 and not result.error:
+            merging = merge_state[1] is not None
+            if result.returncode == 0 and not result.error and not merging:
                 self._finish_preflight(request, "No staged changes to commit")
                 return
-            if result.returncode != 1:
+            if result.returncode not in (0, 1) or (
+                result.returncode == 0 and result.error
+            ):
                 self._finish_preflight(request, result.error or result.stderr)
                 return
             summary = result.stdout.decode("utf-8", errors="replace").strip()
             if result.truncated:
                 summary += "\n[Staged summary truncated]"
+            if merging:
+                parents = merge_state[1].decode("ascii", errors="replace").strip()
+                summary = f"Merge parents:\n{parents}\n\n" + (
+                    summary or "No staged changes relative to HEAD."
+                )
             message = self.compose_commit(request, branch, summary)
             if message is None:
                 self._finish_preflight(request)
                 return
             self.commit_drafts[request.root] = message
-            self._submit_action(request, branch, head, message=message, index=index)
+            self._submit_action(
+                request,
+                branch,
+                head,
+                message=message,
+                index=index,
+                merge_state=merge_state,
+            )
 
-        self._read_context(request, ["write-tree"], tree_read)
+        self._read_index(request, tree_read)
 
-    def _prepare_message_edit(self, request, branch, head):
+    def _prepare_message_edit(self, request, branch, head, merge_state):
         """Reword only the selected HEAD, never include the staged index."""
         if not head or request.entry.target.commit != head:
             self._finish_preflight(
@@ -361,13 +404,7 @@ class PickerGitActions:
             )
             return
 
-        def tree_read(result):
-            if result.error or result.returncode or result.truncated:
-                self._finish_preflight(
-                    request, result.error or result.stderr or "Git index output limited"
-                )
-                return
-            index = result.stdout.decode("ascii", errors="replace").strip()
+        def tree_read(index):
             self._read_context(
                 request,
                 [
@@ -395,9 +432,16 @@ class PickerGitActions:
                 self._finish_preflight(request)
                 return
             self.amend_drafts[(request.root, head)] = message
-            self._submit_action(request, branch, head, message=message, index=index)
+            self._submit_action(
+                request,
+                branch,
+                head,
+                message=message,
+                index=index,
+                merge_state=merge_state,
+            )
 
-        self._read_context(request, ["write-tree"], tree_read)
+        self._read_index(request, tree_read)
 
     def _prepare_revert(self, request, branch, head):
         """Restore unstaged content or delete an untracked file, keeping the index."""
@@ -433,13 +477,9 @@ class PickerGitActions:
                     request, "Revert submodule files in their own repository"
                 )
                 return
-            self._read_context(request, ["write-tree"], tree_read)
+            self._read_index(request, tree_read)
 
-        def tree_read(result):
-            if result.error or result.returncode:
-                self._finish_preflight(request, result.error or result.stderr)
-                return
-            index = result.stdout.decode("ascii", errors="replace").strip()
+        def tree_read(index):
             if deleting:
                 self._confirm_revert(request, branch, head, index)
                 return
@@ -498,9 +538,7 @@ class PickerGitActions:
                     request, "Select a file, not a directory, to revert"
                 )
                 return
-            buffers = self._buffers(request.root, path=target.path)
-            if any(buffer.editor_ref().document().isModified() for buffer in buffers):
-                self._finish_preflight(request, "save or close modified buffers first")
+            if self._clean_buffers(request, path=target.path) is None:
                 return
             if not self.confirm(request, branch):
                 self._finish_preflight(request)
@@ -508,9 +546,8 @@ class PickerGitActions:
             if not self._valid(request):
                 self._finish_preflight(request)
                 return
-            buffers = self._buffers(request.root, path=target.path)
-            if any(buffer.editor_ref().document().isModified() for buffer in buffers):
-                self._finish_preflight(request, "save or close modified buffers first")
+            buffers = self._clean_buffers(request, path=target.path)
+            if buffers is None:
                 return
             if _worktree_stamp(target.path) != before:
                 self._finish_preflight(
@@ -540,6 +577,7 @@ class PickerGitActions:
         message="",
         index=None,
         file_stamp=None,
+        merge_state=None,
     ):
         if not self._valid(request):
             self._finish_preflight(request)
@@ -598,6 +636,7 @@ class PickerGitActions:
                 expected_branch=branch,
                 expected_ref=expected_ref,
                 expected_index=index,
+                expected_merge_state=merge_state,
                 expected_worktree=(
                     (target.path, file_stamp)
                     if request.action == "revert_file"
@@ -611,13 +650,12 @@ class PickerGitActions:
 
     def compose_commit(self, request, branch, summary):
         return self._compose_message(
-            request, branch, summary, drafts=self.commit_drafts, key=request.root
+            branch, summary, drafts=self.commit_drafts, key=request.root
         )
 
     def compose_amend(self, request, branch, original):
         commit = request.entry.target.commit
         return self._compose_message(
-            request,
             branch,
             f"HEAD: {commit}\n\nStaged changes, working files and unsaved buffers are kept.",
             drafts=self.amend_drafts,
@@ -627,7 +665,7 @@ class PickerGitActions:
         )
 
     def _compose_message(
-        self, request, branch, summary, *, drafts, key, message="", amend=False
+        self, branch, summary, *, drafts, key, message="", amend=False
     ):
         dialog = CommitMessageDialog(
             self.picker.dialog,
@@ -746,6 +784,23 @@ class PickerGitActions:
                         disk_stamp=_disk_stamp(finfo.filename),
                     )
                 )
+        return buffers
+
+    def _clean_buffers(self, request, *, path=None):
+        """Capture live views, or end preflight if any has unsaved changes."""
+        buffers = self._buffers(request.root, path=path)
+        dirty = dict.fromkeys(
+            buffer.path
+            for buffer in buffers
+            if buffer.editor_ref().document().isModified()
+        )
+        if dirty:
+            self._finish_preflight(
+                request,
+                "save or close modified buffers first: "
+                + ", ".join(osp.basename(path) for path in dirty),
+            )
+            return None
         return buffers
 
     def _reload_changed_buffers(self, request, buffers):

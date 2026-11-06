@@ -172,6 +172,15 @@ def worktree_stamp(path):
         return None
 
 
+def read_merge_head(path: str) -> bytes | None:
+    """Read every merge parent, or return None when no merge is in progress."""
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return None
+
+
 @dataclass
 class _Mutation:
     key: object
@@ -180,6 +189,7 @@ class _Mutation:
     callback: Callable[[GitResult], None] | None
     checks: list[tuple[str, str]]
     worktree: tuple[str, tuple[int, int, int, int] | None] | None = None
+    merge_state: tuple[str, bytes | None] | None = None
     unlink: bool = False
 
 
@@ -232,6 +242,7 @@ class GitMutationService(QObject):
         expected_branch: str | None = None,
         expected_index: str | None = None,
         expected_worktree: tuple[str, tuple[int, int, int, int] | None] | None = None,
+        expected_merge_state: tuple[str, bytes | None] | None = None,
         _unlink: bool = False,
     ) -> bool:
         """Reserve the slot and verify captured repository/file state before writing.
@@ -239,11 +250,15 @@ class GitMutationService(QObject):
         ``expected_head=''`` denotes an unborn HEAD. A mismatched precondition
         reports an error without starting the requested mutation.
         ``expected_worktree=(path, None)`` requires the file to remain absent.
+        ``expected_merge_state`` captures the absolute MERGE_HEAD path and all
+        its contents; None contents require that no merge is in progress.
         """
         if self._closed or self.busy:
             return False
         if not args or not all(isinstance(argument, str) for argument in args):
             raise ValueError("A Git action requires an argument vector")
+        if expected_merge_state is not None and not osp.isabs(expected_merge_state[0]):
+            raise ValueError("Expected an absolute MERGE_HEAD path")
         checks = []
         if expected_head is not None:
             checks.append(("HEAD", _sha(expected_head) if expected_head else ""))
@@ -259,7 +274,14 @@ class GitMutationService(QObject):
         if expected_index is not None:
             checks.append(("index", _sha(expected_index)))
         self._active = _Mutation(
-            key, cwd, tuple(args), callback, checks, expected_worktree, _unlink
+            key,
+            cwd,
+            tuple(args),
+            callback,
+            checks,
+            worktree=expected_worktree,
+            merge_state=expected_merge_state,
+            unlink=_unlink,
         )
         self._start_next()
         return True
@@ -338,15 +360,18 @@ class GitMutationService(QObject):
         # Ref/index reads are asynchronous. Preserve edits made after the
         # confirmation, including a file recreated while those reads ran.
         # Deletion checks again after its final ls-files read instead.
-        if (
-            self._checking is None
-            and request.worktree is not None
-            and not request.unlink
-        ):
-            path, expected = request.worktree
+        if self._checking is None:
             try:
-                if worktree_stamp(osp.join(request.cwd, path)) != expected:
-                    raise OSError("File changed; refresh before reverting")
+                if request.merge_state is not None:
+                    path, expected = request.merge_state
+                    if read_merge_head(path) != expected:
+                        raise OSError(
+                            "Git merge state changed; refresh before running this action"
+                        )
+                if request.worktree is not None and not request.unlink:
+                    path, expected = request.worktree
+                    if worktree_stamp(osp.join(request.cwd, path)) != expected:
+                        raise OSError("File changed; refresh before reverting")
             except OSError as error:
                 self._error = str(error)
                 self._complete(1)
@@ -428,6 +453,9 @@ class GitMutationService(QObject):
                 self._start_next()
                 return
             self._error = f"Git {reference} changed; refresh before running this action"
+            # A successful inspection can still reject the mutation. Report
+            # the action as failed instead of leaking the inspection's status.
+            returncode = returncode or 1
         if (
             self._checking is None
             and self._active.unlink
