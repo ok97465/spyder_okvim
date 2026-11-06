@@ -55,6 +55,7 @@ from qtpy.QtWidgets import (
 from spyder.widgets.simplecodeeditor import SimpleCodeEditor
 
 # Project Libraries
+from spyder_okvim.spyder.picker_git_actions import can_revert_status
 from spyder_okvim.utils.picker import MAX_QUERY_LENGTH, SearchResult
 from spyder_okvim.utils.qtcompat import live_widget
 from spyder_okvim.utils.theme import (
@@ -83,7 +84,11 @@ _COMMIT_ACTIONS = (
     ("reset_hard", "Reset hard\tCtrl+R, h"),
 )
 _GIT_ACTIONS = {
-    "git_status": (("stage_toggle", "Stage / unstage selected file\tTab"),),
+    "git_status": (
+        ("stage_toggle", "Stage / unstage selected file\tTab"),
+        ("revert", "Revert unstaged changes in selected file…\tCtrl+R"),
+        ("commit", "Commit staged changes…\tCtrl+Enter"),
+    ),
     "git_log": _COMMIT_ACTIONS,
     "git_file_log": _COMMIT_ACTIONS,
     "git_branches": (
@@ -98,6 +103,11 @@ _GIT_ACTIONS = {
 }
 _COMMIT_SHORTCUTS = {Qt.Key_R: "reset", Qt.Key_L: "commit_files"}
 _GIT_CONTROL_SHORTCUTS = {
+    "git_status": {
+        Qt.Key_Return: "commit",
+        Qt.Key_Enter: "commit",
+        Qt.Key_R: "revert",
+    },
     "git_log": _COMMIT_SHORTCUTS,
     "git_file_log": _COMMIT_SHORTCUTS,
     "git_branches": {
@@ -699,15 +709,33 @@ class PickerDialog(QDialog):
             )
         self._update_action_availability()
 
+    def _action_available(self, action, entry):
+        """Apply the same selection and busy rules to menus and shortcuts."""
+        if self._actions_busy or not self._results_current:
+            return False
+        if action == "revert":
+            return entry is not None and can_revert_status(entry.target)
+        return (
+            entry is not None
+            or (self._source == "git_branches" and action == "branch_create")
+            or (self._source == "git_status" and action == "commit")
+        )
+
     def _update_action_availability(self):
-        current = self._results_current and not self._actions_busy
-        selected = self.selected_entry() is not None
-        create = self._source == "git_branches"
-        self.actions_button.setEnabled(current and (selected or create))
-        for action in self.actions_menu.actions():
-            action.setEnabled(
-                current and (selected or (create and action.data() == "branch_create"))
-            )
+        entry = self.selected_entry()
+        target = entry.target if entry is not None else None
+        untracked = target is not None and target.status == "??"
+        actions = self.actions_menu.actions()
+        for action in actions:
+            identifier = action.data()
+            if identifier == "revert":
+                action.setText(
+                    "Delete selected untracked file…\tCtrl+R"
+                    if untracked
+                    else "Revert unstaged changes in selected file…\tCtrl+R"
+                )
+            action.setEnabled(self._action_available(identifier, entry))
+        self.actions_button.setEnabled(any(action.isEnabled() for action in actions))
 
     def set_actions_busy(self, busy):
         """Disable Git execution while a mutation finishes outside the popup."""
@@ -718,12 +746,7 @@ class PickerDialog(QDialog):
 
     def _request_action(self, action):
         entry = self.selected_entry()
-        create = action == "branch_create" and self._source == "git_branches"
-        if (
-            not self._actions_busy
-            and self._results_current
-            and (entry is not None or create)
-        ):
+        if self._action_available(action, entry):
             self.action_requested.emit(action, entry)
 
     def set_preview(self, content):
@@ -799,7 +822,17 @@ class PickerDialog(QDialog):
         if self._source == "jumps":
             source_help = "\nCtrl+O/I: move through actual history immediately"
         elif self._source == "git_status":
-            source_help = "\nTab: stage/unstage selected file"
+            entry = self.selected_entry()
+            untracked = (
+                entry is not None
+                and entry.target is not None
+                and entry.target.status == "??"
+            )
+            revert = "delete untracked file" if untracked else "revert unstaged changes"
+            source_help = (
+                f"\nTab: stage/unstage · Ctrl+R: {revert}"
+                " · Ctrl+Enter: commit staged changes"
+            )
         elif self._source in ("git_log", "git_file_log"):
             enter = "checkout commit"
             source_help = (
@@ -899,10 +932,12 @@ class PickerDialog(QDialog):
         git_action = (
             _GIT_CONTROL_SHORTCUTS.get(self._source, {}).get(key) if control else None
         )
-        if (
-            self.prompt.is_composing
-            and modifiers == Qt.NoModifier
-            and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape)
+        if self.prompt.is_composing and (
+            (
+                modifiers == Qt.NoModifier
+                and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape)
+            )
+            or git_action in ("commit", "revert")
         ):
             input_method = QApplication.inputMethod()
             if key == Qt.Key_Escape:
@@ -923,6 +958,8 @@ class PickerDialog(QDialog):
             return
         if key == Qt.Key_Escape or (control and key == Qt.Key_C):
             self.reject()
+        elif git_action == "commit":
+            self._request_action(git_action)
         elif key in (Qt.Key_Return, Qt.Key_Enter):
             self._activate()
         elif self._source == "git_status" and key == Qt.Key_Tab:
@@ -932,7 +969,8 @@ class PickerDialog(QDialog):
                 self._reset_pending = True
                 self._update_help()
         elif git_action is not None:
-            self._request_action(git_action)
+            if not (git_action == "revert" and event.isAutoRepeat()):
+                self._request_action(git_action)
         elif control and key in (Qt.Key_O, Qt.Key_I):
             if self._source == "jumps":
                 self.navigate_history.emit(-1 if key == Qt.Key_O else 1)

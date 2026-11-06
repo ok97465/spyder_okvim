@@ -304,6 +304,21 @@ def status_diff_args(path: str, staged: bool = False, old_path: str = "") -> lis
     return [*args, "--", path, *([old_path] if old_path and old_path != path else [])]
 
 
+def _status_display(record: GitStatus) -> str:
+    """Show staged and worktree changes without altering the porcelain value."""
+    if record.kind == "untracked":
+        return "-U"
+    if record.kind == "ignored":
+        return "-I"
+    if record.kind == "conflict":
+        return f"!{record.xy}"
+    return " ".join(
+        sign + ("U" if change == "A" else change)
+        for sign, change in zip(("+", "-"), record.xy)
+        if change != "."
+    )
+
+
 def git_snapshot(source, scope, version, root, commit, result):
     """Adapt bounded Git values to the same candidate contract as other sources."""
     entries = []
@@ -315,6 +330,7 @@ def git_snapshot(source, scope, version, root, commit, result):
         records = parse_changed_files(result.stdout)
     else:
         records = parse_log(result.stdout)
+    status_paths = set()
     for ordinal, record in enumerate(records):
         if source == "git_branches":
             target = PickerTarget(
@@ -341,12 +357,20 @@ def git_snapshot(source, scope, version, root, commit, result):
                 old_path=record.old_path,
                 status=record.xy if source == "git_status" else record.status,
             )
-            label = f"{target.status} {record.path}"
+            status = (
+                _status_display(record) if source == "git_status" else target.status
+            )
+            label = f"{status} {record.path}"
             detail = f"from {record.old_path}" if record.old_path else root
             identifier, kind = record.path, (
                 "status" if source == "git_status" else "commit_file"
             )
             if source == "git_status":
+                # A staged deletion and an untracked replacement share a path.
+                # NUL cannot occur in a filename, so only the extra row needs it.
+                if record.path in status_paths:
+                    identifier = f"{record.path}\0{record.xy}"
+                status_paths.add(record.path)
                 if record.kind == "untracked":
                     kind = "code"
                     detail += " · Untracked: file content preview"

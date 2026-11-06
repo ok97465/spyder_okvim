@@ -19,7 +19,12 @@ from qtpy.QtWidgets import QPlainTextEdit, QWidget
 from spyder_okvim.spyder.picker_dialog import PickerDelegate, PickerDialog
 from spyder_okvim.spyder.picker_preview import ContentPreview
 from spyder_okvim.utils.qtcompat import widget_is_deleted
-from spyder_okvim.utils.picker import PickerEntry, PickerMatch, SearchResult
+from spyder_okvim.utils.picker import (
+    PickerEntry,
+    PickerMatch,
+    PickerTarget,
+    SearchResult,
+)
 
 
 def results(count=3):
@@ -448,6 +453,110 @@ def test_status_tab_stages_without_moving_focus_or_row(qtbot):
     assert actions == [("stage_toggle", "2")]
     assert picker.prompt.hasFocus()
     assert picker.selection_id() == "2"
+
+
+@pytest.mark.parametrize(
+    "status,allowed",
+    [
+        (".M", True),
+        ("MM", True),
+        ("AM", True),
+        ("M.", False),
+        ("A.", False),
+        ("??", True),
+    ],
+)
+def test_status_revert_shortcut_and_menu_only_allow_unstaged_changes(
+    qtbot, status, allowed
+):
+    picker = dialog(qtbot)
+    picker.set_source("git_status")
+    entry = PickerEntry(
+        "file.py",
+        "git_status",
+        "file.py",
+        target=PickerTarget("file.py", status=status),
+    )
+    picker.set_results(SearchResult((PickerMatch(entry, ()),), 1, False))
+    actions = []
+    picker.action_requested.connect(
+        lambda action, target: actions.append((action, target))
+    )
+    menu = {action.data(): action for action in picker.actions_menu.actions()}
+    assert menu["revert"].isEnabled() is allowed
+    if status == "??":
+        assert "Delete" in menu["revert"].text()
+        assert "delete untracked file" in picker.help_label.text()
+    override = QKeyEvent(QEvent.ShortcutOverride, Qt.Key_R, Qt.ControlModifier)
+    QCoreApplication.sendEvent(picker.prompt, override)
+    assert override.isAccepted()
+    assert not actions
+    qtbot.keyClick(picker.prompt, Qt.Key_R, Qt.ControlModifier)
+    assert actions == ([("revert", entry)] if allowed else [])
+    assert not picker._reset_pending
+    assert picker.query() == ""
+    picker.set_actions_busy(True)
+    qtbot.keyClick(picker.prompt, Qt.Key_R, Qt.ControlModifier)
+    assert len(actions) == int(allowed)
+    assert not menu["revert"].isEnabled()
+
+
+@pytest.mark.parametrize("key", [Qt.Key_Return, Qt.Key_Enter])
+def test_status_commit_menu_and_shortcut_work_without_selected_row(qtbot, key):
+    picker = dialog(qtbot)
+    picker.set_source("git_status")
+    picker.set_results(results(0))
+    actions = []
+    picker.action_requested.connect(
+        lambda action, entry: actions.append((action, entry))
+    )
+    menu = {action.data(): action for action in picker.actions_menu.actions()}
+    assert picker.actions_button.isEnabled()
+    assert menu["commit"].isEnabled()
+    assert not menu["stage_toggle"].isEnabled()
+    override = QKeyEvent(QEvent.ShortcutOverride, key, Qt.ControlModifier)
+    QCoreApplication.sendEvent(picker.prompt, override)
+    assert override.isAccepted()
+    assert not actions
+    qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
+    assert actions == [("commit", None)]
+    menu["commit"].trigger()
+    assert actions == [("commit", None), ("commit", None)]
+    picker.set_actions_busy(True)
+    qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
+    assert len(actions) == 2
+    assert not picker.actions_button.isEnabled()
+    picker.set_actions_busy(False)
+    picker.set_busy("Searching…")
+    qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
+    assert len(actions) == 2
+
+
+@pytest.mark.parametrize(
+    "key,action", [(Qt.Key_Return, "commit"), (Qt.Key_R, "revert")]
+)
+def test_status_action_finishes_query_ime_before_opening(
+    qtbot, monkeypatch, key, action
+):
+    from qtpy.QtWidgets import QApplication
+
+    picker = dialog(qtbot)
+    picker.set_source("git_status")
+    entry = PickerEntry(
+        "file.py", "git_status", "file.py", target=PickerTarget("file.py", status=".M")
+    )
+    picker.set_results(SearchResult((PickerMatch(entry, ()),), 1, False))
+    actions = []
+    picker.action_requested.connect(lambda action, entry: actions.append(action))
+    QCoreApplication.sendEvent(picker.prompt, QInputMethodEvent("한", []))
+    commits = []
+    monkeypatch.setattr(QApplication.inputMethod(), "commit", lambda: commits.append(1))
+    qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
+    assert commits == [1]
+    assert not actions
+    QCoreApplication.sendEvent(picker.prompt, QInputMethodEvent())
+    qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
+    assert actions == [action]
 
 
 def test_git_action_menu_and_changed_files_are_available_only_for_valid_selection(
