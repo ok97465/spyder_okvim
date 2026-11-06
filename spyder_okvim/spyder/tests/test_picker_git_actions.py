@@ -8,6 +8,7 @@ from spyder_okvim.spyder.picker_git_actions import (
     GitMutationService,
     action_args,
     can_revert_status,
+    read_merge_head,
     status_action,
     worktree_stamp,
 )
@@ -361,11 +362,13 @@ def test_service_checks_head_branch_and_selected_ref_before_write(qtbot, reposit
         expected_branch="refs/heads/other",
     )
     assert "changed" in result.error
+    assert result.returncode != 0
     assert git(repository, "symbolic-ref", "HEAD").stdout.strip() == b"refs/heads/main"
     result = _submit(
         qtbot, service, repository, ["branch", "never"], expected_head="0" * 40
     )
     assert "changed" in result.error
+    assert result.returncode != 0
     assert git(repository, "show-ref", "refs/heads/never", check=False).returncode != 0
     result = _submit(
         qtbot,
@@ -377,6 +380,7 @@ def test_service_checks_head_branch_and_selected_ref_before_write(qtbot, reposit
         expected_ref=("refs/heads/same-object", "0" * 40),
     )
     assert "changed" in result.error
+    assert result.returncode != 0
     result = _submit(
         qtbot,
         service,
@@ -425,6 +429,112 @@ def test_service_rechecks_staged_tree_before_commit(qtbot, repository):
     assert not result.error
     assert sha(repository) != before
     assert git(repository, "show", "HEAD:file.txt").stdout == b"externally restaged\n"
+    service.close()
+
+
+@pytest.mark.parametrize(
+    "reviewed,current",
+    [
+        (None, b"a" * 40 + b"\n"),
+        (b"a" * 40 + b"\n", None),
+        (
+            b"a" * 40 + b"\n" + b"b" * 40 + b"\n",
+            b"a" * 40 + b"\n" + b"c" * 40 + b"\n",
+        ),
+    ],
+    ids=["merge-started", "merge-aborted", "octopus-parent-changed"],
+)
+def test_service_refuses_changed_merge_parentage(qtbot, repository, reviewed, current):
+    merge_head = repository / ".git" / "MERGE_HEAD"
+    if current is not None:
+        merge_head.write_bytes(current)
+    service = GitMutationService()
+
+    result = _submit(
+        qtbot,
+        service,
+        repository,
+        ["branch", "never"],
+        expected_head=sha(repository),
+        expected_merge_state=(str(merge_head), reviewed),
+    )
+
+    assert "merge state changed" in result.error
+    assert result.returncode != 0
+    assert git(repository, "show-ref", "refs/heads/never", check=False).returncode != 0
+    assert read_merge_head(str(merge_head)) == current
+    service.close()
+
+
+@pytest.mark.parametrize("in_merge", [False, True])
+def test_service_accepts_unchanged_merge_state(qtbot, repository, in_merge):
+    merge_head = repository / ".git" / "MERGE_HEAD"
+    if in_merge:
+        merge_head.write_bytes(sha(repository).encode() + b"\n" + b"b" * 40 + b"\n")
+    reviewed = read_merge_head(str(merge_head))
+    service = GitMutationService()
+
+    result = _submit(
+        qtbot,
+        service,
+        repository,
+        ["branch", "accepted"],
+        expected_head=sha(repository),
+        expected_merge_state=(str(merge_head), reviewed),
+    )
+
+    assert not result.error
+    assert result.returncode == 0
+    assert sha(repository, "refs/heads/accepted") == sha(repository)
+    service.close()
+
+
+def test_merge_parent_guard_rechecks_after_async_preconditions(
+    qtbot, repository, monkeypatch
+):
+    merge_head = repository / ".git" / "MERGE_HEAD"
+    service = GitMutationService()
+    start_next = service._start_next
+    changed = []
+
+    def start_merge_after_preconditions():
+        if service._active is not None and not service._active.checks:
+            merge_head.write_bytes(sha(repository).encode() + b"\n")
+            changed.append(True)
+        start_next()
+
+    monkeypatch.setattr(service, "_start_next", start_merge_after_preconditions)
+    result = _submit(
+        qtbot,
+        service,
+        repository,
+        ["branch", "never"],
+        expected_head=sha(repository),
+        expected_merge_state=(str(merge_head), None),
+    )
+
+    assert changed == [True]
+    assert "merge state changed" in result.error
+    assert git(repository, "show-ref", "refs/heads/never", check=False).returncode != 0
+    service.close()
+
+
+def test_merge_parent_read_failure_rejects_mutation(qtbot, repository):
+    merge_head = repository / ".git" / "MERGE_HEAD"
+    merge_head.mkdir()
+    service = GitMutationService()
+
+    result = _submit(
+        qtbot,
+        service,
+        repository,
+        ["branch", "never"],
+        expected_merge_state=(str(merge_head), None),
+    )
+
+    assert result.error
+    assert result.returncode != 0
+    assert git(repository, "show-ref", "refs/heads/never", check=False).returncode != 0
     service.close()
 
 

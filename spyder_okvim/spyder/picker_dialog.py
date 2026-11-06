@@ -16,6 +16,7 @@ from qtpy.QtCore import (
     QRect,
     QSignalBlocker,
     QSize,
+    QTimer,
     Qt,
     Signal,
 )
@@ -392,6 +393,9 @@ class PickerDialog(QDialog):
         self._preview_first_line = 1
         self._preview_available = False
         self._diff_highlighter = None
+        self._appearance_timer = QTimer(self)
+        self._appearance_timer.setSingleShot(True)
+        self._appearance_timer.timeout.connect(self.apply_appearance)
         self.setWindowTitle("Okvim Picker")
         self.setObjectName("okvimPicker")
         self.setPalette(interface_palette(self))
@@ -938,6 +942,12 @@ class PickerDialog(QDialog):
         git_action = (
             _GIT_CONTROL_SHORTCUTS.get(self._source, {}).get(key) if control else None
         )
+        if event.isAutoRepeat() and git_action in (
+            "commit",
+            "revert",
+            "edit_commit_message",
+        ):
+            return
         if self.prompt.is_composing and (
             (
                 modifiers == Qt.NoModifier
@@ -964,21 +974,16 @@ class PickerDialog(QDialog):
             return
         if key == Qt.Key_Escape or (control and key == Qt.Key_C):
             self.reject()
-        elif git_action == "commit":
-            self._request_action(git_action)
-        elif key in (Qt.Key_Return, Qt.Key_Enter):
-            self._activate()
-        elif self._source == "git_status" and key == Qt.Key_Tab:
-            self._request_action("stage_toggle")
         elif git_action == "reset":
             if not self._actions_busy and self.selected_entry() is not None:
                 self._reset_pending = True
                 self._update_help()
         elif git_action is not None:
-            if not (
-                git_action in ("revert", "edit_commit_message") and event.isAutoRepeat()
-            ):
-                self._request_action(git_action)
+            self._request_action(git_action)
+        elif key in (Qt.Key_Return, Qt.Key_Enter):
+            self._activate()
+        elif self._source == "git_status" and key == Qt.Key_Tab:
+            self._request_action("stage_toggle")
         elif control and key in (Qt.Key_O, Qt.Key_I):
             if self._source == "jumps":
                 self.navigate_history.emit(-1 if key == Qt.Key_O else 1)
@@ -1008,6 +1013,8 @@ class PickerDialog(QDialog):
             return
         self._appearance_updating = True
         try:
+            # Resolve inherited styles before sharing their palette with children.
+            self.ensurePolished()
             editor = live_widget(self._editor)
             palette = self.palette()
             background = palette.color(QPalette.Base)
@@ -1025,10 +1032,9 @@ class PickerDialog(QDialog):
                 "QDialog#okvimPicker QComboBox, "
                 "QAbstractItemView#okvimPickerSourceList"
             )
+            # Keep control colors explicit for Spyder 6.1's QSS theme, but
+            # let the dialog inherit live host colors before painting its frame.
             stylesheet = (
-                "QDialog#okvimPicker {"
-                f"background: {background}; color: {foreground};"
-                f"border: 1px solid {border}; }}"
                 "QWidget#okvimPickerResults, QWidget#okvimPickerPreviewPanel, "
                 "QWidget#okvimPickerToolbar {"
                 f"background: {background}; border: none; }}"
@@ -1063,6 +1069,9 @@ class PickerDialog(QDialog):
             )
             if stylesheet != self.styleSheet():
                 self.setStyleSheet(stylesheet)
+                # Qt repolishing restores its stored palette. Keep the latest
+                # live roles when refreshing only descendant control rules.
+                self.setPalette(palette)
             for button in self._toolbar_buttons:
                 metrics = button.fontMetrics()
                 button.setMinimumSize(
@@ -1076,10 +1085,17 @@ class PickerDialog(QDialog):
                 self.source_selector,
                 self.source_selector.view(),
                 self.source_selector.view().viewport(),
-                self.actions_menu,
             ):
                 if widget.palette() != palette:
                     widget.setPalette(palette)
+            # An empty menu is disabled as a whole. Keep its surface readable;
+            # the item stylesheet supplies the distinct disabled action color.
+            menu_palette = QPalette(palette)
+            menu_palette.setColor(
+                QPalette.Disabled, QPalette.WindowText, QColor(foreground)
+            )
+            if self.actions_menu.palette() != menu_palette:
+                self.actions_menu.setPalette(menu_palette)
             if editor is not None:
                 self.preview.setFont(editor.font())
                 scheme = getattr(
@@ -1095,6 +1111,15 @@ class PickerDialog(QDialog):
         finally:
             self._appearance_updating = False
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Draw from the live palette instead of generating a stylesheet that
+        # would override subsequent theme changes with previously read colors.
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), self.palette().brush(QPalette.Base))
+        painter.setPen(self.palette().color(QPalette.Mid))
+        painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+
     def changeEvent(self, event):
         super().changeEvent(event)
         if event.type() in (
@@ -1104,6 +1129,9 @@ class PickerDialog(QDialog):
             QEvent.FontChange,
         ):
             self.apply_appearance()
+            # Stylesheet repolishing can send this event before installing its
+            # final palette. Refresh child palettes once repolishing completes.
+            self._appearance_timer.start()
 
     def showEvent(self, event):
         if not self._initialized_geometry:

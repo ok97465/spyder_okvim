@@ -243,6 +243,17 @@ def test_truncated_nul_records_never_invent_last_path():
     assert not parse_log(b"a" * 40 + b"\0author\0invalid\0subject\0")
 
 
+@pytest.mark.parametrize(
+    "prefix,status,kind", [(b"?", "??", "untracked"), (b"!", "!!", "ignored")]
+)
+def test_untracked_and_ignored_statuses_remain_distinct(prefix, status, kind):
+    (record,) = parse_status(prefix + b" literal [x]*\t\n.txt\0")
+
+    assert record.xy == status
+    assert record.kind == kind
+    assert record.path == "literal [x]*\t\n.txt"
+
+
 def test_object_ids_are_fixed_values():
     with pytest.raises(ValueError):
         commit_preview_args("--output=/tmp/x")

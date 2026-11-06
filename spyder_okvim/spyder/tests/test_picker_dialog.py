@@ -269,6 +269,30 @@ def test_match_highlights_use_utf16_after_non_bmp_characters(
     ]
 
 
+@pytest.mark.parametrize(
+    "background, foreground",
+    [("#19232d", "#dfe1e2"), ("#fafafa", "#202020")],
+)
+def test_first_open_resolves_host_stylesheet_before_reading_palette(
+    qtbot, background, foreground
+):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    parent.setStyleSheet(
+        f"QDialog {{ background-color: {background}; color: {foreground}; }}"
+    )
+    parent.show()
+    qtbot.waitExposed(parent)
+
+    # Top-level dialogs have a native palette until Qt polishes their inherited
+    # stylesheet. Child views need the resolved theme palette on first open.
+    picker = PickerDialog(parent)
+    qtbot.picker_dialogs.append(picker)
+    for widget in (picker, picker.list_view, picker.prompt):
+        assert widget.palette().color(QPalette.Base) == QColor(background)
+        assert widget.palette().color(QPalette.Text) == QColor(foreground)
+
+
 def test_live_palette_does_not_reset_query_selection_or_preview(qtbot):
     picker = dialog(qtbot)
     picker.set_query("query")
@@ -281,7 +305,40 @@ def test_live_palette_does_not_reset_query_selection_or_preview(qtbot):
     palette.setColor(QPalette.Text, QColor("#222222"))
     picker.setPalette(palette)
     QCoreApplication.sendEvent(picker, QEvent(QEvent.StyleChange))
-    assert "#f8f8f8" in picker.styleSheet()
+    assert picker.palette().color(QPalette.Base) == QColor("#f8f8f8")
+    assert picker.prompt.palette().color(QPalette.Text) == QColor("#222222")
+    assert picker.grab().toImage().pixelColor(5, 5) == QColor("#f8f8f8")
+    assert picker.query() == "query"
+    assert picker.selection_id() == "1"
+    assert picker.preview.verticalScrollBar().value() == scroll
+
+
+@pytest.mark.parametrize(
+    "background, foreground",
+    [("#19232d", "#dfe1e2"), ("#fafafa", "#202020")],
+)
+def test_live_host_stylesheet_updates_existing_picker_without_resetting_state(
+    qtbot, background, foreground
+):
+    parent = QWidget()
+    qtbot.addWidget(parent)
+    parent.setStyleSheet("QDialog { background: #eeeeee; color: #111111; }")
+    parent.show()
+    picker = dialog(qtbot, parent=parent)
+    picker.set_query("query")
+    picker.set_results(results(), selected_id="1")
+    picker.set_preview(ContentPreview("\n".join(map(str, range(600))), 40, 65))
+    picker.preview.verticalScrollBar().setValue(20)
+    scroll = picker.preview.verticalScrollBar().value()
+
+    parent.setStyleSheet(
+        f"QDialog {{ background: {background}; color: {foreground}; }}"
+    )
+    QCoreApplication.processEvents()
+
+    for widget in (picker, picker.list_view, picker.prompt):
+        assert widget.palette().color(QPalette.Base) == QColor(background)
+        assert widget.palette().color(QPalette.Text) == QColor(foreground)
     assert picker.query() == "query"
     assert picker.selection_id() == "1"
     assert picker.preview.verticalScrollBar().value() == scroll
@@ -578,6 +635,20 @@ def test_status_commit_menu_and_shortcut_work_without_selected_row(qtbot, key):
     picker.set_busy("Searching…")
     qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
     assert len(actions) == 2
+
+
+@pytest.mark.parametrize("key", [Qt.Key_Return, Qt.Key_Enter])
+def test_status_commit_shortcut_ignores_autorepeat(qtbot, key):
+    picker = dialog(qtbot)
+    picker.set_source("git_status")
+    picker.set_results(results(0))
+    actions = []
+    picker.action_requested.connect(lambda action, entry: actions.append(action))
+    repeat = QKeyEvent(QEvent.KeyPress, key, Qt.ControlModifier, "", True)
+    QCoreApplication.sendEvent(picker.prompt, repeat)
+    assert actions == []
+    qtbot.keyClick(picker.prompt, key, Qt.ControlModifier)
+    assert actions == ["commit"]
 
 
 @pytest.mark.parametrize(

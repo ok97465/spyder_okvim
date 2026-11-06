@@ -67,6 +67,9 @@ def test_definition_tracking_survives_editor_switch(
     status.cursor.set_cursor_pos(2)
     origin = status.get_current_location()
     destination_file = stack.get_filenames()[1]
+    destination_editor = stack.data[1].editor
+    previous_destination_text = destination_editor.toPlainText()
+    destination_editor.set_text("definition target\n")
     destination = (destination_file, destination_position)
 
     def arrive():
@@ -106,6 +109,7 @@ def test_definition_tracking_survives_editor_switch(
         vim._on_editor_focus_changed()
         assert status.get_current_location() == destination
     finally:
+        destination_editor.set_text(previous_destination_text)
         stack.set_stack_index(previous_index)
         vim._on_editor_focus_changed()
         reset_vim_state(status)
