@@ -206,9 +206,15 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._switcher_navigation = SwitcherNavigation(self)
         vim_cmd.commandline.installEventFilter(self)
         self._editor_widget.installEventFilter(self)
-        signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
-        if signal is not None:
-            signal.connect(self._on_editor_focus_changed)
+        self._editor_connections = []
+        for name, callback in (
+            ("sig_editor_focus_changed", self._on_editor_focus_changed),
+            ("sig_codeeditor_deleted", self._on_editor_deleted),
+        ):
+            signal = getattr(self._editor_widget, name, None)
+            if signal is not None:
+                signal.connect(callback)
+                self._editor_connections.append((signal, callback))
         self._on_editor_focus_changed()
         self._sync_statusbar()
 
@@ -264,6 +270,23 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         stack = self.vim_cmd.editor_widget.get_current_editorstack()
         self._use_stack(stack)
 
+    def _on_editor_deleted(self, editor):
+        """Release view work even if closing the last tab produces no focus event."""
+        reference = self._active_editor
+        active_editor = live_widget(reference)
+        stack = live_widget(self._active_stack)
+        # Spyder closes sibling clones with their signals blocked. The active
+        # view can disappear even when the deletion signal names another view.
+        if reference is not None and (
+            active_editor is None
+            or editor is active_editor
+            or (stack is not None and stack.get_current_editor() is not active_editor)
+        ):
+            self._reset_view(preserve_definition=True)
+            if reference is self._active_editor:
+                self._active_editor = None
+        self.vim_cmd.vim_status.search.release_closed_editor(editor)
+
     def _use_stack(self, stack):
         """Bind commands to a view before restoring a closed split's Vim focus.
 
@@ -318,24 +341,21 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _reset_view(self, *, preserve_definition=False):
         """Cancel partial commands before they can cross into another view."""
-        self.vim_cmd.bind_editor(None)
-        status = self.vim_cmd.vim_status
-        self.vim_cmd.cancel_macro()
+        reference = self._active_editor
+        vim_cmd = self.vim_cmd
+        vim_cmd.bind_editor(None)
+        status = vim_cmd.vim_status
         if status.is_recording_macro():
             status.stop_recording_macro()
         status.cancel_pending_work(preserve_definition=preserve_definition)
-        editor = live_widget(self._active_editor)
-        if editor is not None:
-            editor.clear_extra_selections("vim_selection")
-            editor.clear_extra_selections("vim_cursor")
         if status.sub_mode is not None:
             status.sub_mode.on_escape()
         status.sub_mode = None
         status.input_cmd.clear()
-        status.clear_state()
+        status.clear_state(previous_editor=live_widget(reference))
         status.set_message("")
-        self.vim_cmd.commandline.clear()
-        self.vim_cmd.commandline.sync_input_method()
+        vim_cmd.commandline.clear()
+        vim_cmd.commandline.sync_input_method()
 
     def _move_labels(self, parent):
         """Keep shared Leap labels under a live ancestor of the active view."""
@@ -433,9 +453,9 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             for editor in self._editors:
                 if not widget_is_deleted(editor):
                     editor.removeEventFilter(self)
-            signal = getattr(self._editor_widget, "sig_editor_focus_changed", None)
-            if signal is not None:
-                signal.disconnect(self._on_editor_focus_changed)
+            for signal, callback in self._editor_connections:
+                signal.disconnect(callback)
+            self._editor_connections.clear()
             for window in self._window_stacks:
                 if not widget_is_deleted(window):
                     window.removeEventFilter(self)

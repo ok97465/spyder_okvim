@@ -82,7 +82,7 @@ def editor_windows(qtbot, tmp_path, vim_bot):
 
     def get_plugin(name, error=True):
         if name in (Plugins.IPythonConsole, Plugins.Projects, Plugins.Debugger):
-            return None
+            return services.get(name)
         return services.get(name, Mock())
 
     main.get_plugin = get_plugin
@@ -115,6 +115,7 @@ def editor_windows(qtbot, tmp_path, vim_bot):
         main=main,
         editor=editor,
         widget=widget,
+        services=services,
         vim=vim,
         qtbot=qtbot,
         commandline=vim.vim_cmd.commandline,
@@ -204,6 +205,150 @@ def _exercise_vim(state, stack):
     assert all(label.window() is code.window() for label in status.labels_for_annotate)
     status.annotate_on_txt({0: "a", 6: "b"})
     status.hide_annotate_on_txt()
+
+
+@pytest.fixture
+def projects(editor_windows, monkeypatch):
+    """Connect Projects with fresh settings for each real editor session."""
+    # Third Party Libraries
+    from spyder.plugins.editor.extensions import AutoImportExtension
+    from spyder.plugins.projects.plugin import Projects
+
+    state = editor_windows
+    settings = {
+        (Plugins.Editor, "layout_settings"): None,
+        (Plugins.Editor, "filenames"): [],
+        (Plugins.Projects, "current_project_path"): None,
+        (Plugins.Projects, "recent_projects"): [],
+        (Plugins.Projects, "visible_if_project_open"): False,
+        (Plugins.Projects, "expanded_state"): None,
+        (Plugins.Projects, "scrollbar_position"): None,
+    }
+    previous = {key: CONF.get(*key, default) for key, default in settings.items()}
+    project_root = AutoImportExtension.PROJECT_ROOT
+    try:
+        # Constructing the recent-project menu can reuse actions from a
+        # previous test's already-deleted Projects widget.
+        for (section, option), value in settings.items():
+            CONF.set(section, option, value)
+        plugin = Projects(state.main, CONF)
+        monkeypatch.setitem(state.services, Plugins.Projects, plugin)
+        plugin.on_initialize()
+        state.editor.on_projects_available()
+        plugin.on_editor_available()
+        try:
+            yield plugin
+        finally:
+            plugin.on_close()
+            plugin.on_editor_teardown()
+            state.editor.on_projects_teardown()
+    finally:
+        AutoImportExtension.set_project(project_root)
+        for (section, option), value in previous.items():
+            CONF.set(section, option, value)
+
+
+@pytest.mark.parametrize("split", [False, True], ids=["single", "split"])
+def test_project_switch_releases_vim_state_before_restoring_diagnostic_tabs(
+    editor_windows, projects, tmp_path, split
+):
+    """Close the old view before Vim can act on the incoming project."""
+    # Third Party Libraries
+    from lsprotocol import types as lsp
+    from spyder.plugins.projects.api import EmptyProject
+
+    state = editor_windows
+    stack = state.widget.editorstacks[0]
+    status = state.vim.vim_cmd.vim_status
+    for row in stack.data:
+        row.editor.document().setModified(False)
+
+    old_path = tmp_path / "old" / "old.py"
+    long_path = tmp_path / "new" / "diagnostics.py"
+    clean_path = long_path.with_name("clean.py")
+    old_path.parent.mkdir()
+    long_path.parent.mkdir()
+    old_path.write_text("old_value = 1\n", encoding="utf-8")
+    long_path.write_text("print(missing)\n" * 2400, encoding="utf-8")
+    clean_path.write_text("new_value = 2\n", encoding="utf-8")
+    EmptyProject(str(old_path.parent)).set_recent_files([str(old_path)])
+    EmptyProject(str(long_path.parent)).set_recent_files(
+        [str(long_path), str(clean_path)]
+    )
+
+    projects.open_project(str(old_path.parent), restart_console=False)
+    source = stack.get_current_editor()
+    if split:
+        state.widget.editorsplitter.split(Qt.Horizontal)
+        stack = state.widget.editorstacks[-1]
+    old_editor = _focus_stack(state, stack)
+    assert old_editor.filename == str(old_path)
+    state.qtbot.keyClicks(state.commandline, "d")
+    assert status.sub_mode is not None
+    status.set_focus_to_vim_after_delay(60_000)
+    assert status._focus_timer.isActive()
+    search = status.search
+    search.search("value", forward=False)
+    search_snapshot = search.snapshot()
+    assert old_editor.get_extra_selections("vim_search")
+    search._refresh_timer.start(60_000)
+
+    pending_at_close = []
+
+    def record_close(editor):
+        # The primary stack emits when closing a file; the cloned stack's
+        # signals are blocked even when its editor is the active Vim view.
+        if editor is source:
+            pending_at_close.append(
+                (
+                    status.sub_mode,
+                    status._focus_timer.isActive(),
+                    search._refresh_timer.isActive(),
+                )
+            )
+
+    state.widget.sig_codeeditor_deleted.connect(record_close)
+    try:
+        projects.open_project(str(long_path.parent), restart_console=False)
+    finally:
+        state.widget.sig_codeeditor_deleted.disconnect(record_close)
+
+    assert pending_at_close == [(None, False, False)]
+    assert search.snapshot() == search_snapshot
+    _settle()
+    assert widget_is_deleted(source) and widget_is_deleted(old_editor)
+    assert all(
+        pane.get_filenames() == [str(long_path), str(clean_path)]
+        for pane in state.widget.editorstacks
+    )
+    stack = state.widget.get_current_editorstack()
+    target = stack.get_current_editor()
+    assert target.filename == str(long_path)
+    assert status.get_editor() is target
+
+    # Forward a deterministic LSP report through Spyder's normal editor
+    # handler so this test does not depend on an installed Ruff server.
+    diagnostics = [
+        lsp.Diagnostic(
+            range=lsp.Range(lsp.Position(line, 6), lsp.Position(line, 13)),
+            message="Undefined name `missing`",
+            severity=lsp.DiagnosticSeverity.Error,
+            source="ruff",
+            code="F821",
+        )
+        for line in range(350)
+    ]
+    with state.qtbot.waitSignal(target.sig_process_code_analysis):
+        state.widget.on_diagnostics(
+            lsp.PublishDiagnosticsParams(long_path.as_uri(), diagnostics)
+        )
+    assert len(target._diagnostics) == len(diagnostics)
+    assert _focus_stack(state, stack) is target
+    status.cursor.set_cursor_pos(0)
+    state.qtbot.keyClicks(state.commandline, "l")
+    assert target.textCursor().position() == 1
+    assert target.toPlainText().startswith("print(missing)\n")
+    assert old_path.read_text(encoding="utf-8") == "old_value = 1\n"
 
 
 def test_substitute_overlay_is_released_when_editor_window_changes(editor_windows):
@@ -461,7 +606,7 @@ def test_control_w_closes_current_split(editor_windows, host):
     assert status.get_editorstack() is remaining
     assert remaining.get_filenames() == filenames
     assert status.is_normal()
-    assert state.commandline.hasFocus()
+    state.qtbot.waitUntil(state.commandline.hasFocus)
     assert state.commandline.text() == ""
     status.cursor.set_cursor_pos(0)
     state.qtbot.keyClicks(state.commandline, "l")
@@ -693,7 +838,7 @@ def test_commandline_popup_follows_active_view(commandline_popup_windows, target
 
 
 def test_commandline_popup_releases_closed_editor(commandline_popup_windows):
-    """Closing the active tab disposes its panel before the editor is deleted."""
+    """Closing the active tab disposes its panel and allows a replacement."""
     state = commandline_popup_windows
     stack = state.widget.editorstacks[0]
     stack.set_stack_index(1)
@@ -705,9 +850,6 @@ def test_commandline_popup_releases_closed_editor(commandline_popup_windows):
     _settle()
 
     assert stack.get_current_editor() is not code
-    # Spyder detaches closed editors before their final deferred deletion.
-    code.deleteLater()
-    _settle()
     assert widget_is_deleted(code)
     assert widget_is_deleted(popup)
     assert not _commandline_popup_visible(state)
@@ -837,6 +979,9 @@ def test_commandline_popup_shutdown_in_new_window(commandline_popup_windows, und
 @pytest.mark.parametrize("window_count", [1, 2])
 def test_new_windows_splits_and_cloned_tabs(editor_windows, undocked, window_count):
     """Route to every stack/tab with an independent main pane and New windows."""
+    # Third Party Libraries
+    from lsprotocol import types as lsp
+
     state = editor_windows
     widget = state.widget
     original_stack = widget.editorstacks[0]
@@ -903,20 +1048,8 @@ def test_new_windows_splits_and_cloned_tabs(editor_windows, undocked, window_cou
             state.vim.vim_cmd.vim_status.cursor.set_cursor_pos(position)
             code._LSPMixin__cursor_position_before_format = position
             _settle()
-            # Keep Vim focus here so this routing test also works with stock
-            # Spyder; the paired fork tests its additional focus-restore hook.
             code._apply_document_edits(
-                {
-                    "params": [
-                        {
-                            "range": {
-                                "start": {"line": 0, "character": 0},
-                                "end": {"line": 1, "character": 0},
-                            },
-                            "newText": "x\n",
-                        }
-                    ]
-                }
+                [lsp.TextEdit(lsp.Range(lsp.Position(0, 0), lsp.Position(1, 0)), "x\n")]
             )
             _settle()
             assert code.toPlainText() == "x\n"

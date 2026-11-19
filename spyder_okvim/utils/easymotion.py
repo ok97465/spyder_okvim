@@ -10,7 +10,7 @@ from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import QPlainTextEdit, QWidget
 
 # Project Libraries
-from spyder_okvim.utils.qtcompat import text_width
+from spyder_okvim.utils.qtcompat import text_width, widget_is_deleted
 from spyder_okvim.vim.label import ANNOTATION_STYLE, annotation_style, place_annotation
 
 
@@ -20,19 +20,19 @@ def _marker_layout(editor, positions, names):
     metrics = editor.fontMetrics()
     padding_h = ANNOTATION_STYLE["padding_h"] + ANNOTATION_STYLE["border_width"]
     padding_v = ANNOTATION_STYLE["padding_v"] + ANNOTATION_STYLE["border_width"]
+    bounds = editor.viewport().rect()
+    min_width = text_width(metrics, " ")
+    height = metrics.height() + 2 * padding_v
     occupied = []
     layout = []
     for position, name in zip(positions, names):
         cursor.setPosition(position)
         target = editor.cursorRect(cursor)
-        if not target.intersects(editor.viewport().rect()):
+        if not target.intersects(bounds):
             continue
-        width = max(text_width(metrics, name), text_width(metrics, " ")) + 2 * padding_h
-        height = metrics.height() + 2 * padding_v
+        width = max(text_width(metrics, name), min_width) + 2 * padding_h
         target.translate(-padding_h, -padding_v)
-        rect = place_annotation(
-            target, width, height, editor.viewport().rect(), occupied
-        )
+        rect = place_annotation(target, width, height, bounds, occupied)
         if rect is not None:
             occupied.append(rect)
             layout.append((position, name, rect))
@@ -44,25 +44,20 @@ class EasyMotionMarkerManager:
 
     def __init__(self):
         """Initialize empty marker sets."""
+        single_keys = "hklyuiopnm,qwe"
+        prefixes = "rtzxcvbasdgjf;"
+        self.marker_keys = list(single_keys)
+        self.marker_keys.extend(
+            prefix + key for prefix, key in product(prefixes, single_keys)
+        )
         self.position_list: list[int] = []
         self.name_list: list[str] = []
-
-        self.marker_keys: list[str] = []
-        self.init_marker_keys()
         self.motion_type = None
         self._targets = []
         self._prefix = ""
         self.total_count = 0
         self.visible_count = 0
         self.label_rects = {}
-
-    def init_marker_keys(self):
-        """Initialize markers."""
-        keys1 = "hklyuiopnm,qwe"
-        keys2 = "rtzxcvbasdgjf;"
-
-        self.marker_keys = list(keys1)
-        self.marker_keys += ["".join(pro) for pro in product(keys2, keys1)]
 
     def set_positions(self, position_list: list[int], motion_type):
         """Set positions."""
@@ -106,28 +101,47 @@ class EasyMotionPainter(QObject):
 
     """
 
-    def __init__(self, editor: QPlainTextEdit = None):
-        """Create painter.
-
-        Args:
-            editor: Widget receiving overlay rendering.
-        """
+    def __init__(self):
         super().__init__()
-        self.editor = editor
-        self.positions = []
-        self.names = []
-        self.label_rects = {}
+        self.editor = None
+        self._markers = None
+
+    def show_markers(
+        self, editor: QPlainTextEdit | None, markers: EasyMotionMarkerManager
+    ):
+        """Bind the overlay and repaint after the visible markers change."""
+        if editor is None:
+            self.clear()
+            return
+        viewport = editor.viewport()
+        if editor is not self.editor:
+            self.clear()
+            self.editor = editor
+            viewport.installEventFilter(self)
+        self._markers = markers
+        viewport.update()
+
+    def clear(self):
+        """Remove the overlay, including when Qt has already deleted the editor."""
+        editor, self.editor = self.editor, None
+        self._markers = None
+        if editor is not None and not widget_is_deleted(editor):
+            viewport = editor.viewport()
+            viewport.removeEventFilter(self)
+            viewport.update()
 
     def eventFilter(self, viewport: QWidget, event: QEvent):
-        if not viewport or event.type() != QEvent.Paint:
+        editor = self.editor
+        if editor is None or event.type() != QEvent.Paint:
             return False
         # Handle the painter event last to prevent
         # the area painted by EasyMotion to be overridden
         viewport.removeEventFilter(self)
         QCoreApplication.sendEvent(viewport, event)
+        if self.editor is not editor or widget_is_deleted(viewport):
+            return True
         viewport.installEventFilter(self)
-
-        editor = self.editor
+        markers = self._markers
 
         font = editor.font()
         font.setBold(True)
@@ -147,8 +161,8 @@ class EasyMotionPainter(QObject):
             painter.setRenderHint(QPainter.Antialiasing, True)
             painter.setBrush(background_color)
             painter.setFont(font)
-            for position, marker_name in zip(self.positions, self.names):
-                rect = self.label_rects.get(position)
+            for position, marker_name in zip(markers.position_list, markers.name_list):
+                rect = markers.label_rects.get(position)
                 if rect is None:
                     continue
                 painter.setPen(pen_border)

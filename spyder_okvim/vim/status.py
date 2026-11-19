@@ -15,7 +15,7 @@ from spyder_okvim.utils.bookmark_manager import BookmarkManager
 from spyder_okvim.utils.cell_helpers import CellRegion
 from spyder_okvim.utils.easymotion import EasyMotionMarkerManager, EasyMotionPainter
 from spyder_okvim.utils.jump_list import JumpList
-from spyder_okvim.utils.qtcompat import text_width
+from spyder_okvim.utils.qtcompat import live_widget, text_width, widget_is_deleted
 
 from .cursor import VimCursor
 from .insert_repeat import InsertRepeatSession
@@ -134,6 +134,7 @@ class VimStatus(QObject):
         self._definition_watch = QTimer(self)
         self._definition_generation = 0
         self._definition_connections = ()
+        self._focus_editor = None
         self._focus_timer = QTimer(self)
         self._focus_timer.setSingleShot(True)
         self._focus_timer.timeout.connect(self._restore_input_focus)
@@ -143,7 +144,6 @@ class VimStatus(QObject):
         # easymotion
         self.painter_easymotion = EasyMotionPainter()
         self.manager_marker_easymotion = EasyMotionMarkerManager()
-        self.editor_connected_easymotion = None
 
         # Leap
         self.n_annotate_max = 50
@@ -159,14 +159,18 @@ class VimStatus(QObject):
         """Return one indentation level from the active document settings."""
         return self.get_editor().indent_chars
 
-    def clear_state(self):
+    def clear_state(self, *, previous_editor=None):
         """Return to Normal state and remove active Visual/annotation display."""
         self.is_visual_mode = False
         self.vim_state = VimState.NORMAL
         editor = self.get_editor()
-        if editor:
-            editor.clear_extra_selections("vim_selection")
-            editor.clear_extra_selections("vim_cursor")
+        editors = (editor,)
+        if previous_editor is not None and previous_editor is not editor:
+            editors = (previous_editor, editor)
+        for view in editors:
+            if view is not None:
+                view.clear_extra_selections("vim_selection")
+                view.clear_extra_selections("vim_cursor")
         self.hide_annotate_on_txt()
 
     def is_normal(self):
@@ -177,10 +181,11 @@ class VimStatus(QObject):
         """Change vim state to normal mode."""
         self.finish_insert()
         self.clear_state()
-        cursor = self.get_cursor()
-        if cursor.atBlockEnd() and not cursor.atBlockStart():
-            pos = cursor.position()
-            self.cursor.set_cursor_pos(pos - 1)
+        editor = self.get_editor()
+        if editor is not None:
+            cursor = editor.textCursor()
+            if cursor.atBlockEnd() and not cursor.atBlockStart():
+                self.cursor.set_cursor_pos(cursor.position() - 1)
         try:
             self.change_label.emit(VimState.NORMAL)
         except RuntimeError:
@@ -196,7 +201,7 @@ class VimStatus(QObject):
         if editor is None:
             return
         self.is_visual_mode = False
-        self.remove_marker_of_easymotion()
+        self.painter_easymotion.clear()
         editor.clear_extra_selections("vim_selection")
         editor.clear_extra_selections("vim_cursor")
         self.change_label.emit(VimState.INSERT)
@@ -238,21 +243,13 @@ class VimStatus(QObject):
 
     def set_focus_to_vim(self):
         """Set focus to vim command line."""
-        if self.cmd_line:
+        if self.cmd_line is not None and not widget_is_deleted(self.cmd_line):
             self.cmd_line.setFocus()
 
     def set_focus_to_vim_after_delay(self, delay=300):
         """Schedule input focus in milliseconds for the current editor only."""
-        # Project Libraries
-        from spyder_okvim.utils.qtcompat import widget_is_deleted
-
         editor = self.get_editor()
-        if (
-            self.cmd_line is None
-            or widget_is_deleted(self.cmd_line)
-            or editor is None
-            or widget_is_deleted(editor)
-        ):
+        if self.cmd_line is None or widget_is_deleted(self.cmd_line) or editor is None:
             self._focus_timer.stop()
             return
         self._focus_editor = weakref.ref(editor)
@@ -260,10 +257,8 @@ class VimStatus(QObject):
 
     def _restore_input_focus(self):
         """Reject a delayed focus request after its editor has changed."""
-        # Project Libraries
-        from spyder_okvim.utils.qtcompat import live_widget
-
-        editor = live_widget(getattr(self, "_focus_editor", None))
+        editor = live_widget(self._focus_editor)
+        self._focus_editor = None
         if editor is not None and editor is self.get_editor():
             self.set_focus_to_vim()
             self.cursor.draw_vim_cursor()
@@ -406,31 +401,13 @@ class VimStatus(QObject):
             positions: Character positions to annotate.
             motion_type: Kind of motion that triggered the annotation.
         """
-        if not positions:
-            return
-        self.manager_marker_easymotion.set_positions(positions, motion_type)
-        self.manager_marker_easymotion.fit_to_editor(self.get_editor())
-        self.update_marker_for_easymotion()
-
-    def update_marker_for_easymotion(self):
-        """Update marker of easymotion."""
-        self.remove_marker_of_easymotion()
         editor = self.get_editor()
-        self.painter_easymotion.editor = editor
-        self.painter_easymotion.label_rects = self.manager_marker_easymotion.label_rects
-        self.painter_easymotion.positions = self.manager_marker_easymotion.position_list
-        self.painter_easymotion.names = self.manager_marker_easymotion.name_list
-        self.editor_connected_easymotion = editor
-        editor.viewport().installEventFilter(self.painter_easymotion)
-        editor.viewport().update()
-
-    def remove_marker_of_easymotion(self):
-        """Remove marker of easymotion."""
-        editor = self.editor_connected_easymotion
-        self.editor_connected_easymotion = None
-        if editor:
-            editor.viewport().removeEventFilter(self.painter_easymotion)
-            editor.viewport().update()
+        if not positions or editor is None:
+            return
+        markers = self.manager_marker_easymotion
+        markers.set_positions(positions, motion_type)
+        markers.fit_to_editor(editor)
+        self.painter_easymotion.show_markers(editor, markers)
 
     @Slot()
     def hide_annotate_on_txt(self):
@@ -606,13 +583,14 @@ class VimStatus(QObject):
         self.finish_insert(apply_count=False)
         self.disconnect_from_editor()
         self._focus_timer.stop()
+        self._focus_editor = None
         if not preserve_definition:
             self._definition_deadline.stop()
             self._definition_generation += 1
             self._definition_watch.stop()
             self.timer_go_to_definition = None
         self.cursor.clear_highlights()
-        self.remove_marker_of_easymotion()
+        self.painter_easymotion.clear()
 
     def create_command_services(self):
         """Compose independent motion/edit services for one executor lifetime.

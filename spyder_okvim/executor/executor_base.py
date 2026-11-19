@@ -236,14 +236,6 @@ class ExecutorSubBase(ExecutorBase):
         """Delegate file closure and debugger/autosave guards to the host."""
         self.vim_status.host.close_current_file(force=force)
 
-    def save_current_file(self):
-        """Return the host's explicit save success result."""
-        return self.vim_status.host.save_current_file()
-
     def save_and_close_current_file(self):
         """Close only when the originally active document was saved."""
         self.vim_status.host.save_and_close_current_file()
-
-    def create_new_file(self):
-        """Create a document using the host editor action."""
-        self.vim_status.host.create_new_file()

@@ -127,14 +127,18 @@ class ExecutorColon(ExecutorSubBase):
 
         return True
 
-    def substitute(self, header):
-        """Validate and calculate all replacements before editing the document."""
-        status = self.vim_status
+    def _require_editor(self):
         editor = self.get_editor()
         if editor is None:
             raise ExError("No active editor")
+        return editor
+
+    def substitute(self, header):
+        """Validate and calculate all replacements before editing the document."""
+        status = self.vim_status
+        editor = self._require_editor()
         document = editor.document()
-        cursor = self.get_cursor()
+        cursor = editor.textCursor()
         origin_block, origin_column = cursor.block(), cursor.positionInBlock()
         current_line = cursor.blockNumber()
         address_line = current_line if self.origin_line is None else self.origin_line
@@ -280,7 +284,7 @@ class ExecutorColon(ExecutorSubBase):
 
     def w(self, arg=""):
         """Save current file."""
-        self.save_current_file()
+        self.vim_status.host.save_current_file()
         self.vim_status.cursor.draw_vim_cursor()
 
     def q(self, arg=""):
@@ -300,14 +304,15 @@ class ExecutorColon(ExecutorSubBase):
 
     def n(self, args=""):
         """Create new file."""
-        self.create_new_file()
+        self.vim_status.host.create_new_file()
         self.vim_status.set_focus_to_vim()
 
     def vs(self, arg=""):
         """Split the active editor into side-by-side views."""
+        editor = self._require_editor()
         stack = self.get_editorstack()
         filename = stack.get_current_filename()
-        position = self.vim_status.get_cursor().position()
+        position = editor.textCursor().position()
         stack.sig_split_horizontally.emit()
         self.get_editorstack().set_current_filename(filename)
         self.vim_status.cursor.set_cursor_pos(position)
@@ -331,6 +336,7 @@ class ExecutorColon(ExecutorSubBase):
 
     def goto_line(self, count):
         """Move cursor according to :number command."""
+        self._require_editor()
         status = self.vim_status
         status.push_jump()
 

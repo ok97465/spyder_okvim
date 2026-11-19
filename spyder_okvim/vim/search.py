@@ -185,6 +185,7 @@ class SearchInfo(QObject):
 
     def _disconnect_document(self):
         """Release the old document and remove its highlights."""
+        self._refresh_timer.stop()
         if self._document is not None:
             try:
                 self._document.contentsChanged.disconnect(self._document_changed)
@@ -213,9 +214,15 @@ class SearchInfo(QObject):
 
     def _editor_destroyed(self, *args):
         """Cancel pending work before a closed editor can be accessed."""
-        self._refresh_timer.stop()
         self._editor = None
         self._disconnect_document()
+
+    def release_closed_editor(self, editor):
+        """Drop results for a closed view or a clone removed with it."""
+        if self._editor is not None and (
+            self._editor is editor or self._editor is not self.vim_cursor.get_editor()
+        ):
+            self._disconnect_document()
 
     def _document_changed(self):
         """Coalesce edits without delaying explicit search motions."""
@@ -227,9 +234,7 @@ class SearchInfo(QObject):
         """Recompute matches when the active document or its text changes."""
         if self._closed:
             return
-        self._refresh_timer.stop()
-        stack = self.vim_cursor.get_editorstack()
-        editor = stack.get_current_editor() if stack is not None else None
+        editor = self.vim_cursor.get_editor()
         document = editor.document() if editor is not None else None
         if editor is not self._editor or document is not self._document:
             self._disconnect_document()
@@ -244,6 +249,8 @@ class SearchInfo(QObject):
                     signal.connect(self.refresh_appearance)
                 editor.installEventFilter(self)
             self.refresh_appearance()
+        else:
+            self._refresh_timer.stop()
         if document is None or self._revision == document.revision():
             return
 
@@ -292,7 +299,6 @@ class SearchInfo(QObject):
             return
         self._closed = True
         self.closed.emit()
-        self._refresh_timer.stop()
         for signal in self._editor_signals:
             try:
                 signal.disconnect(self.refresh)

@@ -259,7 +259,9 @@ class VimShortcut(QObject):
 
     def clear_tip_search(self) -> None:
         """Clear tooltip, search highlight."""
-        self.get_editor().hide_tooltip()
+        editor = self.get_editor()
+        if editor is not None:
+            editor.hide_tooltip()
         self.vim_status.search.clear_highlights()
 
     def jump_backward(self) -> None:
@@ -542,16 +544,9 @@ class VimWidget(QWidget):
         return self._yank_picker is picker
 
     def bind_editor(self, editor):
-        """Bind view observers together after the host selects an editor stack.
-
-        Cancel requests against the old view before installing observers on a
-        replacement. Rebinding the same editor preserves its active prompt.
-        Passing None releases the view without retaining deleted Qt wrappers.
-        """
+        """Move view observers to the editor selected by the host."""
         if self._closed:
             return
-        if editor is not self.put_controller.editor and not self.picker.navigating:
-            self.cancel_pending_input()
         self.which_key.set_editor(editor)
         self.substitute_preview.set_editor(editor)
         self.commandline_popup.set_editor(editor)
@@ -701,6 +696,12 @@ class VimWidget(QWidget):
             if sub_mode and sub_mode.accepts_input_method:
                 self.commandline.esc_pressed()
             self.commandline.sync_input_method()
+            return
+
+        # Project restoration can leave the command line focused while every
+        # editor tab is closed. Ex input can still open or create a file.
+        if not text.startswith(":") and self.vim_status.get_editor() is None:
+            self.commandline.esc_pressed()
             return
 
         confirmation = self.vim_status.substitute_confirm

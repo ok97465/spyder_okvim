@@ -12,7 +12,7 @@ from qtpy.QtWidgets import QApplication, QTextEdit
 # Project Libraries
 from spyder_okvim.spyder.config import PluginSettings
 from spyder_okvim.utils.motion import MotionInfo, MotionType
-from spyder_okvim.utils.qtcompat import live_widget
+from spyder_okvim.utils.qtcompat import live_widget, widget_is_deleted
 from spyder_okvim.utils.theme import readable_color, selection_colors
 
 
@@ -116,6 +116,8 @@ class VimCursor(QObject):
         """Get the editor focused."""
         editorstack = self.get_editorstack()
         editor = editorstack.get_current_editor() if editorstack is not None else None
+        if editor is not None and widget_is_deleted(editor):
+            editor = None
         self._bind_theme_editor(editor)
         return editor
 
@@ -149,11 +151,13 @@ class VimCursor(QObject):
 
     def draw_vim_cursor(self):
         """Draw vim cursor."""
-        vim_cursor = self.vim_cursor
         editor = self.get_editor()
+        if editor is None:
+            return
+        vim_cursor = self.vim_cursor
         vim_cursor.cursor = editor.textCursor()
         vim_cursor.cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
-        self.set_extra_selections("vim_cursor", [vim_cursor])
+        editor.set_extra_selections("vim_cursor", [vim_cursor])
 
     def create_selection(self, start, end):
         """Create a text selection between two positions.

@@ -479,7 +479,9 @@ class VimLineEdit(QLineEdit):
             e.accept()
         elif pressed_ctrl and key in self.dispatcher:
             self.vim_widget.put_controller.cancel()
-            self.dispatcher[key]()
+            if self.vim_status.get_editor() is not None:
+                self.dispatcher[key]()
+            e.accept()
         elif self.testAttribute(Qt.WA_InputMethodEnabled):
             if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Tab, Qt.Key_Backtab):
                 QApplication.inputMethod().commit()
@@ -586,7 +588,7 @@ class VimLineEdit(QLineEdit):
         self.vim_widget.put_controller.cancel()
         self.vim_widget.sig_command_cancelled.emit()
         self.vim_status.input_cmd.clear()
-        self.vim_status.remove_marker_of_easymotion()
+        self.vim_status.painter_easymotion.clear()
         sub_mode = self.vim_status.sub_mode
         if sub_mode:
             try:

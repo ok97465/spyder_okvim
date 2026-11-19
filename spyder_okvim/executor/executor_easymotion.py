@@ -53,32 +53,30 @@ class ExecutorSelectMarkerEasymotion(ExecutorSubBase):
         if txt == "\x1b":
             self.on_escape()
             return True
-        manager_marker = self.vim_status.manager_marker_easymotion
-        manager_marker.handle_user_input(txt)
+        status = self.vim_status
+        markers = status.manager_marker_easymotion
+        painter = status.painter_easymotion
+        markers.handle_user_input(txt)
+        positions = markers.position_list
 
-        motion_type = manager_marker.motion_type
-        pos_list = manager_marker.position_list
-        len_pos = len(pos_list)
+        if txt == "\b" or len(positions) > 1:
+            painter.show_markers(self.get_editor(), markers)
+            _show_marker_state(status)
+            return True
 
-        if txt == "\b" or len_pos > 1:
-            self.vim_status.update_marker_for_easymotion()
-            _show_marker_state(self.vim_status)
+        painter.clear()
+        status.sub_mode = None
+        if not positions:
+            status.set_message("EasyMotion: no target for that label")
             return True
-        elif len_pos == 0:
-            self.vim_status.remove_marker_of_easymotion()
-            self.vim_status.sub_mode = None
-            self.vim_status.set_message("EasyMotion: no target for that label")
-            return True
-        else:
-            self.vim_status.remove_marker_of_easymotion()
-            self.vim_status.sub_mode = None
-            self.vim_status.set_message("")
-            motion_info = MotionInfo(pos_list[0], motion_type=motion_type)
-            return self.process_return(self.execute_func_deferred(motion_info))
+
+        status.set_message("")
+        motion_info = MotionInfo(positions[0], motion_type=markers.motion_type)
+        return self.process_return(self.execute_func_deferred(motion_info))
 
     def on_escape(self):
         """Release overlays and stage feedback on cancellation."""
-        self.vim_status.remove_marker_of_easymotion()
+        self.vim_status.painter_easymotion.clear()
         self.vim_status.set_message("")
         self.vim_status.sub_mode = None
 
