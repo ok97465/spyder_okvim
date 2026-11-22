@@ -7,7 +7,7 @@ import weakref
 # Third Party Libraries
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt, QTimer
-from qtpy.QtWidgets import QApplication, QMainWindow, QShortcut
+from qtpy.QtWidgets import QApplication, QLineEdit, QMainWindow, QShortcut
 from spyder.config.manager import CONF
 
 # Project Libraries
@@ -125,6 +125,74 @@ def _exercise_vim(main, editor, vim, qtbot, window):
     assert editor.textCursor().blockNumber() == 1
     assert status.sub_mode is None
     assert editor.toPlainText() == original
+
+
+def test_status_widgets_follow_editor_after_parent_change(undock_bot):
+    """Keep shared widgets out of Qt's synchronous Editor reparenting."""
+    main, _, _, _, _, status_widget, dock = undock_bot
+    floating = QMainWindow()
+    try:
+        floating.setCentralWidget(main.editor)
+        assert status_widget.window() is main
+        floating.show()
+        _process_events()
+        assert status_widget.window() is floating
+    finally:
+        dock()
+        floating.close()
+    assert status_widget.window() is main
+
+
+@pytest.mark.parametrize("click_editor", [False, True])
+def test_activation_queues_vim_focus_and_respects_editor_click(
+    undock_bot, click_editor
+):
+    """Restore focus after activation unless the user clicked the editor."""
+    main, _, editor, vim, qtbot, _, _ = undock_bot
+    commandline = vim.vim_cmd.commandline
+    main.activateWindow()
+    _process_events()
+    commandline.setFocus()
+    editor.setFocus(Qt.ActiveWindowFocusReason)
+    assert QApplication.focusWidget() is editor
+
+    QCoreApplication.sendEvent(main, QEvent(QEvent.WindowActivate))
+    assert QApplication.focusWidget() is editor
+    if click_editor:
+        qtbot.mouseClick(editor.viewport(), Qt.LeftButton)
+    _process_events()
+    expected_focus = editor if click_editor else commandline
+    assert QApplication.focusWidget() is expected_focus
+    if click_editor:
+        QCoreApplication.sendEvent(main, QEvent(QEvent.WindowActivate))
+        _process_events()
+        assert QApplication.focusWidget() is editor
+
+
+def test_requested_vim_focus_respects_new_focus(undock_bot):
+    """An explicit request applies only while the original focus is current."""
+    main, _, editor, vim, _, _, _ = undock_bot
+    commandline = vim.vim_cmd.commandline
+    other = QLineEdit(main)
+    main.layout().addWidget(other)
+    try:
+        other.show()
+        main.activateWindow()
+        _process_events()
+        editor.setFocus()
+        vim.request_vim_focus(editor)
+        assert QApplication.focusWidget() is editor
+        _process_events()
+        assert QApplication.focusWidget() is commandline
+
+        editor.setFocus()
+        vim.request_vim_focus(editor)
+        other.setFocus()
+        _process_events()
+        assert QApplication.focusWidget() is other
+    finally:
+        other.deleteLater()
+        _process_events()
 
 
 @pytest.mark.parametrize("close_to_dock", [False, True])

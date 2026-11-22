@@ -17,9 +17,16 @@ import weakref
 
 # Third Party Libraries
 import qtawesome as qta
-from qtpy.QtCore import QCoreApplication, QEvent, QSize, Qt, Signal
+from qtpy.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, Signal
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QMainWindow, QShortcut, QSizePolicy
+from qtpy.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QMainWindow,
+    QShortcut,
+    QSizePolicy,
+    QWidget,
+)
 from spyder.api.fonts import SpyderFontType
 from spyder.api.plugin_registration.decorators import (
     on_plugin_available,
@@ -133,6 +140,36 @@ class StatusBarVimWidget(StatusBarWidget):
         return super().eventFilter(watched, event)
 
 
+class _VimFocusGuard(QObject):
+    """Track Qt's automatic focus and newer clicks while input is queued."""
+
+    automatic_focus = None
+    clicked = False
+
+    def start(self):
+        self.automatic_focus = None
+        self.clicked = False
+        QApplication.instance().installEventFilter(self)
+
+    def stop(self):
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+        self.automatic_focus = None
+        self.clicked = False
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.MouseButtonPress:
+            self.clicked = True
+        elif event.type() == QEvent.FocusIn and isinstance(watched, QWidget):
+            self.automatic_focus = (
+                weakref.ref(watched)
+                if event.reason() == Qt.ActiveWindowFocusReason
+                else None
+            )
+        return False
+
+
 class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     """Implements a Vim-like command mode."""
 
@@ -199,6 +236,12 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._active_editor = None
         self._input_focus_after_split_close = None
         self._status_window = None
+        self._activated_window = None
+        self._requested_vim_focus = None
+        self._focus_guard = _VimFocusGuard(self)
+        self._host_update_timer = QTimer(self)
+        self._host_update_timer.setSingleShot(True)
+        self._host_update_timer.timeout.connect(self._update_host)
         self._window_stacks = weakref.WeakKeyDictionary()
         self._vim_focus = weakref.WeakKeyDictionary()
         self._editors = weakref.WeakSet()
@@ -215,12 +258,14 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             if signal is not None:
                 signal.connect(callback)
                 self._editor_connections.append((signal, callback))
-        self._on_editor_focus_changed()
-        self._sync_statusbar()
+        self._use_stack(vim_cmd.editor_widget.get_current_editorstack())
+        if self._active_stack is None:
+            self._sync_statusbar()
 
     def eventFilter(self, watched, event):
         """Track the active editor view and rescue shared UI before it closes."""
-        if event.type() == QEvent.FocusIn:
+        event_type = event.type()
+        if event_type == QEvent.FocusIn:
             if watched is self.vim_cmd.commandline:
                 self._vim_focus[watched.window()] = True
             elif (
@@ -228,17 +273,19 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
                 and event.reason() != Qt.ActiveWindowFocusReason
             ):
                 self._vim_focus[watched.window()] = False
-        if event.type() == QEvent.WindowActivate and watched in self._window_stacks:
-            stack = live_widget(self._window_stacks[watched])
-            if stack is not None and watched not in self._closing_windows:
-                self._use_stack(stack)
-                if self._vim_focus.get(watched, False):
-                    self.vim_cmd.commandline.setFocus()
-        if event.type() == QEvent.Close and watched in self._window_stacks:
+        if (
+            event_type == QEvent.WindowActivate
+            and self._statusbar_attached
+            and watched in self._window_stacks
+        ):
+            self._activated_window = weakref.ref(watched)
+            self._focus_guard.start()
+            self._queue_host_update()
+        if event_type == QEvent.Close and watched in self._window_stacks:
             if watched is not self._main:
                 self._closing_windows.add(watched)
             self._input_focus_after_split_close = None
-        if event.type() == QEvent.Close and (
+        if event_type == QEvent.Close and (
             watched is live_widget(self._status_window)
             or watched is live_widget(self._active_stack)
         ):
@@ -258,17 +305,101 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             self.vim_cmd.vim_status.cursor.set_editorstack(None)
             self._move_statusbar(self._main_statusbar)
             self._move_labels(self._editor_widget)
-        if watched is self._editor_widget and event.type() in (
+        if watched is self._editor_widget and event_type in (
             QEvent.ParentChange,
             QEvent.Show,
         ):
-            self._sync_statusbar()
+            self._queue_host_update()
         return super().eventFilter(watched, event)
+
+    def _queue_host_update(self):
+        """Wait for Qt to finish sending focus and docking notifications."""
+        if self._statusbar_attached and not self._host_update_timer.isActive():
+            self._host_update_timer.start(0)
+
+    def _cancel_host_update(self):
+        self._host_update_timer.stop()
+        self._activated_window = None
+        self._requested_vim_focus = None
+        self._focus_guard.stop()
+
+    def request_vim_focus(self, editor) -> None:
+        """Restore Vim input for an explicitly selected editor after docking."""
+        if (
+            self._statusbar_attached
+            and editor is not None
+            and not widget_is_deleted(editor)
+        ):
+            self._requested_vim_focus = weakref.ref(editor)
+            self._focus_guard.start()
+            self._queue_host_update()
+
+    def _update_host(self):
+        """Apply the latest host change and restore focus for a live activation."""
+        activated_window = live_widget(self._activated_window)
+        requested_editor = live_widget(self._requested_vim_focus)
+        automatic_focus = live_widget(self._focus_guard.automatic_focus)
+        clicked = self._focus_guard.clicked
+        self._cancel_host_update()
+        if not self._statusbar_attached:
+            return
+        window = QApplication.activeWindow()
+        stack = None
+        if (
+            window is not None
+            and window is activated_window
+            and window not in self._closing_windows
+        ):
+            stack = live_widget(self._window_stacks.get(window))
+        if stack is not None and stack.window() is window and stack.isVisible():
+            self._use_stack(stack)
+            if clicked and QApplication.focusWidget() is not self.vim_cmd.commandline:
+                self._vim_focus[window] = False
+            restore_focus = self._vim_focus.get(window, False)
+        else:
+            self._sync_statusbar()
+            restore_focus = False
+        restore_requested = (
+            requested_editor is not None
+            and requested_editor is live_widget(self._active_editor)
+        )
+        if not clicked and (restore_focus or restore_requested):
+            self._restore_window_focus(
+                window, automatic_focus=automatic_focus if restore_focus else None
+            )
+
+    def _restore_window_focus(self, window, *, automatic_focus):
+        """Restore the remembered Vim focus after Qt has chosen an active view."""
+        if window is self._main and not getattr(
+            self._editor_widget, "is_visible", True
+        ):
+            return
+        commandline = self.vim_cmd.commandline
+        editor = live_widget(self._active_editor)
+        focus = QApplication.focusWidget()
+        if (
+            window is not None
+            and window is QApplication.activeWindow()
+            and window not in self._closing_windows
+            and editor is not None
+            and editor.isVisible()
+            and editor.window() is window
+            and not widget_is_deleted(commandline)
+            and commandline.isVisible()
+            and commandline.window() is window
+            and (
+                focus is None
+                or focus is commandline
+                or focus is editor
+                or (focus is automatic_focus and focus.window() is window)
+            )
+        ):
+            commandline.setFocus()
 
     def _on_editor_focus_changed(self):
         """Discover new windows/splits through Spyder's editor focus signal."""
         stack = self.vim_cmd.editor_widget.get_current_editorstack()
-        self._use_stack(stack)
+        self._use_stack(stack, sync_host=False)
 
     def _on_editor_deleted(self, editor):
         """Release view work even if closing the last tab produces no focus event."""
@@ -287,20 +418,23 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
                 self._active_editor = None
         self.vim_cmd.vim_status.search.release_closed_editor(editor)
 
-    def _use_stack(self, stack):
+    def _use_stack(self, stack, *, sync_host=True):
         """Bind commands to a view before restoring a closed split's Vim focus.
 
         A pending close handoff is valid only in its original host window.
         View-bound work is cancelled before the new input-focus request is
         scheduled. Definition tracking spans the switch to observe gd's arrival.
         """
-        if stack is None or stack.window() in self._closing_windows:
+        if stack is None or widget_is_deleted(stack):
             return
-        restore_input = (
-            live_widget(self._input_focus_after_split_close) is stack.window()
-        )
+        window = stack.window()
+        if window in self._closing_windows:
+            return
+        restore_input = live_widget(self._input_focus_after_split_close) is window
         self._input_focus_after_split_close = None
         editor = stack.get_current_editor()
+        if editor is not None and widget_is_deleted(editor):
+            editor = None
         changed_editor = editor is not live_widget(self._active_editor)
         if changed_editor and not self.vim_cmd.picker.allows_navigation(stack):
             # Definition navigation switches editors before placing the cursor.
@@ -308,13 +442,15 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             self._reset_view(preserve_definition=True)
         self._active_stack = weakref.ref(stack)
         self._active_editor = weakref.ref(editor) if editor is not None else None
+        if window in self._window_stacks:
+            self._window_stacks[window] = self._active_stack
         remember_pane(self.vim_cmd.vim_status, stack)
         self.vim_cmd.vim_status.cursor.set_editorstack(stack)
         self.vim_cmd.bind_editor(editor)
         if editor is not None and editor not in self._editors:
             self._editors.add(editor)
             editor.installEventFilter(self)
-            self._vim_focus[stack.window()] = False
+            self._vim_focus[window] = False
         save_stack = getattr(self._editor_widget, "set_last_focused_editorstack", None)
         if save_stack is not None:
             owner = (
@@ -329,7 +465,10 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
             shortcut.setObjectName("okvim_escape")
             shortcut.setContext(Qt.WidgetWithChildrenShortcut)
             stack.installEventFilter(self)
-        self._sync_statusbar()
+        if sync_host:
+            self._sync_statusbar()
+        else:
+            self._queue_host_update()
         self.vim_cmd.vim_status.search.refresh()
         if restore_input:
             self.vim_cmd.vim_status.set_focus_to_vim_after_delay(0)
@@ -359,26 +498,40 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
 
     def _move_labels(self, parent):
         """Keep shared Leap labels under a live ancestor of the active view."""
+        if parent is None or widget_is_deleted(parent):
+            return
         for label in self.vim_cmd.vim_status.labels_for_annotate:
-            if label.parentWidget() is not parent:
+            if not widget_is_deleted(label) and label.parentWidget() is not parent:
                 label.hide()
                 label.setParent(parent)
 
     def _move_statusbar(self, statusbar):
         """Reparent the same status widget without changing its registration."""
-        if not self._statusbar_attached:
+        if (
+            not self._statusbar_attached
+            or statusbar is None
+            or widget_is_deleted(statusbar)
+        ):
             return
         widget = self._status_bar_widget
-        if widget.parentWidget() is not statusbar:
-            widget.parentWidget().removeWidget(widget)
+        if widget_is_deleted(widget):
+            return
+        parent = widget.parentWidget()
+        if parent is not statusbar:
+            if parent is not None:
+                parent.removeWidget(widget)
             statusbar.insertPermanentWidget(0, widget)
             widget._update_space()
             widget.show()
 
     def _sync_statusbar(self):
         """Move the existing Vim UI without recreating widgets or shortcuts."""
+        if not self._statusbar_attached or widget_is_deleted(self._editor_widget):
+            return
         stack = live_widget(self._active_stack)
         window = stack.window() if stack is not None else self._editor_widget.window()
+        if window in self._closing_windows:
+            return
         if window is self._main:
             statusbar = self._main_statusbar
             label_parent = self._editor_widget
@@ -411,6 +564,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
     def on_statusbar_teardown(self) -> None:
         """Release the status ID so disabling and re-enabling OkVim is safe."""
         if getattr(self, "_statusbar_attached", False):
+            self._cancel_host_update()
             self._move_statusbar(self._main_statusbar)
             statusbar = self.get_plugin(Plugins.StatusBar)
             statusbar.remove_status_widget(StatusBarVimWidget.ID)
@@ -448,6 +602,7 @@ class OkVim(SpyderDockablePlugin):  # pylint: disable=R0904
         self._input_focus_after_split_close = None
         self.on_switcher_teardown()
         if hasattr(self, "_editor_widget"):
+            self._cancel_host_update()
             self._editor_widget.removeEventFilter(self)
             self.vim_cmd.commandline.removeEventFilter(self)
             for editor in self._editors:

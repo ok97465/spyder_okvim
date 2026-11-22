@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import pytest
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
 from qtpy.QtGui import QTextCursor
-from qtpy.QtWidgets import QApplication, QMainWindow, QShortcut
+from qtpy.QtWidgets import QApplication, QMainWindow, QPushButton, QShortcut
 from spyder.api.plugins import Plugins
 from spyder.config.manager import CONF
 from spyder.plugins.editor.plugin import Editor
@@ -211,7 +211,6 @@ def _exercise_vim(state, stack):
 def projects(editor_windows, monkeypatch):
     """Connect Projects with fresh settings for each real editor session."""
     # Third Party Libraries
-    from spyder.plugins.editor.extensions import AutoImportExtension
     from spyder.plugins.projects.plugin import Projects
 
     state = editor_windows
@@ -225,7 +224,6 @@ def projects(editor_windows, monkeypatch):
         (Plugins.Projects, "scrollbar_position"): None,
     }
     previous = {key: CONF.get(*key, default) for key, default in settings.items()}
-    project_root = AutoImportExtension.PROJECT_ROOT
     try:
         # Constructing the recent-project menu can reuse actions from a
         # previous test's already-deleted Projects widget.
@@ -243,7 +241,6 @@ def projects(editor_windows, monkeypatch):
             plugin.on_editor_teardown()
             state.editor.on_projects_teardown()
     finally:
-        AutoImportExtension.set_project(project_root)
         for (section, option), value in previous.items():
             CONF.set(section, option, value)
 
@@ -1301,6 +1298,28 @@ def test_queued_search_cannot_mutate_another_window(editor_windows):
     _settle()
     assert source.textCursor().position() == position
     assert state.vim.vim_cmd.vim_status.sub_mode is None
+
+
+@pytest.mark.parametrize("move_focus", [False, True])
+def test_explicit_editor_switch_restores_vim_for_current_focus(
+    editor_windows, move_focus
+):
+    """Only complete the Spyder-to-Vim handoff while Editor still has focus."""
+    state = editor_windows
+    other = QPushButton("Other pane", state.main)
+    state.main.setCentralWidget(other)
+    state.main.activateWindow()
+    _settle()
+    other.setFocus()
+
+    state.widget.change_visibility(True, force_focus=True)
+    assert QApplication.focusWidget() is state.widget.get_current_editor()
+    if move_focus:
+        other.setFocus()
+    _settle()
+
+    expected = other if move_focus else state.commandline
+    assert QApplication.focusWidget() is expected
 
 
 def test_window_activation_restores_normal_and_respects_editor_click(editor_windows):
